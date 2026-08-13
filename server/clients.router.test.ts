@@ -1,0 +1,234 @@
+import { TRPCError } from "@trpc/server";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { TrpcContext } from "./_core/context";
+import { ASSET_SLOT_VALUES, BUSINESS_DAY_VALUES } from "../shared/client";
+
+const mocks = vi.hoisted(() => ({
+  getClientById: vi.fn(),
+  getClientAssets: vi.fn(),
+  getClientSecretSetup: vi.fn(),
+  updateClient: vi.fn(),
+  listClients: vi.fn(),
+  createClient: vi.fn(),
+  saveClientSecretSetup: vi.fn(),
+  upsertClientAsset: vi.fn(),
+}));
+
+const workspaceMocks = vi.hoisted(() => ({
+  ensureWorkspaceDefaults: vi.fn(),
+  getWorkspace: vi.fn(),
+  replaceFunnelShape: vi.fn(),
+  saveHomepageSectionOrder: vi.fn(),
+  updateFunnelStep: vi.fn(),
+}));
+
+vi.mock("./db", () => mocks);
+vi.mock("./workspaceDb", () => workspaceMocks);
+
+import { appRouter } from "./routers";
+
+const baseClient = {
+  id: 7,
+  businessName: "Paradise Spas",
+  shortName: "Paradise",
+  phone: "+17015551234",
+  email: "hello@paradisespas.example",
+  streetAddress: "123 Main Street",
+  city: "Minot",
+  state: "North Dakota",
+  postalCode: "58701",
+  country: "United States",
+  websiteUrl: "https://paradisespas.example",
+  foundedYear: 1994,
+  tagline: "Relaxation starts here.",
+  theme: "aqua" as const,
+  businessHours: BUSINESS_DAY_VALUES.map((day, index) => ({
+    day,
+    isOpen: index < 6,
+    opensAt: "09:00",
+    closesAt: "17:00",
+  })),
+  facebookUrl: "https://www.facebook.com/paradisespas",
+  googleMapsUrl: "https://maps.app.goo.gl/example",
+  productCategories: ["hotTubs" as const],
+  primaryOffer: "Save on select models this month.",
+  financingPromise: "Flexible monthly payment options are available.",
+  deliveryPromise: "Local delivery and setup are available.",
+  status: "draft" as const,
+  readyAt: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+const detailsInput = {
+  businessName: baseClient.businessName,
+  shortName: baseClient.shortName,
+  phone: baseClient.phone,
+  email: baseClient.email,
+  streetAddress: baseClient.streetAddress,
+  city: baseClient.city,
+  state: baseClient.state,
+  postalCode: baseClient.postalCode,
+  country: baseClient.country,
+  websiteUrl: baseClient.websiteUrl,
+  foundedYear: baseClient.foundedYear,
+  tagline: baseClient.tagline,
+  theme: baseClient.theme,
+  businessHours: baseClient.businessHours,
+  facebookUrl: baseClient.facebookUrl,
+  googleMapsUrl: baseClient.googleMapsUrl,
+  productCategories: baseClient.productCategories,
+  primaryOffer: baseClient.primaryOffer,
+  financingPromise: baseClient.financingPromise,
+  deliveryPromise: baseClient.deliveryPromise,
+};
+
+const setupInput = {
+  metaPixelId: "1234567890",
+  ga4MeasurementId: "G-ABC1234",
+  clarityId: "clarity123",
+  ghlApiKey: "ghl-api-key-value",
+  ghlWebhookUrl: "https://services.leadconnectorhq.com/hooks/example",
+  cloudflareProjectName: "paradise-spas",
+};
+
+function createContext(): TrpcContext {
+  return {
+    user: {
+      id: 1,
+      openId: "test-user",
+      name: "Test User",
+      email: "test@example.com",
+      loginMethod: "manus",
+      role: "admin",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      lastSignedIn: new Date(),
+    },
+    req: { protocol: "https", headers: {} } as TrpcContext["req"],
+    res: {} as TrpcContext["res"],
+  };
+}
+
+describe("client launch gating", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.JWT_SECRET = "test-only-secret-that-is-long-enough";
+    mocks.getClientById.mockResolvedValue(baseClient);
+    mocks.getClientAssets.mockResolvedValue([]);
+    mocks.getClientSecretSetup.mockResolvedValue(undefined);
+    mocks.updateClient.mockResolvedValue(undefined);
+    mocks.listClients.mockResolvedValue([baseClient]);
+    mocks.createClient.mockResolvedValue(7);
+    mocks.saveClientSecretSetup.mockResolvedValue(undefined);
+    workspaceMocks.ensureWorkspaceDefaults.mockResolvedValue(undefined);
+  });
+
+  it("lists and retrieves persisted clients with readiness details", async () => {
+    const caller = appRouter.createCaller(createContext());
+
+    const [list, detail] = await Promise.all([
+      caller.clients.list(),
+      caller.clients.get({ clientId: 7 }),
+    ]);
+
+    expect(list).toHaveLength(1);
+    expect(list[0]?.client.id).toBe(7);
+    expect(detail.client.businessName).toBe("Paradise Spas");
+    expect(detail.readiness.isComplete).toBe(false);
+  });
+
+  it("creates a client and protects setup values before persistence", async () => {
+    const caller = appRouter.createCaller(createContext());
+    await caller.clients.create({ details: detailsInput, setup: setupInput });
+
+    expect(mocks.createClient).toHaveBeenCalledWith(
+      expect.objectContaining({ businessName: "Paradise Spas", status: "draft" }),
+    );
+    expect(mocks.saveClientSecretSetup).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        metaPixelIdEncrypted: expect.stringMatching(/^v1\./),
+        ghlApiKeyEncrypted: expect.stringMatching(/^v1\./),
+        ghlWebhookUrlEncrypted: expect.stringMatching(/^v1\./),
+      }),
+    );
+    expect(workspaceMocks.ensureWorkspaceDefaults).toHaveBeenCalledWith(7);
+  });
+
+  it("updates client details and keeps blank setup fields unchanged", async () => {
+    const caller = appRouter.createCaller(createContext());
+    await caller.clients.update({
+      clientId: 7,
+      details: { ...detailsInput, tagline: "A new client tagline." },
+      setup: {
+        metaPixelId: "",
+        ga4MeasurementId: "",
+        clarityId: "",
+        ghlApiKey: "",
+        ghlWebhookUrl: "",
+        cloudflareProjectName: "",
+      },
+    });
+
+    expect(mocks.updateClient).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ tagline: "A new client tagline." }),
+    );
+    expect(mocks.saveClientSecretSetup).not.toHaveBeenCalled();
+  });
+
+  it("refuses to mark an incomplete client ready", async () => {
+    const caller = appRouter.createCaller(createContext());
+
+    await expect(caller.clients.launch({ clientId: 7 })).rejects.toBeInstanceOf(TRPCError);
+    expect(mocks.updateClient).not.toHaveBeenCalled();
+  });
+
+  it("marks a complete client ready without deploying anything", async () => {
+    let currentClient = { ...baseClient };
+    mocks.getClientById.mockImplementation(async () => currentClient);
+    mocks.getClientAssets.mockResolvedValue(
+      ASSET_SLOT_VALUES.map((slot, index) => ({
+        id: index + 1,
+        clientId: 7,
+        slot,
+        storageKey: `clients/7/${slot}.webp`,
+        storageUrl: `/manus-storage/clients/7/${slot}.webp`,
+        filename: `${slot}.webp`,
+        originalFilename: `${slot}.jpg`,
+        mimeType: "image/webp",
+        byteSize: 50_000,
+        width: 1200,
+        height: 800,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })),
+    );
+    mocks.getClientSecretSetup.mockResolvedValue({
+      id: 1,
+      clientId: 7,
+      metaPixelIdEncrypted: "v1.a.b.c",
+      ga4MeasurementIdEncrypted: "v1.a.b.c",
+      clarityIdEncrypted: "v1.a.b.c",
+      ghlApiKeyEncrypted: "v1.a.b.c",
+      ghlWebhookUrlEncrypted: "v1.a.b.c",
+      cloudflareProjectNameEncrypted: "v1.a.b.c",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    mocks.updateClient.mockImplementation(async (_clientId, update) => {
+      currentClient = { ...currentClient, ...update };
+    });
+
+    const caller = appRouter.createCaller(createContext());
+    const result = await caller.clients.launch({ clientId: 7 });
+
+    expect(mocks.updateClient).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ status: "ready", readyAt: expect.any(Date) }),
+    );
+    expect(result.client.status).toBe("ready");
+    expect(result.readiness.isComplete).toBe(true);
+  });
+});

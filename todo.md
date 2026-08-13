@@ -1,0 +1,145 @@
+# Project TODO
+
+- [x] Define client configuration, business-hours, launch-asset, and explicit readiness/checklist data structures.
+- [x] Add database persistence for clients, JSON-backed business hours, stored asset references, and protected setup values.
+- [x] Generate and apply the database migration without destructive changes.
+- [x] Encrypt sensitive setup values before database persistence and never return raw secret values to the browser after save.
+- [x] Add authenticated server procedures to list, retrieve, create, update, and mark clients ready to deploy.
+- [x] Validate phone numbers in E.164 format on both client and server.
+- [x] Validate email addresses, website URLs, Facebook URLs, Google Maps URLs, founded years, and required text fields on both client and server.
+- [x] Calculate readiness on the server from required business information, theme, logo, six photo slots, and five setup values.
+- [x] Keep the Launch Site action server-enforced and unavailable until readiness reaches 100 percent.
+- [x] Add server-side logo upload to S3 with stored metadata and thumbnail-ready URL.
+- [x] Add six named marketing-photo slots: hero, hot tubs category, swim spas category, showroom, product, and delivery.
+- [x] Convert every marketing photo to WebP on the server, compress it below 150 KB, and assign the template filename automatically.
+- [x] Replace an existing slot safely when a new photo is uploaded and preserve database consistency.
+- [x] Build the dark-mode client-card homepage with filled green/red status lights and readiness progress for every client.
+- [x] Build a large, guided create/edit client workflow with plain-language section labels and obvious next actions.
+- [x] Add all requested business, contact, address, theme, hours, social, category, and offer fields.
+- [x] Add Aqua, Luxury, and Natural theme choices with clear color swatches.
+- [x] Add drag-and-drop logo upload with a thumbnail preview.
+- [x] Add drag-and-drop upload controls and thumbnail previews for every named marketing-photo slot.
+- [x] Label the protected setup section exactly “Technical Setup (ask Alex)”.
+- [x] Show filled red/green indicators for each protected setup value without exposing saved secret contents.
+- [x] Build the per-client checklist with a clear checkmark or cross for business information, theme, logo, each photo, and each protected setup value.
+- [x] Disable the Launch Site button at the HTML-control level whenever any required item is incomplete.
+- [x] Show a plain-language success confirmation after a client is marked ready to deploy, without performing a real deployment.
+- [x] Add clear loading, empty, validation-error, upload-progress, save-success, and failure states.
+- [x] Ensure the interface is responsive, keyboard accessible, touch friendly, and readable on phones.
+- [x] Remove unneeded technical jargon from end-user-facing copy while preserving the exact mandated “Technical Setup (ask Alex)” title and its required field labels.
+- [x] Add Vitest coverage for validation, readiness rules, protected-value handling, CRUD procedures, and launch gating.
+- [x] Test server-side image conversion, WebP output, filename rules, and the under-150-KB limit.
+- [x] Run type checking, automated tests, and production build successfully.
+- [x] Visually verify the primary desktop and mobile workflows and correct any layout or contrast issues.
+- [x] Review this checklist and mark every completed item before creating the final checkpoint.
+- [x] Save one final checkpoint after the complete first build.
+- [x] Publish the application and verify the live URL.
+
+## GHL-Style Workspace Expansion
+
+- [x] Add persistent website page, paid-ad funnel, funnel-step, and homepage-section data structures.
+- [x] Add non-destructive database migrations for pages, funnels, funnel steps, and ordered homepage sections.
+- [x] Seed default website pages, funnel shapes, and homepage sections automatically for each client without fabricating testimonials or customer content.
+- [x] Add authenticated procedures to load a complete selected-client workspace.
+- [x] Add authenticated procedures to update funnel shape, step details, URLs, captured fields, and tracking actions.
+- [x] Add authenticated procedures to reorder, enable, and disable homepage sections.
+- [x] Preserve existing client create/edit, protected setup, upload, checklist, and launch-readiness procedures.
+- [x] Build a GHL-inspired desktop sidebar with Clients, Pages, Funnels, Media, and Settings navigation.
+- [x] Build a mobile bottom navigation with the same primary destinations.
+- [x] Add a top client switcher showing every client with filled green, yellow, or red status indicators.
+- [x] Make client selection update pages, funnels, media, settings, and workspace content consistently.
+- [x] Add breadcrumb navigation for every workspace route.
+- [x] Add Preview and Publish actions at the top-right with clear current-state feedback.
+- [x] Add Website and Paid Ads mode tabs at the top of the workspace.
+- [x] Build Website mode page cards for Homepage, Inventory, Category pages, Visit Us, and Financing.
+- [x] Add useful visual page thumbnails without relying on fabricated customer content.
+- [x] Build the Homepage section builder with Hero, Categories, Visit Showroom, Delivery/Install, Testimonials, Financing, FAQ, Contact, and Map cards.
+- [x] Make homepage section cards draggable with persistent ordering.
+- [x] Add clear enable/disable controls and a visual section-order preview.
+- [x] Build Paid Ads mode funnel cards with the active Shape A, Shape B, or Shape C clearly shown.
+- [x] Render funnel steps as connected cards with directional arrows.
+- [x] Show each step’s URL, captured form fields, and tracking actions.
+- [x] Make funnel steps selectable and editable in a plain-language details panel.
+- [x] Preserve the exact Shape A flow: ZIP → Thank You.
+- [x] Preserve the exact Shape B flow: ZIP → Survey → Contact → Thank You.
+- [x] Preserve the exact Shape C flow: ZIP → Survey → Contact → Book → Thank You.
+- [x] Keep all new layouts dark, large-target, plain-language, keyboard accessible, and mobile friendly.
+- [x] Add automated coverage for workspace defaults, funnel shapes, step updates, section ordering, and client switching.
+- [x] Run regression tests for existing client onboarding, image processing, readiness, and launch gating.
+- [x] Run final type checking, automated tests, production build, and desktop/mobile visual verification.
+- [x] Review the expanded checklist before saving the update checkpoint.
+- [x] Save the completed update checkpoint.
+- [x] Republish with Team visibility and verify the updated live URL.
+
+## Funnel Creation and Deployment Readiness
+
+- [x] Add a dedicated encrypted GHL webhook URL field to “Technical Setup (ask Alex)” because the existing GHL API key is not a webhook URL.
+- [x] Add persistent funnel configuration, survey-question, generated-config, and deployment-status data structures.
+- [x] Add a non-destructive migration for funnel configuration, ordered questions, and draft/ready/deployed status.
+- [x] Add authenticated APIs to list, create, retrieve, update, and save multiple funnels per client.
+- [x] Autofill new funnel configuration from the selected client’s business name, phone, ZIP/address service area, Meta Pixel ID, and encrypted GHL webhook URL.
+- [x] Keep client setup values protected at rest while allowing authenticated config generation and preview.
+- [x] Add question validation for radio, checkbox, and text types with appropriate option requirements.
+- [x] Add persistent question creation, removal, editing, and collision-safe reordering.
+- [x] Generate deterministic `funnel.config.ts` content from stored client, offer, thank-you, and survey-question data.
+- [x] Store generated configuration content encrypted at rest and return it only to authenticated users.
+- [x] Add a server-enforced “Deploy Funnel” action that marks complete funnels ready without running Wrangler.
+- [x] Store draft, ready, and deployed status separately for every funnel.
+- [x] Add a manual “Mark deployed” confirmation after the Wrangler step so the deployed status can be recorded per funnel.
+- [x] Show the exact success instruction: “Funnel config generated. Run `npx wrangler deploy` in the funnel template folder to go live.”
+- [x] Preserve existing funnel shape visualization and step editing while adding real funnel configuration editing.
+- [x] Add a prominent Create Funnel action in the selected client’s Paid Ads workspace.
+- [x] Show multiple client funnels as cards with draft, ready, or deployed badges.
+- [x] Make every funnel card open its saved configuration editor.
+- [x] Build offer headline, offer subheadline, and thank-you message fields.
+- [x] Build a draggable survey-question editor with add, remove, reorder, type, and answer-option controls.
+- [x] Update form-step and full-flow counts automatically as survey questions change.
+- [x] Show a live ZIP → survey question(s) → contact → thank-you flow preview.
+- [x] Add Generate / Save controls and a read-only copyable config-code preview.
+- [x] Keep the new editor dark, large-target, plain-language, keyboard accessible, and mobile friendly.
+- [x] Add automated tests for autofill, question validation/order, deterministic config generation, encrypted storage, and deployment gating.
+- [x] Run regression tests for the existing client profile, uploads, readiness, page workspace, section builder, and legacy funnel shapes.
+- [x] Run final type checking, automated tests, production build, and desktop/mobile visual verification.
+- [x] Review the funnel expansion checklist before checkpointing.
+- [x] Save the completed funnel expansion checkpoint.
+- [x] Republish with Team visibility and verify the updated live URL.
+
+## Complete Astro client.config.ts Schema
+
+- [x] Expand the persistent client model with schema type, SMS phone, phone display override, second address line, coordinates, Google Place ID, and US country default.
+- [x] Add persistent JSON-backed social links, font settings, border radii, navigation items, category configurations, financing, homepage sections, and integration settings.
+- [x] Add persistent protected storage for all 14 required Wrangler secrets without exposing saved values after load.
+- [x] Add asset slots and S3-backed uploads for nav logo, footer logo, inventory logo, favicon, Open Graph image, and enabled-category hero images.
+- [x] Generate and apply a non-destructive database migration for the complete Astro configuration schema.
+- [x] Add schema validation for identity, E.164 SMS phone, optional phone display override, address coordinates, Google Place ID, and schema type.
+- [x] Add URL validation for all seven optional social-link fields.
+- [x] Add day-by-day HH:MM business-hours validation, per-day Closed state, and grouped-day editing support.
+- [x] Add the Mono theme while preserving Aqua, Luxury, and Natural.
+- [x] Add font, Google Fonts URL, and non-negative card/button/pill radius validation.
+- [x] Add ordered navigation-item validation for categories and link items with header/footer visibility.
+- [x] Add category validation for hot tubs, swim spas, saunas, cold plunge, and massage chairs, including label, slug, description, and hero image.
+- [x] Add conditional financing validation for lender, URL, disclaimer, terms, CTA label, and monthly example.
+- [x] Add ordered homepage-section validation for hero, cards, visit, steps, gallery, reviews, bignumber, faq, ctaband, and cta.
+- [x] Add conditional integration validation for D1, R2, GHL, Meta, Zaraz, and Sentry configuration fields.
+- [x] Add authenticated APIs to retrieve and save the full Astro configuration for each client.
+- [x] Add authenticated asset-upload APIs for all new logo, favicon, Open Graph, and category-hero slots.
+- [x] Add authenticated protected-secret save APIs and red/green completion status for all 14 Wrangler secrets.
+- [x] Generate deterministic, complete `client.config.ts` content from all saved form data.
+- [x] Add copy and download controls for the generated `client.config.ts` file.
+- [x] Organize the client editor into Basic Info, Branding, Content, and Technical tabs while preserving the Paid Ads workspace.
+- [x] Build Basic Info sections for identity, contact, address, grouped hours, and social links.
+- [x] Build Branding sections for four themes, fonts, five logo/image uploads, and border radii.
+- [x] Build ordered drag-and-drop navigation items with categories/link type behavior and header/footer toggles.
+- [x] Build the five-category editor with enable toggles, labels, slugs, descriptions, and hero uploads.
+- [x] Build conditional financing controls.
+- [x] Expand the homepage builder to all ten requested section types with add, remove, reorder, enable/disable, and type-specific fields.
+- [x] Build conditional integration cards for D1, R2, GHL, Meta, Zaraz, and Sentry.
+- [x] Build the complete 14-secret checklist with descriptions, masked inputs, and filled red/green indicators.
+- [x] Add save-on-change behavior with visible saving, saved, validation-error, and retry states.
+- [x] Keep the expanded editor dark, fast, large-target, keyboard accessible, and mobile friendly.
+- [x] Preserve existing client onboarding, photo uploads, readiness, website workspace, Paid Ads funnels, and launch actions.
+- [x] Add automated tests for every schema group, conditional validation, protected secrets, uploads, ordering, and deterministic export.
+- [x] Run complete regression tests, type checking, production build, database persistence checks, and desktop/mobile visual verification.
+- [x] Review the complete Astro schema checklist before checkpointing.
+- [x] Save the completed Astro schema expansion checkpoint.
+- [x] Republish with Team visibility and verify the existing live URL.
