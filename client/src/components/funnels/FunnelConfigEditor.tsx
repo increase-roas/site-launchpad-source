@@ -272,6 +272,12 @@ export function FunnelConfigEditor({
   const [form, setForm] = useState<FormDraft | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [deployMessage, setDeployMessage] = useState("");
+  const [exportedConfig, setExportedConfig] = useState("");
+
+  useEffect(() => {
+    setExportedConfig("");
+    setDeployMessage("");
+  }, [clientId, funnelId]);
 
   useEffect(() => {
     const detail = detailQuery.data;
@@ -295,6 +301,7 @@ export function FunnelConfigEditor({
 
   const saveMutation = trpc.funnelBuilder.save.useMutation({
     onSuccess: async detail => {
+      setExportedConfig(detail.config.generatedConfig);
       await Promise.all([
         utils.funnelBuilder.get.invalidate({ clientId, funnelId }),
         utils.funnelBuilder.list.invalidate({ clientId }),
@@ -344,7 +351,7 @@ export function FunnelConfigEditor({
     onError: error => toast.error(error.message),
   });
 
-  const generatedConfig = detailQuery.data?.config.generatedConfig ?? "";
+  const generatedConfig = exportedConfig || detailQuery.data?.config.generatedConfig || "";
   const status = detailQuery.data?.funnel.deploymentStatus ?? "draft";
   const readyInstruction = deployMessage || (status === "ready" ? DEPLOY_SUCCESS_MESSAGE : "");
 
@@ -466,8 +473,8 @@ export function FunnelConfigEditor({
               <label className="space-y-2"><span className="text-sm font-extrabold">Business name</span><Input readOnly value={detail.profile.businessName} className="h-12 rounded-xl border-white/8 bg-black/20" /></label>
               <label className="space-y-2"><span className="text-sm font-extrabold">Phone</span><Input readOnly value={detail.profile.phone} className="h-12 rounded-xl border-white/8 bg-black/20" /></label>
               <label className="space-y-2 sm:col-span-2"><span className="text-sm font-extrabold">Service area</span><Input value={form.serviceArea} onChange={event => setForm({ ...form, serviceArea: event.target.value })} className="h-12 rounded-xl border-white/10 bg-black/15" /></label>
-              <label className="space-y-2"><span className="flex items-center gap-2 text-sm font-extrabold"><Zap className="h-4 w-4 text-cyan-300" /> Meta Pixel ID</span><Input readOnly value={detail.profile.metaPixelId} placeholder="Missing in setup" className="h-12 rounded-xl border-white/8 bg-black/20" /></label>
-              <label className="space-y-2"><span className="flex items-center gap-2 text-sm font-extrabold"><Webhook className="h-4 w-4 text-cyan-300" /> GHL webhook URL</span><Input readOnly value={detail.profile.ghlWebhookUrl} placeholder="Missing in setup" className="h-12 rounded-xl border-white/8 bg-black/20" /></label>
+              <label className="space-y-2"><span className="flex items-center gap-2 text-sm font-extrabold"><Zap className="h-4 w-4 text-cyan-300" /> Meta Pixel ID</span><Input readOnly value={detail.profile.hasMetaPixelId ? "Saved in setup" : ""} placeholder="Missing in setup" className="h-12 rounded-xl border-white/8 bg-black/20" /></label>
+              <label className="space-y-2"><span className="flex items-center gap-2 text-sm font-extrabold"><Webhook className="h-4 w-4 text-cyan-300" /> GHL webhook URL</span><Input readOnly value={detail.profile.hasGhlWebhookUrl ? "Saved in setup" : ""} placeholder="Missing in setup" className="h-12 rounded-xl border-white/8 bg-black/20" /></label>
             </div>
           </Card>
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   applyAstroAssetUrls,
   mergeStoredAstroConfig,
@@ -7,6 +7,8 @@ import {
 import { decryptSetupValue } from "./clientSecurity";
 import { createDefaultAstroConfig } from "../shared/astroConfig";
 import { BUSINESS_DAY_VALUES } from "../shared/client";
+
+const originalSecret = process.env.JWT_SECRET;
 
 const defaultConfig = () => createDefaultAstroConfig({
   businessName: "Test Spas",
@@ -27,6 +29,13 @@ const defaultConfig = () => createDefaultAstroConfig({
 });
 
 describe("Astro config persistence helpers", () => {
+  beforeEach(() => {
+    process.env.JWT_SECRET = "test-only-astro-config-encryption-secret";
+  });
+
+  afterEach(() => {
+    process.env.JWT_SECRET = originalSecret;
+  });
   it("merges every persisted category hero asset into saved category data", () => {
     const config = defaultConfig();
     const merged = applyAstroAssetUrls(config, {

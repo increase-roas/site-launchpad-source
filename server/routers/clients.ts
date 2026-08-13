@@ -28,7 +28,7 @@ import {
 import { encryptSetupValue, hasProtectedValue } from "../clientSecurity";
 import { decodeImageDataUrl, processUploadedImage } from "../imageProcessing";
 import { storagePutExact } from "../storage";
-import { protectedProcedure, router } from "../_core/trpc";
+import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { ensureWorkspaceDefaults } from "../workspaceDb";
 
 const secretColumnByField = {
@@ -196,7 +196,7 @@ export const clientsRouter = router({
       }
     }),
 
-  launch: protectedProcedure
+  launch: adminProcedure
     .input(z.object({ clientId: z.number().int().positive() }))
     .mutation(async ({ input }) => {
       const view = await getClientView(input.clientId);

@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrpcContext } from "./_core/context";
 import { ASSET_SLOT_VALUES, BUSINESS_DAY_VALUES } from "../shared/client";
+import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from "../shared/const";
 
 const mocks = vi.hoisted(() => ({
   getClientById: vi.fn(),
@@ -92,19 +93,22 @@ const setupInput = {
   cloudflareProjectName: "paradise-spas",
 };
 
-function createContext(): TrpcContext {
+function createContext(role: "admin" | "user" | null = "admin"): TrpcContext {
   return {
-    user: {
-      id: 1,
-      openId: "test-user",
-      name: "Test User",
-      email: "test@example.com",
-      loginMethod: "manus",
-      role: "admin",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      lastSignedIn: new Date(),
-    },
+    user:
+      role === null
+        ? null
+        : {
+            id: 1,
+            openId: "test-user",
+            name: "Test User",
+            email: "test@example.com",
+            loginMethod: "manus",
+            role,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            lastSignedIn: new Date(),
+          },
     req: { protocol: "https", headers: {} } as TrpcContext["req"],
     res: {} as TrpcContext["res"],
   };
@@ -230,5 +234,39 @@ describe("client launch gating", () => {
     );
     expect(result.client.status).toBe("ready");
     expect(result.readiness.isComplete).toBe(true);
+  });
+
+  it("lets a non-admin operator update client details", async () => {
+    const caller = appRouter.createCaller(createContext("user"));
+    await caller.clients.update({
+      clientId: 7,
+      details: { ...detailsInput, tagline: "Operator edit." },
+      setup: {
+        metaPixelId: "",
+        ga4MeasurementId: "",
+        clarityId: "",
+        ghlApiKey: "",
+        ghlWebhookUrl: "",
+        cloudflareProjectName: "",
+      },
+    });
+    expect(mocks.updateClient).toHaveBeenCalled();
+  });
+
+  it("forbids a non-admin from launching", async () => {
+    const caller = appRouter.createCaller(createContext("user"));
+    await expect(caller.clients.launch({ clientId: 7 })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: NOT_ADMIN_ERR_MSG,
+    });
+    expect(mocks.updateClient).not.toHaveBeenCalled();
+  });
+
+  it("rejects unauthenticated client lists", async () => {
+    const caller = appRouter.createCaller(createContext(null));
+    await expect(caller.clients.list()).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      message: UNAUTHED_ERR_MSG,
+    });
   });
 });

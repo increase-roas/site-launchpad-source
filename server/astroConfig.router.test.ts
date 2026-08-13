@@ -87,7 +87,7 @@ const view = {
     ADMIN_PASSWORD: false,
     ADMIN_SESSION_SECRET: false,
   },
-  generatedConfig: "export const clientConfig = {} as const;",
+  generatedConfig: "export const clientConfig = { pixel: 'raw-secret-pixel' } as const;",
   generatedAt: null,
 };
 
@@ -106,7 +106,10 @@ describe("authenticated Astro config procedures", () => {
 
   it("loads and saves the complete selected-client configuration", async () => {
     const caller = astroConfigRouter.createCaller(context());
-    await caller.get({ clientId: 5 });
+    const loaded = await caller.get({ clientId: 5 });
+    expect(loaded.generatedConfig).toBe("");
+    expect(loaded.hasGeneratedConfig).toBe(true);
+    expect(JSON.stringify(loaded)).not.toContain("raw-secret-pixel");
     const saved = await caller.save({ clientId: 5, config });
     expect(mocks.getAstroConfigView).toHaveBeenCalledWith(5);
     expect(mocks.saveAstroConfig).toHaveBeenCalledWith(5, config);
@@ -136,6 +139,7 @@ describe("authenticated Astro config procedures", () => {
     expect(mocks.saveWranglerSecrets).toHaveBeenCalledWith(5, { GHL_API_KEY: "raw-secret" });
     expect(result.secretStatus.GHL_API_KEY).toBe(true);
     expect(JSON.stringify(result)).not.toContain("raw-secret");
+    expect(result.generatedConfig).toBe("");
   });
 
   it("processes and persists a category hero in its exact Astro asset slot", async () => {

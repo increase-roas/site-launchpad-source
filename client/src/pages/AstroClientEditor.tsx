@@ -15,6 +15,11 @@ import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, Megaphone, Save } from "
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import {
+  saveClientIdForMountedEditor,
+  shouldClearDirtyAfterSave,
+  shouldHydrateEditor,
+} from "./editorIsolation";
 
 type SaveState = "idle" | "pending" | "saving" | "saved" | "invalid" | "error";
 
@@ -40,41 +45,30 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
   const [uploadingSlot, setUploadingSlot] = useState<AstroAssetSlot | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [issues, setIssues] = useState<string[]>([]);
-  const hydratedRef = useRef(false);
+  const hydratedForClientIdRef = useRef<number | null>(null);
   const dirtyRef = useRef(false);
   const configRef = useRef<AstroClientConfigInput | null>(null);
+  const saveInFlightRef = useRef(false);
+  const trailingSaveRef = useRef(false);
+  const inFlightPayloadRef = useRef("");
+  const mountedClientIdRef = useRef(clientId);
+  mountedClientIdRef.current = clientId;
   const initialTab = useMemo(() => {
     const tab = new URLSearchParams(window.location.search).get("tab");
     return tab === "branding" || tab === "content" || tab === "technical" ? tab : "basic";
   }, []);
 
   useEffect(() => {
-    if (!query.data || hydratedRef.current) return;
+    if (!query.data || !shouldHydrateEditor(hydratedForClientIdRef.current, clientId)) return;
     setConfig(query.data.input);
     configRef.current = query.data.input;
     setAssets(query.data.assets);
     setGeneratedConfig(query.data.generatedConfig);
     setSecretStatus(query.data.secretStatus);
     setSaveState("saved");
-    hydratedRef.current = true;
-  }, [query.data]);
-
-  const saveMutation = trpc.astroConfig.save.useMutation({
-    onMutate: () => setSaveState("saving"),
-    onSuccess: async view => {
-      dirtyRef.current = false;
-      setGeneratedConfig(view.generatedConfig);
-      setAssets(view.assets);
-      setSecretStatus(view.secretStatus);
-      setSaveState("saved");
-      setIssues([]);
-      await Promise.all([utils.clients.list.invalidate(), utils.astroConfig.get.invalidate(queryInput)]);
-    },
-    onError: error => {
-      setSaveState("error");
-      toast.error(error.message);
-    },
-  });
+    dirtyRef.current = false;
+    hydratedForClientIdRef.current = clientId;
+  }, [query.data, clientId]);
 
   const secretMutation = trpc.astroConfig.saveSecrets.useMutation({
     onSuccess: view => {
@@ -119,9 +113,43 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
     onSettled: () => setUploadingSlot(null),
   });
 
+  const saveMutation = trpc.astroConfig.save.useMutation({
+    onMutate: () => setSaveState("saving"),
+    onSuccess: async view => {
+      setGeneratedConfig(view.generatedConfig);
+      setAssets(view.assets);
+      setSecretStatus(view.secretStatus);
+      setIssues([]);
+      await Promise.all([utils.clients.list.invalidate(), utils.astroConfig.get.invalidate(queryInput)]);
+      const currentPayload = JSON.stringify(configRef.current);
+      const needsTrailing =
+        trailingSaveRef.current || !shouldClearDirtyAfterSave(inFlightPayloadRef.current, currentPayload);
+      trailingSaveRef.current = false;
+      saveInFlightRef.current = false;
+      if (needsTrailing && configRef.current) {
+        dirtyRef.current = true;
+        setSaveState("pending");
+        return;
+      }
+      dirtyRef.current = false;
+      setSaveState("saved");
+    },
+    onError: error => {
+      saveInFlightRef.current = false;
+      trailingSaveRef.current = false;
+      setSaveState("error");
+      toast.error(error.message);
+    },
+  });
+
   const saveNow = (showToast = false) => {
     const current = configRef.current;
-    if (!current || saveMutation.isPending) return;
+    const targetClientId = saveClientIdForMountedEditor(mountedClientIdRef.current, clientId);
+    if (!current || targetClientId === null) return;
+    if (saveInFlightRef.current || saveMutation.isPending) {
+      trailingSaveRef.current = dirtyRef.current;
+      return;
+    }
     const parsed = astroClientConfigInputSchema.safeParse(current);
     if (!parsed.success) {
       const nextIssues = Array.from(new Set(parsed.error.issues.map(issue => `${issue.path.join(" → ")}: ${issue.message}`))).slice(0, 8);
@@ -130,7 +158,9 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
       if (showToast) toast.error("Complete the highlighted setup items before generating the config.");
       return;
     }
-    saveMutation.mutate({ clientId, config: parsed.data }, {
+    saveInFlightRef.current = true;
+    inFlightPayloadRef.current = JSON.stringify(parsed.data);
+    saveMutation.mutate({ clientId: targetClientId, config: parsed.data }, {
       onSuccess: () => {
         if (showToast) toast.success("client.config.ts generated.");
       },

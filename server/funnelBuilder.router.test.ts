@@ -1,5 +1,6 @@
-import type { TrpcContext } from "./_core/context";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { TrpcContext } from "./_core/context";
+import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from "../shared/const";
 
 const mocks = vi.hoisted(() => ({
   listFunnelBuilderCards: vi.fn(),
@@ -23,19 +24,22 @@ vi.mock("./workspaceDb", () => ({ ensureWorkspaceDefaults: mocks.ensureWorkspace
 
 import { funnelBuilderRouter } from "./routers/funnelBuilder";
 
-function context(): TrpcContext {
+function context(role: "admin" | "user" | null = "admin"): TrpcContext {
   return {
-    user: {
-      id: 1,
-      openId: "funnel-test-user",
-      name: "Funnel Test",
-      email: "funnel@example.com",
-      loginMethod: "manus",
-      role: "admin",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      lastSignedIn: new Date(),
-    },
+    user:
+      role === null
+        ? null
+        : {
+            id: 1,
+            openId: "funnel-test-user",
+            name: "Funnel Test",
+            email: "funnel@example.com",
+            loginMethod: "manus",
+            role,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            lastSignedIn: new Date(),
+          },
     req: { protocol: "https", headers: {} } as TrpcContext["req"],
     res: {} as TrpcContext["res"],
   };
@@ -43,9 +47,23 @@ function context(): TrpcContext {
 
 const detail = {
   funnel: { id: 8, clientId: 5, name: "Hot Tub Quiz", deploymentStatus: "draft" },
-  config: { generatedConfig: "export const funnelConfig = {};" },
+  config: {
+    serviceArea: "Minot, ND",
+    offerHeadline: "Save",
+    offerSubheadline: "Find a model",
+    thankYouMessage: "Thanks",
+    generatedConfig: "export const funnelConfig = { pixel: '1234567890' };",
+    generatedAt: null,
+  },
   questions: [],
-  profile: { businessName: "Paradise Spas", missingSetup: [] },
+  profile: {
+    businessName: "Paradise Spas",
+    phone: "+17015551234",
+    serviceArea: "Minot, ND",
+    metaPixelId: "1234567890",
+    ghlWebhookUrl: "https://services.leadconnectorhq.com/hooks/example",
+    missingSetup: [],
+  },
 };
 
 const editorInput = {
@@ -112,5 +130,39 @@ describe("authenticated funnel builder procedures", () => {
     const result = await caller.markDeployed({ clientId: 5, funnelId: 8 });
     expect(mocks.markFunnelDeployed).toHaveBeenCalledWith(5, 8);
     expect(result.funnel.deploymentStatus).toBe("deployed");
+  });
+
+  it("redacts pixel, webhook, and generated config on get", async () => {
+    const caller = funnelBuilderRouter.createCaller(context("user"));
+    const result = await caller.get({ clientId: 5, funnelId: 8 });
+    const serialized = JSON.stringify(result);
+    expect(result.profile.hasMetaPixelId).toBe(true);
+    expect(result.config.hasGeneratedConfig).toBe(true);
+    expect(result.config.generatedConfig).toBe("");
+    expect(serialized).not.toContain("1234567890");
+    expect(serialized).not.toContain("leadconnectorhq");
+  });
+
+  it("lets an operator save funnel content", async () => {
+    const caller = funnelBuilderRouter.createCaller(context("user"));
+    await caller.save({ clientId: 5, funnelId: 8, config: editorInput });
+    expect(mocks.saveFunnelBuilder).toHaveBeenCalledWith(5, 8, editorInput);
+  });
+
+  it("forbids a non-admin from deploying", async () => {
+    const caller = funnelBuilderRouter.createCaller(context("user"));
+    await expect(caller.deploy({ clientId: 5, funnelId: 8 })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: NOT_ADMIN_ERR_MSG,
+    });
+    expect(mocks.markFunnelReady).not.toHaveBeenCalled();
+  });
+
+  it("rejects unauthenticated funnel reads", async () => {
+    const caller = funnelBuilderRouter.createCaller(context(null));
+    await expect(caller.get({ clientId: 5, funnelId: 8 })).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      message: UNAUTHED_ERR_MSG,
+    });
   });
 });

@@ -12,6 +12,7 @@ import { getClientById, upsertClientAsset } from "../db";
 import { decodeImageDataUrl, processAstroUploadedImage } from "../imageProcessing";
 import { storagePutExact } from "../storage";
 import { protectedProcedure, router } from "../_core/trpc";
+import { toClientAstroConfigView } from "../secretRedaction";
 
 const clientIdInput = z.object({ clientId: z.number().int().positive() });
 const wranglerSecretInputSchema = z.object(
@@ -30,7 +31,9 @@ function plainError(error: unknown, fallback: string): TRPCError {
 export const astroConfigRouter = router({
   get: protectedProcedure.input(clientIdInput).query(async ({ input }) => {
     try {
-      return await getAstroConfigView(input.clientId);
+      return toClientAstroConfigView(await getAstroConfigView(input.clientId), {
+        includeGeneratedConfig: false,
+      });
     } catch (error) {
       throw plainError(error, "Client configuration could not be loaded.");
     }
@@ -40,7 +43,9 @@ export const astroConfigRouter = router({
     .input(z.object({ clientId: z.number().int().positive(), config: astroClientConfigInputSchema }))
     .mutation(async ({ input }) => {
       try {
-        return await saveAstroConfig(input.clientId, input.config);
+        return toClientAstroConfigView(await saveAstroConfig(input.clientId, input.config), {
+          includeGeneratedConfig: true,
+        });
       } catch (error) {
         throw plainError(error, "Client configuration could not be saved.");
       }
@@ -50,7 +55,9 @@ export const astroConfigRouter = router({
     .input(z.object({ clientId: z.number().int().positive(), values: wranglerSecretInputSchema }))
     .mutation(async ({ input }) => {
       try {
-        return await saveWranglerSecrets(input.clientId, input.values);
+        return toClientAstroConfigView(await saveWranglerSecrets(input.clientId, input.values), {
+          includeGeneratedConfig: false,
+        });
       } catch (error) {
         throw plainError(error, "Protected setup values could not be saved.");
       }
@@ -91,7 +98,9 @@ export const astroConfigRouter = router({
           width: processed.width,
           height: processed.height,
         });
-        return getAstroConfigView(client.id);
+        return toClientAstroConfigView(await getAstroConfigView(client.id), {
+          includeGeneratedConfig: false,
+        });
       } catch (error) {
         throw plainError(error, "That image could not be uploaded.");
       }

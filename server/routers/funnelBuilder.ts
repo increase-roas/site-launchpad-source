@@ -1,7 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { DEPLOY_SUCCESS_MESSAGE, funnelEditorInputSchema } from "../../shared/funnelConfig";
-import { protectedProcedure, router } from "../_core/trpc";
+import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
+import { toClientFunnelBuilderDetail } from "../secretRedaction";
 import {
   createFunnelBuilder,
   getFunnelBuilderDetail,
@@ -45,7 +46,9 @@ export const funnelBuilderRouter = router({
     )
     .mutation(async ({ input }) => {
       try {
-        return await createFunnelBuilder(input.clientId, input.name);
+        return toClientFunnelBuilderDetail(await createFunnelBuilder(input.clientId, input.name), {
+          includeGeneratedConfig: false,
+        });
       } catch (error) {
         throw asPlainError(error, "Funnel could not be created.");
       }
@@ -53,7 +56,9 @@ export const funnelBuilderRouter = router({
 
   get: protectedProcedure.input(ownedFunnelInput).query(async ({ input }) => {
     try {
-      return await getFunnelBuilderDetail(input.clientId, input.funnelId);
+      return toClientFunnelBuilderDetail(await getFunnelBuilderDetail(input.clientId, input.funnelId), {
+        includeGeneratedConfig: false,
+      });
     } catch (error) {
       throw asPlainError(error, "Funnel could not be loaded.");
     }
@@ -63,24 +68,31 @@ export const funnelBuilderRouter = router({
     .input(ownedFunnelInput.extend({ config: funnelEditorInputSchema }))
     .mutation(async ({ input }) => {
       try {
-        return await saveFunnelBuilder(input.clientId, input.funnelId, input.config);
+        return toClientFunnelBuilderDetail(
+          await saveFunnelBuilder(input.clientId, input.funnelId, input.config),
+          { includeGeneratedConfig: true },
+        );
       } catch (error) {
         throw asPlainError(error, "Funnel could not be saved.");
       }
     }),
 
-  deploy: protectedProcedure.input(ownedFunnelInput).mutation(async ({ input }) => {
+  deploy: adminProcedure.input(ownedFunnelInput).mutation(async ({ input }) => {
     try {
-      const funnel = await markFunnelReady(input.clientId, input.funnelId);
-      return { funnel, message: DEPLOY_SUCCESS_MESSAGE };
+      const detail = toClientFunnelBuilderDetail(await markFunnelReady(input.clientId, input.funnelId), {
+        includeGeneratedConfig: false,
+      });
+      return { funnel: detail, message: DEPLOY_SUCCESS_MESSAGE };
     } catch (error) {
       throw asPlainError(error, "Funnel is not ready to deploy.");
     }
   }),
 
-  markDeployed: protectedProcedure.input(ownedFunnelInput).mutation(async ({ input }) => {
+  markDeployed: adminProcedure.input(ownedFunnelInput).mutation(async ({ input }) => {
     try {
-      return await markFunnelDeployed(input.clientId, input.funnelId);
+      return toClientFunnelBuilderDetail(await markFunnelDeployed(input.clientId, input.funnelId), {
+        includeGeneratedConfig: false,
+      });
     } catch (error) {
       throw asPlainError(error, "Deployed status could not be saved.");
     }

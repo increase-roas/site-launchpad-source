@@ -32,7 +32,12 @@ function Router() {
         {params => <MediaWorkspace clientId={Number(params.clientId)} />}
       </Route>
       <Route path="/workspace/:clientId/settings">
-        {params => <AstroClientEditor clientId={Number(params.clientId)} />}
+        {params => (
+          <AstroClientEditor
+            key={Number(params.clientId)}
+            clientId={Number(params.clientId)}
+          />
+        )}
       </Route>
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
