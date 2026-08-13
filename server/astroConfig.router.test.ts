@@ -2,6 +2,7 @@ import type { TrpcContext } from "./_core/context";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createDefaultAstroConfig } from "../shared/astroConfig";
 import { BUSINESS_DAY_VALUES } from "../shared/client";
+import { UNAUTHED_ERR_MSG } from "../shared/const";
 
 const mocks = vi.hoisted(() => ({
   getAstroConfigView: vi.fn(),
@@ -32,19 +33,22 @@ vi.mock("./storage", () => ({ storagePutExact: mocks.storagePutExact }));
 
 import { astroConfigRouter } from "./routers/astroConfig";
 
-function context(): TrpcContext {
+function context(role: "admin" | "user" | null = "admin"): TrpcContext {
   return {
-    user: {
-      id: 1,
-      openId: "astro-test-user",
-      name: "Astro Test",
-      email: "astro@example.com",
-      loginMethod: "manus",
-      role: "admin",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      lastSignedIn: new Date(),
-    },
+    user:
+      role === null
+        ? null
+        : {
+            id: 1,
+            openId: "astro-test-user",
+            name: "Astro Test",
+            email: "astro@example.com",
+            loginMethod: "manus",
+            role,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            lastSignedIn: new Date(),
+          },
     req: { protocol: "https", headers: {} } as TrpcContext["req"],
     res: {} as TrpcContext["res"],
   };
@@ -114,7 +118,10 @@ describe("authenticated Astro config procedures", () => {
     const saved = await caller.save({ clientId: 5, config });
     expect(mocks.getAstroConfigView).toHaveBeenCalledWith(5);
     expect(mocks.saveAstroConfig).toHaveBeenCalledWith(5, config);
-    expect(saved.generatedConfig).toContain("clientConfig");
+    expect(saved.generatedConfig).toBe("");
+    expect(saved.hasGeneratedConfig).toBe(true);
+    expect(JSON.stringify(saved)).not.toContain("raw-secret-pixel");
+    expect(JSON.stringify(saved)).not.toContain("clientConfig");
   });
 
   it("passes reordered navigation and homepage sections through the save API unchanged", async () => {
@@ -158,6 +165,25 @@ describe("authenticated Astro config procedures", () => {
       "image/webp",
     );
     expect(mocks.upsertClientAsset).toHaveBeenCalledWith(expect.objectContaining({ clientId: 5, slot: "categoryHotTubs" }));
+  });
+
+  it("exports generated Astro config through a dedicated authenticated RPC", async () => {
+    const caller = astroConfigRouter.createCaller(context("user"));
+    const exported = await caller.exportGeneratedConfig({ clientId: 5 });
+    expect(mocks.getAstroConfigView).toHaveBeenCalledWith(5);
+    expect(exported).toEqual({
+      fileName: "client.config.ts",
+      contents: view.generatedConfig,
+    });
+  });
+
+  it("rejects unauthenticated generated-config exports", async () => {
+    const caller = astroConfigRouter.createCaller(context(null));
+    await expect(caller.exportGeneratedConfig({ clientId: 5 })).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      message: UNAUTHED_ERR_MSG,
+    });
+    expect(mocks.getAstroConfigView).not.toHaveBeenCalled();
   });
 
   it("maps missing-client errors to NOT_FOUND", async () => {

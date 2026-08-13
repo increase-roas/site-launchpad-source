@@ -2,33 +2,33 @@ import { describe, expect, it } from "vitest";
 import {
   toClientAstroConfigView,
   toClientFunnelBuilderDetail,
+  toGeneratedConfigExport,
 } from "./secretRedaction";
 
+const funnelDetail = {
+  funnel: { id: 8, clientId: 5 },
+  config: {
+    serviceArea: "Minot, ND",
+    offerHeadline: "Save",
+    offerSubheadline: "Find a model",
+    thankYouMessage: "Thanks",
+    generatedConfig: "export const funnelConfig = { pixel: '1234567890' };",
+    generatedAt: null,
+  },
+  questions: [],
+  profile: {
+    businessName: "Paradise Spas",
+    phone: "+17015551234",
+    serviceArea: "Minot, ND",
+    metaPixelId: "1234567890",
+    ghlWebhookUrl: "https://services.leadconnectorhq.com/hooks/example",
+    missingSetup: [],
+  },
+};
+
 describe("client DTO redaction", () => {
-  it("strips pixel, webhook, and generated funnel config from get responses", () => {
-    const client = toClientFunnelBuilderDetail(
-      {
-        funnel: { id: 8, clientId: 5 },
-        config: {
-          serviceArea: "Minot, ND",
-          offerHeadline: "Save",
-          offerSubheadline: "Find a model",
-          thankYouMessage: "Thanks",
-          generatedConfig: "export const funnelConfig = { pixel: '1234567890' };",
-          generatedAt: null,
-        },
-        questions: [],
-        profile: {
-          businessName: "Paradise Spas",
-          phone: "+17015551234",
-          serviceArea: "Minot, ND",
-          metaPixelId: "1234567890",
-          ghlWebhookUrl: "https://services.leadconnectorhq.com/hooks/example",
-          missingSetup: [],
-        },
-      },
-      { includeGeneratedConfig: false },
-    );
+  it("strips pixel, webhook, and generated funnel config from get and save responses", () => {
+    const client = toClientFunnelBuilderDetail(funnelDetail);
 
     const serialized = JSON.stringify(client);
     expect(client.profile.hasMetaPixelId).toBe(true);
@@ -37,47 +37,22 @@ describe("client DTO redaction", () => {
     expect(client.config.generatedConfig).toBe("");
     expect(serialized).not.toContain("1234567890");
     expect(serialized).not.toContain("leadconnectorhq");
+    expect(serialized).not.toContain("funnelConfig");
   });
 
-  it("keeps generated funnel config on save so operators can copy the file once", () => {
-    const client = toClientFunnelBuilderDetail(
-      {
-        funnel: { id: 8, clientId: 5 },
-        config: {
-          serviceArea: "Minot, ND",
-          offerHeadline: "Save",
-          offerSubheadline: "Find a model",
-          thankYouMessage: "Thanks",
-          generatedConfig: "export const funnelConfig = { pixel: '1234567890' };",
-          generatedAt: null,
-        },
-        questions: [],
-        profile: {
-          businessName: "Paradise Spas",
-          phone: "+17015551234",
-          serviceArea: "Minot, ND",
-          metaPixelId: "1234567890",
-          ghlWebhookUrl: "https://hooks.example/secret-path",
-          missingSetup: [],
-        },
-      },
-      { includeGeneratedConfig: true },
-    );
-
-    expect(client.config.generatedConfig).toContain("funnelConfig");
-    expect(JSON.stringify(client.profile)).not.toContain("1234567890");
-    expect(JSON.stringify(client.profile)).not.toContain("secret-path");
+  it("returns generated source only through the dedicated export payload", () => {
+    const exported = toGeneratedConfigExport("funnel.config.ts", funnelDetail.config.generatedConfig);
+    expect(exported.fileName).toBe("funnel.config.ts");
+    expect(exported.contents).toContain("funnelConfig");
+    expect(JSON.stringify(toClientFunnelBuilderDetail(funnelDetail))).not.toContain("funnelConfig");
   });
 
-  it("omits decrypted Astro generated config on get", () => {
-    const client = toClientAstroConfigView(
-      {
-        clientId: 5,
-        generatedConfig: "export const clientConfig = { pixel: 'raw-secret-pixel' };",
-        secretStatus: { GHL_API_KEY: true },
-      },
-      { includeGeneratedConfig: false },
-    );
+  it("omits decrypted Astro generated config on get and save", () => {
+    const client = toClientAstroConfigView({
+      clientId: 5,
+      generatedConfig: "export const clientConfig = { pixel: 'raw-secret-pixel' };",
+      secretStatus: { GHL_API_KEY: true },
+    });
 
     expect(client.generatedConfig).toBe("");
     expect(client.hasGeneratedConfig).toBe(true);

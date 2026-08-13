@@ -23,6 +23,10 @@ export function shouldHydrateRemoteForm(
   return currentFingerprint === lastHydratedFingerprint;
 }
 
+export function shouldAdoptRemoteFormAfterSave(sentFingerprint: string, liveFingerprint: string): boolean {
+  return sentFingerprint === liveFingerprint;
+}
+
 export function selectedFunnelForClient(requestedId: number | null, ownedIds: number[]): number | null {
   if (requestedId == null) return null;
   return ownedIds.includes(requestedId) ? requestedId : null;
@@ -30,6 +34,29 @@ export function selectedFunnelForClient(requestedId: number | null, ownedIds: nu
 
 export function nextSerializedSave(inFlight: boolean): "send" | "queue" {
   return inFlight ? "queue" : "send";
+}
+
+export function serializeHomepageSections(
+  sections: Array<{ id: number; sectionType: string; enabled: boolean }>,
+): string {
+  return JSON.stringify(sections);
+}
+
+export function shouldHydrateHomepageSections(input: {
+  inFlight: boolean;
+  hasQueued: boolean;
+  localSerialized: string | null;
+  lastCleanSerialized: string | null;
+}): boolean {
+  if (input.inFlight || input.hasQueued) return false;
+  if (
+    input.localSerialized != null &&
+    input.lastCleanSerialized != null &&
+    input.localSerialized !== input.lastCleanSerialized
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export function shouldClearDirtyAfterSave(savedPayload: string, currentPayload: string): boolean {

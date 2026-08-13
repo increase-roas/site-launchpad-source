@@ -27,45 +27,40 @@ export function toClientFunnelProfile(profile: FunnelProfileInput) {
   };
 }
 
-export function toClientFunnelConfig(
-  config: FunnelConfigInput,
-  options: { includeGeneratedConfig: boolean },
-) {
+export function toClientFunnelConfig(config: FunnelConfigInput) {
   return {
     serviceArea: config.serviceArea,
     offerHeadline: config.offerHeadline,
     offerSubheadline: config.offerSubheadline,
     thankYouMessage: config.thankYouMessage,
-    generatedConfig: options.includeGeneratedConfig ? config.generatedConfig : "",
+    generatedConfig: "",
     hasGeneratedConfig: Boolean(config.generatedConfig),
     generatedAt: config.generatedAt,
   };
 }
 
-export function toClientFunnelBuilderDetail<TFunnel, TQuestions>(
-  detail: {
-    funnel: TFunnel;
-    config: FunnelConfigInput;
-    questions: TQuestions;
-    profile: FunnelProfileInput;
-  },
-  options: { includeGeneratedConfig: boolean },
-) {
+export function toClientFunnelBuilderDetail<TFunnel, TQuestions>(detail: {
+  funnel: TFunnel;
+  config: FunnelConfigInput;
+  questions: TQuestions;
+  profile: FunnelProfileInput;
+}) {
   return {
     funnel: detail.funnel,
-    config: toClientFunnelConfig(detail.config, options),
+    config: toClientFunnelConfig(detail.config),
     questions: detail.questions,
     profile: toClientFunnelProfile(detail.profile),
   };
 }
 
-export function toClientAstroConfigView<TView extends { generatedConfig: string }>(
-  view: TView,
-  options: { includeGeneratedConfig: boolean },
-) {
+export function toClientAstroConfigView<TView extends { generatedConfig: string }>(view: TView) {
   return {
     ...view,
-    generatedConfig: options.includeGeneratedConfig ? view.generatedConfig : "",
+    generatedConfig: "",
     hasGeneratedConfig: Boolean(view.generatedConfig),
   };
+}
+
+export function toGeneratedConfigExport(fileName: string, contents: string) {
+  return { fileName, contents };
 }

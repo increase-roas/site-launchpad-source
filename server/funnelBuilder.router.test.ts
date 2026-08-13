@@ -109,11 +109,14 @@ describe("authenticated funnel builder procedures", () => {
     expect(mocks.getFunnelBuilderDetail).toHaveBeenCalledWith(5, 8);
   });
 
-  it("saves ordered questions and returns generated configuration", async () => {
+  it("saves ordered questions without returning generated source", async () => {
     const caller = funnelBuilderRouter.createCaller(context());
     const result = await caller.save({ clientId: 5, funnelId: 8, config: editorInput });
     expect(mocks.saveFunnelBuilder).toHaveBeenCalledWith(5, 8, editorInput);
-    expect(result.config.generatedConfig).toContain("funnelConfig");
+    expect(result.config.generatedConfig).toBe("");
+    expect(result.config.hasGeneratedConfig).toBe(true);
+    expect(JSON.stringify(result)).not.toContain("funnelConfig");
+    expect(JSON.stringify(result)).not.toContain("1234567890");
   });
 
   it("marks a complete funnel ready and returns the exact Wrangler instruction", async () => {
@@ -147,6 +150,25 @@ describe("authenticated funnel builder procedures", () => {
     const caller = funnelBuilderRouter.createCaller(context("user"));
     await caller.save({ clientId: 5, funnelId: 8, config: editorInput });
     expect(mocks.saveFunnelBuilder).toHaveBeenCalledWith(5, 8, editorInput);
+  });
+
+  it("exports generated funnel config through a dedicated authenticated RPC", async () => {
+    const caller = funnelBuilderRouter.createCaller(context("user"));
+    const exported = await caller.exportGeneratedConfig({ clientId: 5, funnelId: 8 });
+    expect(mocks.getFunnelBuilderDetail).toHaveBeenCalledWith(5, 8);
+    expect(exported).toEqual({
+      fileName: "funnel.config.ts",
+      contents: detail.config.generatedConfig,
+    });
+  });
+
+  it("rejects unauthenticated generated-config exports", async () => {
+    const caller = funnelBuilderRouter.createCaller(context(null));
+    await expect(caller.exportGeneratedConfig({ clientId: 5, funnelId: 8 })).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      message: UNAUTHED_ERR_MSG,
+    });
+    expect(mocks.getFunnelBuilderDetail).not.toHaveBeenCalled();
   });
 
   it("forbids a non-admin from deploying", async () => {

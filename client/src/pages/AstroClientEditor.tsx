@@ -63,7 +63,7 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
     setConfig(query.data.input);
     configRef.current = query.data.input;
     setAssets(query.data.assets);
-    setGeneratedConfig(query.data.generatedConfig);
+    setGeneratedConfig("");
     setSecretStatus(query.data.secretStatus);
     setSaveState("saved");
     dirtyRef.current = false;
@@ -113,10 +113,17 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
     onSettled: () => setUploadingSlot(null),
   });
 
+  const exportMutation = trpc.astroConfig.exportGeneratedConfig.useMutation();
+
+  const revealGeneratedConfig = async () => {
+    const exported = await exportMutation.mutateAsync({ clientId });
+    setGeneratedConfig(exported.contents);
+    return exported.contents;
+  };
+
   const saveMutation = trpc.astroConfig.save.useMutation({
     onMutate: () => setSaveState("saving"),
     onSuccess: async view => {
-      setGeneratedConfig(view.generatedConfig);
       setAssets(view.assets);
       setSecretStatus(view.secretStatus);
       setIssues([]);
@@ -142,7 +149,7 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
     },
   });
 
-  const saveNow = (showToast = false) => {
+  const saveNow = (options: { revealConfig?: boolean } = {}) => {
     const current = configRef.current;
     const targetClientId = saveClientIdForMountedEditor(mountedClientIdRef.current, clientId);
     if (!current || targetClientId === null) return;
@@ -155,21 +162,27 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
       const nextIssues = Array.from(new Set(parsed.error.issues.map(issue => `${issue.path.join(" → ")}: ${issue.message}`))).slice(0, 8);
       setIssues(nextIssues);
       setSaveState("invalid");
-      if (showToast) toast.error("Complete the highlighted setup items before generating the config.");
+      if (options.revealConfig) toast.error("Complete the highlighted setup items before generating the config.");
       return;
     }
     saveInFlightRef.current = true;
     inFlightPayloadRef.current = JSON.stringify(parsed.data);
     saveMutation.mutate({ clientId: targetClientId, config: parsed.data }, {
-      onSuccess: () => {
-        if (showToast) toast.success("client.config.ts generated.");
+      onSuccess: async () => {
+        if (!options.revealConfig) return;
+        try {
+          await revealGeneratedConfig();
+          toast.success("client.config.ts generated.");
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Generated config could not be exported.");
+        }
       },
     });
   };
 
   useEffect(() => {
     if (!dirtyRef.current || saveState !== "pending") return;
-    const timer = window.setTimeout(() => saveNow(false), 850);
+    const timer = window.setTimeout(() => saveNow(), 850);
     return () => window.clearTimeout(timer);
   }, [config, saveState]);
 
@@ -202,7 +215,7 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
   return <div className="mx-auto w-full max-w-[1540px] pb-24 sm:p-2 lg:p-5">
     <header className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
       <div><Button type="button" variant="ghost" onClick={() => setLocation(`/workspace/${clientId}/pages`)} className="-ml-3 h-11 gap-2 text-base font-bold text-muted-foreground"><ArrowLeft className="h-5 w-5" /> Back to website</Button><h1 className="mt-2 text-3xl font-extrabold tracking-[-0.035em] sm:text-4xl">Client configuration</h1><p className="mt-2 max-w-2xl font-medium text-muted-foreground">Everything the Astro template needs, organized into four clear tabs.</p></div>
-      <div className="flex flex-wrap items-center gap-2"><span className={`flex h-11 items-center gap-2 rounded-xl border px-3 text-sm font-extrabold ${saveState === "invalid" || saveState === "error" ? "border-red-400/20 bg-red-400/[0.06] text-red-200" : "border-white/9 bg-white/[0.025] text-muted-foreground"}`}>{saveState === "saving" ? <Loader2 className="h-4 w-4 animate-spin" /> : saveState === "saved" ? <CheckCircle2 className="h-4 w-4 text-emerald-300" /> : saveState === "invalid" || saveState === "error" ? <AlertCircle className="h-4 w-4" /> : <Save className="h-4 w-4" />}{saveState === "saving" ? "Saving…" : saveState === "pending" ? "Changes waiting" : saveState === "invalid" ? "Needs attention" : saveState === "error" ? "Save failed" : "Saved"}</span><Button type="button" variant="outline" onClick={() => setLocation(`/workspace/${clientId}/funnels`)}><Megaphone className="h-4 w-4" /> Paid Ads</Button><Button type="button" onClick={() => saveNow(true)} disabled={saveMutation.isPending} className="bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"><Save className="h-4 w-4" /> Save now</Button></div>
+      <div className="flex flex-wrap items-center gap-2"><span className={`flex h-11 items-center gap-2 rounded-xl border px-3 text-sm font-extrabold ${saveState === "invalid" || saveState === "error" ? "border-red-400/20 bg-red-400/[0.06] text-red-200" : "border-white/9 bg-white/[0.025] text-muted-foreground"}`}>{saveState === "saving" ? <Loader2 className="h-4 w-4 animate-spin" /> : saveState === "saved" ? <CheckCircle2 className="h-4 w-4 text-emerald-300" /> : saveState === "invalid" || saveState === "error" ? <AlertCircle className="h-4 w-4" /> : <Save className="h-4 w-4" />}{saveState === "saving" ? "Saving…" : saveState === "pending" ? "Changes waiting" : saveState === "invalid" ? "Needs attention" : saveState === "error" ? "Save failed" : "Saved"}</span><Button type="button" variant="outline" onClick={() => setLocation(`/workspace/${clientId}/funnels`)}><Megaphone className="h-4 w-4" /> Paid Ads</Button><Button type="button" onClick={() => saveNow()} disabled={saveMutation.isPending} className="bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"><Save className="h-4 w-4" /> Save now</Button></div>
     </header>
 
     {issues.length ? <div className="mb-5 rounded-2xl border border-red-400/20 bg-red-400/[0.05] p-4"><p className="font-extrabold text-red-200">Complete these items to save:</p><ul className="mt-2 space-y-1 text-sm font-medium text-red-100/80">{issues.map(issue => <li key={issue}>• {issue}</li>)}</ul></div> : null}
@@ -212,7 +225,7 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
       <TabsContent value="basic"><BasicInfoTab value={config} onChange={changeConfig} /></TabsContent>
       <TabsContent value="branding"><BrandingTab value={config} onChange={changeConfig} assets={assets} uploadingSlot={uploadingSlot} onUpload={uploadFile} /></TabsContent>
       <TabsContent value="content"><ContentTab value={config} onChange={changeConfig} assets={assets} uploadingSlot={uploadingSlot} onUpload={uploadFile} /></TabsContent>
-      <TabsContent value="technical"><TechnicalTab value={config} onChange={changeConfig} secretStatus={secretStatus} secretDrafts={secretDrafts} onSecretChange={(name, value) => setSecretDrafts(current => ({ ...current, [name]: value }))} onSaveSecrets={() => secretMutation.mutate({ clientId, values: secretDrafts })} savingSecrets={secretMutation.isPending} generatedConfig={generatedConfig} onGenerate={() => saveNow(true)} generating={saveMutation.isPending} /></TabsContent>
+      <TabsContent value="technical"><TechnicalTab value={config} onChange={changeConfig} secretStatus={secretStatus} secretDrafts={secretDrafts} onSecretChange={(name, value) => setSecretDrafts(current => ({ ...current, [name]: value }))} onSaveSecrets={() => secretMutation.mutate({ clientId, values: secretDrafts })} savingSecrets={secretMutation.isPending} generatedConfig={generatedConfig} onGenerate={() => saveNow({ revealConfig: true })} generating={saveMutation.isPending || exportMutation.isPending} onRevealConfig={revealGeneratedConfig} revealing={exportMutation.isPending} /></TabsContent>
     </Tabs>
   </div>;
 }

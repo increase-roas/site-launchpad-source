@@ -24,7 +24,11 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { nextSerializedSave } from "./editorIsolation";
+import {
+  nextSerializedSave,
+  serializeHomepageSections,
+  shouldHydrateHomepageSections,
+} from "./editorIsolation";
 
 type SectionDraft = {
   id: number;
@@ -173,18 +177,34 @@ export default function WebsiteWorkspace({ clientId }: { clientId: number }) {
   const sectionBuilderRef = useRef<HTMLDivElement>(null);
   const saveInFlightRef = useRef(false);
   const queuedSectionsRef = useRef<SectionDraft[] | null>(null);
+  const lastCleanSerializedRef = useRef<string | null>(null);
+  const sectionsRef = useRef<SectionDraft[]>([]);
 
   useEffect(() => {
     if (!workspaceQuery.data) return;
-    if (saveInFlightRef.current || queuedSectionsRef.current) return;
-    setSections(
-      workspaceQuery.data.sections.map(section => ({
-        id: section.id,
-        sectionType: section.sectionType,
-        enabled: Boolean(section.enabled),
-      })),
-    );
+    const incoming = workspaceQuery.data.sections.map(section => ({
+      id: section.id,
+      sectionType: section.sectionType,
+      enabled: Boolean(section.enabled),
+    }));
+    const incomingSerialized = serializeHomepageSections(incoming);
+    const local = sectionsRef.current;
+    const localSerialized = local.length ? serializeHomepageSections(local) : null;
+    if (
+      !shouldHydrateHomepageSections({
+        inFlight: saveInFlightRef.current,
+        hasQueued: Boolean(queuedSectionsRef.current),
+        localSerialized,
+        lastCleanSerialized: lastCleanSerializedRef.current,
+      })
+    ) {
+      return;
+    }
+    setSections(incoming);
+    lastCleanSerializedRef.current = incomingSerialized;
   }, [workspaceQuery.data]);
+
+  sectionsRef.current = sections;
 
   const saveSections = trpc.workspace.saveSections.useMutation();
 
@@ -201,13 +221,12 @@ export default function WebsiteWorkspace({ clientId }: { clientId: number }) {
             return;
           }
           saveInFlightRef.current = false;
+          lastCleanSerializedRef.current = serializeHomepageSections(next);
           await utils.workspace.get.invalidate({ clientId });
           toast.success("Homepage order saved.");
         },
-        onError: async error => {
+        onError: error => {
           saveInFlightRef.current = false;
-          queuedSectionsRef.current = null;
-          await utils.workspace.get.invalidate({ clientId });
           toast.error(error.message);
         },
       },

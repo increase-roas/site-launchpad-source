@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { shouldHydrateRemoteForm } from "@/pages/editorIsolation";
+import { shouldAdoptRemoteFormAfterSave, shouldHydrateRemoteForm } from "@/pages/editorIsolation";
 
 type QuestionDraft = SurveyQuestionInput & { localKey: string };
 type FormDraft = Omit<FunnelEditorInput, "questions"> & { questions: QuestionDraft[] };
@@ -325,6 +325,7 @@ export function FunnelConfigEditor({
   const [exportedConfig, setExportedConfig] = useState("");
   const formRef = useRef<FormDraft | null>(null);
   const lastHydratedFingerprint = useRef<string | null>(null);
+  const inFlightFingerprintRef = useRef<string | null>(null);
   const pendingDeployRef = useRef(false);
 
   useEffect(() => {
@@ -363,38 +364,48 @@ export function FunnelConfigEditor({
     onError: error => toast.error(error.message),
   });
 
+  const exportMutation = trpc.funnelBuilder.exportGeneratedConfig.useMutation();
+
   const saveMutation = trpc.funnelBuilder.save.useMutation({
     onSuccess: async detail => {
-      setExportedConfig(detail.config.generatedConfig);
+      const sent = inFlightFingerprintRef.current;
+      const current = formRef.current;
+      const adoptRemote =
+        Boolean(current && sent && shouldAdoptRemoteFormAfterSave(sent, draftFingerprint(current)));
+      if (adoptRemote && current) {
+        const next: FormDraft = {
+          ...current,
+          questions: detail.questions.map(question => ({
+            id: question.id,
+            localKey: `saved-${question.id}`,
+            questionText: question.questionText,
+            questionType: question.questionType,
+            options: question.options,
+          })),
+        };
+        setForm(next);
+        formRef.current = next;
+        lastHydratedFingerprint.current = draftFingerprint(next);
+      }
+      try {
+        const exported = await exportMutation.mutateAsync({ clientId, funnelId });
+        setExportedConfig(exported.contents);
+      } catch {
+        setExportedConfig("");
+      }
       await Promise.all([
         utils.funnelBuilder.get.invalidate({ clientId, funnelId }),
         utils.funnelBuilder.list.invalidate({ clientId }),
         utils.workspace.get.invalidate({ clientId }),
       ]);
-      const current = formRef.current;
-      const next: FormDraft | null = current
-        ? {
-            ...current,
-            questions: detail.questions.map(question => ({
-              id: question.id,
-              localKey: `saved-${question.id}`,
-              questionText: question.questionText,
-              questionType: question.questionType,
-              options: question.options,
-            })),
-          }
-        : current;
-      if (next) {
-        setForm(next);
-        formRef.current = next;
-        lastHydratedFingerprint.current = draftFingerprint(next);
-      }
       setDeployMessage("");
       toast.success("Funnel saved and config generated.");
-      if (pendingDeployRef.current) {
+      if (pendingDeployRef.current && adoptRemote) {
         pendingDeployRef.current = false;
         deployMutation.mutate({ clientId, funnelId });
+        return;
       }
+      pendingDeployRef.current = false;
     },
     onError: error => {
       pendingDeployRef.current = false;
@@ -414,7 +425,8 @@ export function FunnelConfigEditor({
     onError: error => toast.error(error.message),
   });
 
-  const generatedConfig = exportedConfig || detailQuery.data?.config.generatedConfig || "";
+  const generatedConfig = exportedConfig;
+  const hasGeneratedConfig = Boolean(exportedConfig) || Boolean(detailQuery.data?.config.hasGeneratedConfig);
   const status = detailQuery.data?.funnel.deploymentStatus ?? "draft";
   const readyInstruction = deployMessage || (status === "ready" ? DEPLOY_SUCCESS_MESSAGE : "");
 
@@ -442,6 +454,7 @@ export function FunnelConfigEditor({
       toast.error(parsed.error.issues[0]?.message ?? "A few funnel details need attention.");
       return;
     }
+    if (formRef.current) inFlightFingerprintRef.current = draftFingerprint(formRef.current);
     saveMutation.mutate({ clientId, funnelId, config: parsed.data });
   };
 
@@ -596,6 +609,26 @@ export function FunnelConfigEditor({
                 <pre className="mt-4 max-h-[520px] overflow-auto rounded-xl border border-white/8 bg-[#061019] p-4 text-xs leading-relaxed text-cyan-50/80">{generatedConfig}</pre>
                 <Button type="button" variant="outline" onClick={async () => { await navigator.clipboard.writeText(generatedConfig); toast.success("Config copied."); }} className="mt-3 h-11 w-full gap-2 rounded-xl border-white/10 bg-white/[0.025] font-extrabold"><Clipboard className="h-4 w-4" /> Copy config</Button>
               </>
+            ) : hasGeneratedConfig ? (
+              <div className="mt-4 rounded-xl border border-dashed border-white/10 bg-black/15 p-6 text-center">
+                <Code2 className="mx-auto h-7 w-7 text-muted-foreground" />
+                <p className="mt-3 text-sm font-extrabold">Saved config available</p>
+                <p className="mt-1 text-xs font-semibold leading-relaxed text-muted-foreground">Copy to reveal funnel.config.ts for this funnel only.</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={exportMutation.isPending}
+                  onClick={async () => {
+                    const exported = await exportMutation.mutateAsync({ clientId, funnelId });
+                    setExportedConfig(exported.contents);
+                    await navigator.clipboard.writeText(exported.contents);
+                    toast.success("Config copied.");
+                  }}
+                  className="mt-3 h-11 w-full gap-2 rounded-xl border-white/10 bg-white/[0.025] font-extrabold"
+                >
+                  <Clipboard className="h-4 w-4" /> Copy config
+                </Button>
+              </div>
             ) : (
               <div className="mt-4 rounded-xl border border-dashed border-white/10 bg-black/15 p-6 text-center"><Code2 className="mx-auto h-7 w-7 text-muted-foreground" /><p className="mt-3 text-sm font-extrabold">No config generated yet</p><p className="mt-1 text-xs font-semibold leading-relaxed text-muted-foreground">Save this funnel to generate the copyable TypeScript config.</p></div>
             )}

@@ -15,6 +15,7 @@ import {
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { UpdateConflictError } from "./trpcErrors";
+import { seedWorkspaceDefaults, type WorkspaceSeedClient } from "./workspaceSeed";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -126,27 +127,33 @@ export async function createClient(values: InsertClient): Promise<number> {
   return created.id;
 }
 
+export function mysqlAffectedRows(result: unknown): number {
+  const header = Array.isArray(result) ? result[0] : result;
+  if (header && typeof header === "object" && "affectedRows" in header) {
+    const value = header.affectedRows;
+    return typeof value === "number" ? value : 0;
+  }
+  return 0;
+}
+
+export function resolveOptimisticUpdate(affectedRows: number, existing: { id: number } | undefined): void {
+  if (affectedRows > 0) return;
+  if (!existing) throw new Error("Client not found.");
+  throw new UpdateConflictError();
+}
+
 export async function updateClient(
   clientId: number,
   values: Partial<InsertClient>,
-  expectedUpdatedAt?: Date,
+  expectedUpdatedAt: Date,
 ): Promise<void> {
   const db = await requireDb();
-  if (expectedUpdatedAt) {
-    const current = await getClientById(clientId);
-    if (!current) throw new Error("Client not found.");
-    if (!current.updatedAt || current.updatedAt.getTime() !== expectedUpdatedAt.getTime()) {
-      throw new UpdateConflictError();
-    }
-  }
-  await db
+  const result = await db
     .update(clients)
     .set({ ...values, updatedAt: new Date() })
-    .where(
-      expectedUpdatedAt
-        ? and(eq(clients.id, clientId), eq(clients.updatedAt, expectedUpdatedAt))
-        : eq(clients.id, clientId),
-    );
+    .where(and(eq(clients.id, clientId), eq(clients.updatedAt, expectedUpdatedAt)));
+  if (mysqlAffectedRows(result) > 0) return;
+  resolveOptimisticUpdate(0, await getClientById(clientId));
 }
 
 export async function listClientAssets(): Promise<ClientAsset[]> {
@@ -164,23 +171,30 @@ export async function getClientAssets(clientId: number): Promise<ClientAsset[]> 
   return db.select().from(clientAssets).where(eq(clientAssets.clientId, clientId));
 }
 
+export async function createClientWithSecretsInTransaction(
+  tx: WorkspaceSeedClient,
+  values: InsertClient,
+  secretValues: Partial<Omit<InsertClientSecretSetup, "clientId">>,
+): Promise<number> {
+  const result = await tx.insert(clients).values(values).$returningId();
+  const clientId = result[0]?.id;
+  if (!clientId) throw new Error("Client could not be created.");
+  if (Object.keys(secretValues).length > 0) {
+    await tx
+      .insert(clientSecretSetups)
+      .values({ clientId, ...secretValues })
+      .onDuplicateKeyUpdate({ set: secretValues });
+  }
+  await seedWorkspaceDefaults(tx, clientId);
+  return clientId;
+}
+
 export async function createClientWithSecrets(
   values: InsertClient,
   secretValues: Partial<Omit<InsertClientSecretSetup, "clientId">>,
 ): Promise<number> {
   const db = await requireDb();
-  return db.transaction(async tx => {
-    const result = await tx.insert(clients).values(values).$returningId();
-    const clientId = result[0]?.id;
-    if (!clientId) throw new Error("Client could not be created.");
-    if (Object.keys(secretValues).length > 0) {
-      await tx
-        .insert(clientSecretSetups)
-        .values({ clientId, ...secretValues })
-        .onDuplicateKeyUpdate({ set: secretValues });
-    }
-    return clientId;
-  });
+  return db.transaction(tx => createClientWithSecretsInTransaction(tx, values, secretValues));
 }
 
 export async function upsertClientAsset(values: InsertClientAsset): Promise<void> {

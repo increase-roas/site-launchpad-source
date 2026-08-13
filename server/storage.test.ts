@@ -33,7 +33,7 @@ describe("exact storage filenames", () => {
 
     const presignUrl = fetchMock.mock.calls[0]?.[0] as URL;
     const storedPath = presignUrl.searchParams.get("path") ?? "";
-    expect(storedPath).toMatch(/^clients\/7-paradise\/hero_[a-f0-9]{8}\.webp$/);
+    expect(storedPath).toMatch(/^clients\/7-paradise\/hero_[a-f0-9]{32}\.webp$/);
     expect(result.key).toBe(storedPath);
     expect(result.url).toBe(`/manus-storage/${storedPath}`);
     expect(fetchMock.mock.calls[1]?.[0]).toBe("https://s3.example.test/upload");

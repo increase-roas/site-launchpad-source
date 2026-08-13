@@ -36,6 +36,8 @@ export function TechnicalTab({
   generatedConfig,
   onGenerate,
   generating,
+  onRevealConfig,
+  revealing,
 }: {
   value: AstroClientConfigInput;
   onChange: (next: AstroClientConfigInput) => void;
@@ -47,18 +49,22 @@ export function TechnicalTab({
   generatedConfig: string;
   onGenerate: () => void;
   generating: boolean;
+  onRevealConfig: () => Promise<string>;
+  revealing: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const updateIntegration = (name: AstroIntegration, patch: Partial<AstroClientConfigInput["integrations"][AstroIntegration]>) => onChange({ ...value, integrations: { ...value.integrations, [name]: { ...value.integrations[name], ...patch } } });
 
   const copyConfig = async () => {
-    await navigator.clipboard.writeText(generatedConfig);
+    const contents = generatedConfig || (await onRevealConfig());
+    await navigator.clipboard.writeText(contents);
     setCopied(true);
     toast.success("Config copied.");
     window.setTimeout(() => setCopied(false), 1600);
   };
-  const downloadConfig = () => {
-    const blob = new Blob([generatedConfig], { type: "text/typescript;charset=utf-8" });
+  const downloadConfig = async () => {
+    const contents = generatedConfig || (await onRevealConfig());
+    const blob = new Blob([contents], { type: "text/typescript;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -79,7 +85,7 @@ export function TechnicalTab({
     </Card>
 
     <Card className="border-white/8 bg-card/70 p-5 sm:p-6">
-      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div className="flex gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-400/10 text-cyan-300"><Code2 className="h-5 w-5" /></span><div><h2 className="text-xl font-extrabold">Config export</h2><p className="mt-1 text-sm font-medium text-muted-foreground">Generate a complete, formatted file ready for the Astro template.</p></div></div><div className="flex flex-wrap gap-2"><Button type="button" onClick={onGenerate} disabled={generating}>{generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Code2 className="h-4 w-4" />} Generate</Button><Button type="button" variant="outline" onClick={copyConfig} disabled={!generatedConfig}>{copied ? <Check className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />} Copy</Button><Button type="button" variant="outline" onClick={downloadConfig} disabled={!generatedConfig}><Download className="h-4 w-4" /> Download</Button></div></div>
+      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div className="flex gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-400/10 text-cyan-300"><Code2 className="h-5 w-5" /></span><div><h2 className="text-xl font-extrabold">Config export</h2><p className="mt-1 text-sm font-medium text-muted-foreground">Generate a complete, formatted file ready for the Astro template.</p></div></div><div className="flex flex-wrap gap-2"><Button type="button" onClick={onGenerate} disabled={generating}>{generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Code2 className="h-4 w-4" />} Generate</Button><Button type="button" variant="outline" onClick={() => void copyConfig()} disabled={generating || revealing}>{copied ? <Check className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />} Copy</Button><Button type="button" variant="outline" onClick={() => void downloadConfig()} disabled={generating || revealing}><Download className="h-4 w-4" /> Download</Button></div></div>
       <pre className="max-h-[560px] overflow-auto rounded-2xl border border-white/8 bg-black/35 p-4 text-xs leading-relaxed text-cyan-100"><code>{generatedConfig || "Save the client configuration to generate client.config.ts."}</code></pre>
     </Card>
   </div>;

@@ -32,7 +32,7 @@ import { decodeImageDataUrl, MAX_DATA_URL_CHARS, processUploadedImage } from "..
 import { storagePutExact } from "../storage";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { ensureWorkspaceDefaults } from "../workspaceDb";
-import { UpdateConflictError, assertWritableVersion, isDuplicateKeyError } from "../trpcErrors";
+import { UpdateConflictError, isDuplicateKeyError } from "../trpcErrors";
 import type { Client, ClientAsset } from "../../drizzle/schema";
 
 const secretColumnByField = {
@@ -142,7 +142,7 @@ export const clientsRouter = router({
         clientId: z.number().int().positive(),
         details: clientInputSchema,
         setup: secretSetupInputSchema,
-        expectedUpdatedAt: z.coerce.date().optional(),
+        expectedUpdatedAt: z.coerce.date(),
       }),
     )
     .mutation(async ({ input }) => {
@@ -150,9 +150,6 @@ export const clientsRouter = router({
       if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Client not found." });
 
       try {
-        if (input.expectedUpdatedAt) {
-          assertWritableVersion(existing.updatedAt, input.expectedUpdatedAt);
-        }
         await updateClient(input.clientId, input.details, input.expectedUpdatedAt);
         await applySetupValues(input.clientId, input.setup);
         return getClientView(input.clientId);
@@ -227,7 +224,14 @@ export const clientsRouter = router({
         });
       }
 
-      await updateClient(input.clientId, { status: "ready", readyAt: new Date() });
-      return getClientView(input.clientId);
+      try {
+        await updateClient(input.clientId, { status: "ready", readyAt: new Date() }, view.client.updatedAt);
+        return getClientView(input.clientId);
+      } catch (error) {
+        if (error instanceof UpdateConflictError) {
+          throw new TRPCError({ code: "CONFLICT", message: error.message });
+        }
+        throw error;
+      }
     }),
 });

@@ -175,12 +175,13 @@ describe("client launch gating", () => {
         ghlWebhookUrl: "",
         cloudflareProjectName: "",
       },
+      expectedUpdatedAt: baseClient.updatedAt,
     });
 
     expect(mocks.updateClient).toHaveBeenCalledWith(
       7,
       expect.objectContaining({ tagline: "A new client tagline." }),
-      undefined,
+      baseClient.updatedAt,
     );
     expect(mocks.saveClientSecretSetup).not.toHaveBeenCalled();
   });
@@ -234,6 +235,7 @@ describe("client launch gating", () => {
     expect(mocks.updateClient).toHaveBeenCalledWith(
       7,
       expect.objectContaining({ status: "ready", readyAt: expect.any(Date) }),
+      baseClient.updatedAt,
     );
     expect(result.client.status).toBe("ready");
     expect(result.readiness.isComplete).toBe(true);
@@ -252,6 +254,7 @@ describe("client launch gating", () => {
         ghlWebhookUrl: "",
         cloudflareProjectName: "",
       },
+      expectedUpdatedAt: baseClient.updatedAt,
     });
     expect(mocks.updateClient).toHaveBeenCalled();
   });
@@ -274,6 +277,25 @@ describe("client launch gating", () => {
         expectedUpdatedAt: new Date("2020-01-01T00:00:00.000Z"),
       }),
     ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("rejects client updates that omit expectedUpdatedAt", async () => {
+    const caller = appRouter.createCaller(createContext());
+    await expect(
+      caller.clients.update({
+        clientId: 7,
+        details: detailsInput,
+        setup: {
+          metaPixelId: "",
+          ga4MeasurementId: "",
+          clarityId: "",
+          ghlApiKey: "",
+          ghlWebhookUrl: "",
+          cloudflareProjectName: "",
+        },
+      } as never),
+    ).rejects.toBeTruthy();
+    expect(mocks.updateClient).not.toHaveBeenCalled();
   });
 
   it("forbids a non-admin from launching", async () => {

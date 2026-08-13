@@ -1,7 +1,8 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { DEPLOY_SUCCESS_MESSAGE, funnelEditorInputSchema } from "../../shared/funnelConfig";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
-import { toClientFunnelBuilderDetail } from "../secretRedaction";
+import { toClientFunnelBuilderDetail, toGeneratedConfigExport } from "../secretRedaction";
 import {
   createFunnelBuilder,
   getFunnelBuilderDetail,
@@ -39,9 +40,7 @@ export const funnelBuilderRouter = router({
     )
     .mutation(async ({ input }) => {
       try {
-        return toClientFunnelBuilderDetail(await createFunnelBuilder(input.clientId, input.name), {
-          includeGeneratedConfig: false,
-        });
+        return toClientFunnelBuilderDetail(await createFunnelBuilder(input.clientId, input.name));
       } catch (error) {
         throw mapRouterError(error, "Funnel could not be created.");
       }
@@ -49,9 +48,7 @@ export const funnelBuilderRouter = router({
 
   get: protectedProcedure.input(ownedFunnelInput).query(async ({ input }) => {
     try {
-      return toClientFunnelBuilderDetail(await getFunnelBuilderDetail(input.clientId, input.funnelId), {
-        includeGeneratedConfig: false,
-      });
+      return toClientFunnelBuilderDetail(await getFunnelBuilderDetail(input.clientId, input.funnelId));
     } catch (error) {
       throw mapRouterError(error, "Funnel could not be loaded.");
     }
@@ -63,18 +60,30 @@ export const funnelBuilderRouter = router({
       try {
         return toClientFunnelBuilderDetail(
           await saveFunnelBuilder(input.clientId, input.funnelId, input.config),
-          { includeGeneratedConfig: true },
         );
       } catch (error) {
         throw mapRouterError(error, "Funnel could not be saved.");
       }
     }),
 
+  exportGeneratedConfig: protectedProcedure.input(ownedFunnelInput).mutation(async ({ input }) => {
+    try {
+      const detail = await getFunnelBuilderDetail(input.clientId, input.funnelId);
+      if (!detail.config.generatedConfig) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Generated funnel config is not available yet.",
+        });
+      }
+      return toGeneratedConfigExport("funnel.config.ts", detail.config.generatedConfig);
+    } catch (error) {
+      throw mapRouterError(error, "Generated funnel config could not be exported.");
+    }
+  }),
+
   deploy: adminProcedure.input(ownedFunnelInput).mutation(async ({ input }) => {
     try {
-      const detail = toClientFunnelBuilderDetail(await markFunnelReady(input.clientId, input.funnelId), {
-        includeGeneratedConfig: false,
-      });
+      const detail = toClientFunnelBuilderDetail(await markFunnelReady(input.clientId, input.funnelId));
       return { funnel: detail, message: DEPLOY_SUCCESS_MESSAGE };
     } catch (error) {
       throw mapRouterError(error, "Funnel is not ready to deploy.");
@@ -83,9 +92,7 @@ export const funnelBuilderRouter = router({
 
   markDeployed: adminProcedure.input(ownedFunnelInput).mutation(async ({ input }) => {
     try {
-      return toClientFunnelBuilderDetail(await markFunnelDeployed(input.clientId, input.funnelId), {
-        includeGeneratedConfig: false,
-      });
+      return toClientFunnelBuilderDetail(await markFunnelDeployed(input.clientId, input.funnelId));
     } catch (error) {
       throw mapRouterError(error, "Deployed status could not be saved.");
     }

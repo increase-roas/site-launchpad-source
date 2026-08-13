@@ -4,8 +4,10 @@ import {
   nextSerializedSave,
   saveClientIdForMountedEditor,
   selectedFunnelForClient,
+  shouldAdoptRemoteFormAfterSave,
   shouldClearDirtyAfterSave,
   shouldHydrateEditor,
+  shouldHydrateHomepageSections,
   shouldHydrateRemoteForm,
   shouldQueueTrailingSave,
 } from "./editorIsolation";
@@ -54,5 +56,37 @@ describe("editor isolation", () => {
   it("queues homepage saves while one persist is in flight", () => {
     expect(nextSerializedSave(false)).toBe("send");
     expect(nextSerializedSave(true)).toBe("queue");
+  });
+
+  it("does not adopt server questions when the live form moved during save", () => {
+    expect(shouldAdoptRemoteFormAfterSave('{"name":"A"}', '{"name":"A"}')).toBe(true);
+    expect(shouldAdoptRemoteFormAfterSave('{"name":"A"}', '{"name":"B"}')).toBe(false);
+  });
+
+  it("keeps a dirty homepage draft after a failed persist instead of hydrating remote order", () => {
+    expect(
+      shouldHydrateHomepageSections({
+        inFlight: false,
+        hasQueued: true,
+        localSerialized: '[{"id":1}]',
+        lastCleanSerialized: '[{"id":2}]',
+      }),
+    ).toBe(false);
+    expect(
+      shouldHydrateHomepageSections({
+        inFlight: false,
+        hasQueued: false,
+        localSerialized: '[{"id":1,"enabled":true}]',
+        lastCleanSerialized: '[{"id":1,"enabled":false}]',
+      }),
+    ).toBe(false);
+    expect(
+      shouldHydrateHomepageSections({
+        inFlight: false,
+        hasQueued: false,
+        localSerialized: '[{"id":1}]',
+        lastCleanSerialized: '[{"id":1}]',
+      }),
+    ).toBe(true);
   });
 });
