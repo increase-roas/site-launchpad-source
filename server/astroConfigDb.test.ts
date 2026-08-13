@@ -3,6 +3,7 @@ import {
   applyAstroAssetUrls,
   mergeStoredAstroConfig,
   protectWranglerSecretValues,
+  resolveProductCategories,
 } from "./astroConfigDb";
 import { decryptSetupValue } from "./clientSecurity";
 import { createDefaultAstroConfig } from "../shared/astroConfig";
@@ -88,5 +89,15 @@ describe("Astro config persistence helpers", () => {
     const reloaded = mergeStoredAstroConfig(defaults, stored);
     expect(reloaded.navigationItems.map(item => item.id)).toEqual(navigationItems.map(item => item.id));
     expect(reloaded.homepageSections.map(section => section.id)).toEqual(homepageSections.map(section => section.id));
+  });
+
+  it("keeps existing launch categories when the first Settings save has none enabled", () => {
+    const config = defaultConfig();
+    for (const category of Object.keys(config.categories) as Array<keyof typeof config.categories>) {
+      config.categories[category].enabled = false;
+    }
+    expect(resolveProductCategories(config, ["hotTubs", "saunas"])).toEqual(["hotTubs", "saunas"]);
+    config.categories["hot-tubs"].enabled = true;
+    expect(resolveProductCategories(config, ["saunas"])).toEqual(["hotTubs"]);
   });
 });

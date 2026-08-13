@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   Client,
@@ -13,7 +13,8 @@ import {
   clients,
   users,
 } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import { ENV } from "./_core/env";
+import { UpdateConflictError } from "./trpcErrors";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -125,14 +126,61 @@ export async function createClient(values: InsertClient): Promise<number> {
   return created.id;
 }
 
-export async function updateClient(clientId: number, values: Partial<InsertClient>): Promise<void> {
+export async function updateClient(
+  clientId: number,
+  values: Partial<InsertClient>,
+  expectedUpdatedAt?: Date,
+): Promise<void> {
   const db = await requireDb();
-  await db.update(clients).set(values).where(eq(clients.id, clientId));
+  if (expectedUpdatedAt) {
+    const current = await getClientById(clientId);
+    if (!current) throw new Error("Client not found.");
+    if (!current.updatedAt || current.updatedAt.getTime() !== expectedUpdatedAt.getTime()) {
+      throw new UpdateConflictError();
+    }
+  }
+  await db
+    .update(clients)
+    .set({ ...values, updatedAt: new Date() })
+    .where(
+      expectedUpdatedAt
+        ? and(eq(clients.id, clientId), eq(clients.updatedAt, expectedUpdatedAt))
+        : eq(clients.id, clientId),
+    );
+}
+
+export async function listClientAssets(): Promise<ClientAsset[]> {
+  const db = await requireDb();
+  return db.select().from(clientAssets);
+}
+
+export async function listClientSecretSetups(): Promise<ClientSecretSetup[]> {
+  const db = await requireDb();
+  return db.select().from(clientSecretSetups);
 }
 
 export async function getClientAssets(clientId: number): Promise<ClientAsset[]> {
   const db = await requireDb();
   return db.select().from(clientAssets).where(eq(clientAssets.clientId, clientId));
+}
+
+export async function createClientWithSecrets(
+  values: InsertClient,
+  secretValues: Partial<Omit<InsertClientSecretSetup, "clientId">>,
+): Promise<number> {
+  const db = await requireDb();
+  return db.transaction(async tx => {
+    const result = await tx.insert(clients).values(values).$returningId();
+    const clientId = result[0]?.id;
+    if (!clientId) throw new Error("Client could not be created.");
+    if (Object.keys(secretValues).length > 0) {
+      await tx
+        .insert(clientSecretSetups)
+        .values({ clientId, ...secretValues })
+        .onDuplicateKeyUpdate({ set: secretValues });
+    }
+    return clientId;
+  });
 }
 
 export async function upsertClientAsset(values: InsertClientAsset): Promise<void> {
@@ -171,12 +219,8 @@ export async function saveClientSecretSetup(
   values: Partial<Omit<InsertClientSecretSetup, "clientId">>,
 ): Promise<void> {
   const db = await requireDb();
-  const existing = await getClientSecretSetup(clientId);
-
-  if (existing) {
-    await db.update(clientSecretSetups).set(values).where(eq(clientSecretSetups.clientId, clientId));
-    return;
-  }
-
-  await db.insert(clientSecretSetups).values({ clientId, ...values });
+  await db
+    .insert(clientSecretSetups)
+    .values({ clientId, ...values })
+    .onDuplicateKeyUpdate({ set: values });
 }

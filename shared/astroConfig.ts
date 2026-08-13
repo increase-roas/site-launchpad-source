@@ -235,7 +235,15 @@ export const astroClientConfigInputSchema = z.object({
     longitude: coordinate(-180, 180),
     googlePlaceId: z.string().trim().max(300),
   }),
-  hours: z.array(businessHourSchema).length(7),
+  hours: z
+    .array(businessHourSchema)
+    .length(7, "Set hours for every day.")
+    .superRefine((hours, context) => {
+      const days = new Set(hours.map(hour => hour.day));
+      if (days.size !== BUSINESS_DAY_VALUES.length) {
+        context.addIssue({ code: "custom", message: "Set hours for every day." });
+      }
+    }),
   socialLinks: z.object({
     facebook: optionalHttpUrl,
     instagram: optionalHttpUrl,

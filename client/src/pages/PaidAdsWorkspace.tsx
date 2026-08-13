@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { selectedFunnelForClient } from "./editorIsolation";
 
 type Step = {
   id: number;
@@ -168,11 +169,23 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
   const utils = trpc.useUtils();
   const workspaceQuery = trpc.workspace.get.useQuery({ clientId });
   const [selectedStep, setSelectedStep] = useState<Step | null>(null);
-  const [selectedFunnelId, setSelectedFunnelId] = useState<number | null>(() => {
-    const value = new URLSearchParams(window.location.search).get("funnel");
-    const parsed = value ? Number(value) : Number.NaN;
-    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-  });
+  const [selectedFunnelId, setSelectedFunnelId] = useState<number | null>(null);
+
+  useEffect(() => {
+    setSelectedStep(null);
+  }, [clientId]);
+
+  useEffect(() => {
+    if (!workspaceQuery.data) return;
+    const ownedIds = workspaceQuery.data.funnels.map(funnel => funnel.id);
+    const requested = Number(new URLSearchParams(window.location.search).get("funnel"));
+    const requestedId = Number.isInteger(requested) && requested > 0 ? requested : null;
+    const fromUrl = selectedFunnelForClient(requestedId, ownedIds);
+    setSelectedFunnelId(current => (current && ownedIds.includes(current) ? current : fromUrl));
+    if (requestedId != null && !ownedIds.includes(requestedId)) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, [clientId, workspaceQuery.data]);
 
   const openFunnel = (funnelId: number) => {
     setSelectedFunnelId(funnelId);

@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   editorInstanceKey,
+  nextSerializedSave,
   saveClientIdForMountedEditor,
+  selectedFunnelForClient,
   shouldClearDirtyAfterSave,
   shouldHydrateEditor,
+  shouldHydrateRemoteForm,
   shouldQueueTrailingSave,
 } from "./editorIsolation";
 
@@ -34,5 +37,22 @@ describe("editor isolation", () => {
   it("keeps dirty state when the live form moved past the in-flight payload", () => {
     expect(shouldClearDirtyAfterSave('{"name":"A"}', '{"name":"A"}')).toBe(true);
     expect(shouldClearDirtyAfterSave('{"name":"A"}', '{"name":"B"}')).toBe(false);
+  });
+
+  it("skips remote hydrate while the local form fingerprint differs", () => {
+    expect(shouldHydrateRemoteForm('{"name":"A"}', '{"name":"A"}')).toBe(true);
+    expect(shouldHydrateRemoteForm('{"name":"B"}', '{"name":"A"}')).toBe(false);
+    expect(shouldHydrateRemoteForm(null, null)).toBe(true);
+  });
+
+  it("clears funnel selection that does not belong to the mounted client", () => {
+    expect(selectedFunnelForClient(12, [12, 15])).toBe(12);
+    expect(selectedFunnelForClient(12, [8, 9])).toBeNull();
+    expect(selectedFunnelForClient(null, [8])).toBeNull();
+  });
+
+  it("queues homepage saves while one persist is in flight", () => {
+    expect(nextSerializedSave(false)).toBe("send");
+    expect(nextSerializedSave(true)).toBe("queue");
   });
 });

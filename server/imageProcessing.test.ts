@@ -1,6 +1,8 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import {
+  MARKETING_PHOTO_COMPRESS_ATTEMPTS,
+  MAX_DATA_URL_CHARS,
   MAX_MARKETING_PHOTO_BYTES,
   processAstroUploadedImage,
   processUploadedImage,
@@ -82,5 +84,10 @@ describe("server-side image preparation", () => {
       expect(result.mimeType).toBe("image/webp");
       expect(result.byteSize).toBeLessThan(MAX_MARKETING_PHOTO_BYTES);
     }
+  });
+
+  it("bounds upload payload size and sharp compression attempts", () => {
+    expect(MAX_DATA_URL_CHARS).toBe(8_000_000);
+    expect(MARKETING_PHOTO_COMPRESS_ATTEMPTS).toBeLessThan(18);
   });
 });

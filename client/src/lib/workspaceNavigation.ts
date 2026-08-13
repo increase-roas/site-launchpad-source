@@ -21,3 +21,8 @@ export function workspaceRoute(area: WorkspaceArea, clientId?: number): string {
   if (area === "media") return `/workspace/${clientId}/media`;
   return `/workspace/${clientId}/settings`;
 }
+
+export function settingsRedirectFromLegacyClientPath(path: string): string | null {
+  const match = /^\/clients\/(\d+)\/?$/.exec(path);
+  return match ? `/workspace/${match[1]}/settings` : null;
+}

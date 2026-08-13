@@ -9,10 +9,11 @@ import {
 import { sanitizeClientFolder } from "../../shared/client";
 import { getAstroConfigView, saveAstroConfig, saveWranglerSecrets } from "../astroConfigDb";
 import { getClientById, upsertClientAsset } from "../db";
-import { decodeImageDataUrl, processAstroUploadedImage } from "../imageProcessing";
+import { decodeImageDataUrl, MAX_DATA_URL_CHARS, processAstroUploadedImage } from "../imageProcessing";
 import { storagePutExact } from "../storage";
 import { protectedProcedure, router } from "../_core/trpc";
 import { toClientAstroConfigView } from "../secretRedaction";
+import { mapRouterError } from "../trpcErrors";
 
 const clientIdInput = z.object({ clientId: z.number().int().positive() });
 const wranglerSecretInputSchema = z.object(
@@ -21,13 +22,6 @@ const wranglerSecretInputSchema = z.object(
   ) as Record<(typeof WRANGLER_SECRET_VALUES)[number], z.ZodOptional<z.ZodString>>,
 );
 
-function plainError(error: unknown, fallback: string): TRPCError {
-  return new TRPCError({
-    code: "BAD_REQUEST",
-    message: error instanceof Error ? error.message : fallback,
-  });
-}
-
 export const astroConfigRouter = router({
   get: protectedProcedure.input(clientIdInput).query(async ({ input }) => {
     try {
@@ -35,7 +29,7 @@ export const astroConfigRouter = router({
         includeGeneratedConfig: false,
       });
     } catch (error) {
-      throw plainError(error, "Client configuration could not be loaded.");
+      throw mapRouterError(error, "Client configuration could not be loaded.");
     }
   }),
 
@@ -47,7 +41,7 @@ export const astroConfigRouter = router({
           includeGeneratedConfig: true,
         });
       } catch (error) {
-        throw plainError(error, "Client configuration could not be saved.");
+        throw mapRouterError(error, "Client configuration could not be saved.");
       }
     }),
 
@@ -59,7 +53,7 @@ export const astroConfigRouter = router({
           includeGeneratedConfig: false,
         });
       } catch (error) {
-        throw plainError(error, "Protected setup values could not be saved.");
+        throw mapRouterError(error, "Protected setup values could not be saved.");
       }
     }),
 
@@ -69,7 +63,7 @@ export const astroConfigRouter = router({
         clientId: z.number().int().positive(),
         slot: z.enum(ASTRO_ASSET_SLOT_VALUES),
         originalFilename: z.string().trim().min(1).max(500),
-        dataUrl: z.string().min(20).max(30_000_000),
+        dataUrl: z.string().min(20).max(MAX_DATA_URL_CHARS),
       }),
     )
     .mutation(async ({ input }) => {
@@ -102,7 +96,7 @@ export const astroConfigRouter = router({
           includeGeneratedConfig: false,
         });
       } catch (error) {
-        throw plainError(error, "That image could not be uploaded.");
+        throw mapRouterError(error, "That image could not be uploaded.");
       }
     }),
 });

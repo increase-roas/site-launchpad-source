@@ -5,6 +5,7 @@ import {
   buildFunnelAutofillProfile,
   getFunnelDeployMissingItems,
   protectGeneratedFunnelConfig,
+  funnelContentUpdateFields,
 } from "./funnelConfigDb";
 
 const originalSecret = process.env.JWT_SECRET;
@@ -23,6 +24,14 @@ describe("generated funnel config protection", () => {
     const encrypted = protectGeneratedFunnelConfig(source);
     expect(encrypted).not.toContain("funnelConfig");
     expect(decryptSetupValue(encrypted)).toBe(source);
+  });
+
+  it("updates funnel name and slug without touching deployment status fields", () => {
+    expect(funnelContentUpdateFields({ name: "Quiz", slug: "quiz" })).toEqual({
+      name: "Quiz",
+      slug: "quiz",
+    });
+    expect(funnelContentUpdateFields({ name: "Quiz", slug: "quiz" })).not.toHaveProperty("deploymentStatus");
   });
 
   it("autofills client identity, address service area, pixel ID, and GHL webhook from protected setup", () => {

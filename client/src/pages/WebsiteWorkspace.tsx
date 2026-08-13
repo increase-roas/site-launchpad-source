@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { nextSerializedSave } from "./editorIsolation";
 
 type SectionDraft = {
   id: number;
@@ -170,9 +171,12 @@ export default function WebsiteWorkspace({ clientId }: { clientId: number }) {
   const [sections, setSections] = useState<SectionDraft[]>([]);
   const [draggedId, setDraggedId] = useState<number | null>(null);
   const sectionBuilderRef = useRef<HTMLDivElement>(null);
+  const saveInFlightRef = useRef(false);
+  const queuedSectionsRef = useRef<SectionDraft[] | null>(null);
 
   useEffect(() => {
     if (!workspaceQuery.data) return;
+    if (saveInFlightRef.current || queuedSectionsRef.current) return;
     setSections(
       workspaceQuery.data.sections.map(section => ({
         id: section.id,
@@ -182,20 +186,41 @@ export default function WebsiteWorkspace({ clientId }: { clientId: number }) {
     );
   }, [workspaceQuery.data]);
 
-  const saveSections = trpc.workspace.saveSections.useMutation({
-    onSuccess: async () => {
-      await utils.workspace.get.invalidate({ clientId });
-      toast.success("Homepage order saved.");
-    },
-    onError: async error => {
-      await utils.workspace.get.invalidate({ clientId });
-      toast.error(error.message);
-    },
-  });
+  const saveSections = trpc.workspace.saveSections.useMutation();
+
+  const flushSections = (next: SectionDraft[]) => {
+    saveInFlightRef.current = true;
+    saveSections.mutate(
+      { clientId, sections: next },
+      {
+        onSuccess: async () => {
+          if (queuedSectionsRef.current) {
+            const queued = queuedSectionsRef.current;
+            queuedSectionsRef.current = null;
+            flushSections(queued);
+            return;
+          }
+          saveInFlightRef.current = false;
+          await utils.workspace.get.invalidate({ clientId });
+          toast.success("Homepage order saved.");
+        },
+        onError: async error => {
+          saveInFlightRef.current = false;
+          queuedSectionsRef.current = null;
+          await utils.workspace.get.invalidate({ clientId });
+          toast.error(error.message);
+        },
+      },
+    );
+  };
 
   const persistSections = (next: SectionDraft[]) => {
     setSections(next);
-    saveSections.mutate({ clientId, sections: next });
+    if (nextSerializedSave(saveInFlightRef.current) === "queue") {
+      queuedSectionsRef.current = next;
+      return;
+    }
+    flushSections(next);
   };
 
   const moveSection = (fromId: number, toId: number) => {

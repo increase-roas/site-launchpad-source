@@ -26,6 +26,7 @@ vi.mock("./db", () => ({
 vi.mock("./imageProcessing", () => ({
   decodeImageDataUrl: mocks.decodeImageDataUrl,
   processAstroUploadedImage: mocks.processAstroUploadedImage,
+  MAX_DATA_URL_CHARS: 8_000_000,
 }));
 vi.mock("./storage", () => ({ storagePutExact: mocks.storagePutExact }));
 
@@ -157,5 +158,14 @@ describe("authenticated Astro config procedures", () => {
       "image/webp",
     );
     expect(mocks.upsertClientAsset).toHaveBeenCalledWith(expect.objectContaining({ clientId: 5, slot: "categoryHotTubs" }));
+  });
+
+  it("maps missing-client errors to NOT_FOUND", async () => {
+    mocks.getAstroConfigView.mockRejectedValue(new Error("Client not found."));
+    const caller = astroConfigRouter.createCaller(context());
+    await expect(caller.get({ clientId: 99 })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: "Client not found.",
+    });
   });
 });

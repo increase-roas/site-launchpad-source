@@ -103,4 +103,10 @@ describe("Astro client config schema", () => {
     expect(first).toContain("HomeAndConstructionBusiness");
     expect(first).toContain("/manus-storage/nav.webp");
   });
+
+  it("rejects Astro hours that repeat a weekday", () => {
+    const config = createDefaultAstroConfig(client);
+    config.hours[1] = { ...config.hours[0] };
+    expect(astroClientConfigInputSchema.safeParse(config).success).toBe(false);
+  });
 });

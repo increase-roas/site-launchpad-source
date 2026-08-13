@@ -1,4 +1,3 @@
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
   funnelShapeSchema,
@@ -13,13 +12,7 @@ import {
   updateFunnelStep,
 } from "../workspaceDb";
 import { getClientView } from "./clients";
-
-function plainError(error: unknown, fallback: string): TRPCError {
-  return new TRPCError({
-    code: "BAD_REQUEST",
-    message: error instanceof Error ? error.message : fallback,
-  });
-}
+import { mapRouterError } from "../trpcErrors";
 
 async function getCompleteWorkspace(clientId: number) {
   const [clientView, workspace] = await Promise.all([
@@ -36,7 +29,7 @@ export const workspaceRouter = router({
       try {
         return await getCompleteWorkspace(input.clientId);
       } catch (error) {
-        throw plainError(error, "Client workspace could not be loaded.");
+        throw mapRouterError(error, "Client workspace could not be loaded.");
       }
     }),
 
@@ -53,7 +46,7 @@ export const workspaceRouter = router({
         await replaceFunnelShape(input.clientId, input.funnelId, input.shape);
         return await getCompleteWorkspace(input.clientId);
       } catch (error) {
-        throw plainError(error, "Funnel shape could not be changed.");
+        throw mapRouterError(error, "Funnel shape could not be changed.");
       }
     }),
 
@@ -64,7 +57,7 @@ export const workspaceRouter = router({
         await updateFunnelStep(input.clientId, input.step);
         return await getCompleteWorkspace(input.clientId);
       } catch (error) {
-        throw plainError(error, "Funnel step could not be saved.");
+        throw mapRouterError(error, "Funnel step could not be saved.");
       }
     }),
 
@@ -75,7 +68,7 @@ export const workspaceRouter = router({
         await saveHomepageSectionOrder(input.clientId, input.sections);
         return await getCompleteWorkspace(input.clientId);
       } catch (error) {
-        throw plainError(error, "Homepage order could not be saved.");
+        throw mapRouterError(error, "Homepage order could not be saved.");
       }
     }),
 });

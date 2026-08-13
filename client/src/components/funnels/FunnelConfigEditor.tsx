@@ -38,11 +38,61 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { shouldHydrateRemoteForm } from "@/pages/editorIsolation";
 
 type QuestionDraft = SurveyQuestionInput & { localKey: string };
 type FormDraft = Omit<FunnelEditorInput, "questions"> & { questions: QuestionDraft[] };
+
+function formFromDetail(detail: {
+  funnel: { name: string; slug: string };
+  config: {
+    serviceArea: string;
+    offerHeadline: string;
+    offerSubheadline: string;
+    thankYouMessage: string;
+  };
+  profile: { serviceArea: string };
+  questions: Array<{
+    id?: number;
+    questionText: string;
+    questionType: SurveyQuestionType;
+    options: string[];
+  }>;
+}): FormDraft {
+  return {
+    name: detail.funnel.name,
+    slug: detail.funnel.slug,
+    serviceArea: detail.config.serviceArea || detail.profile.serviceArea,
+    offerHeadline: detail.config.offerHeadline,
+    offerSubheadline: detail.config.offerSubheadline,
+    thankYouMessage: detail.config.thankYouMessage,
+    questions: detail.questions.map(question => ({
+      id: question.id,
+      localKey: question.id ? `saved-${question.id}` : crypto.randomUUID(),
+      questionText: question.questionText,
+      questionType: question.questionType,
+      options: question.options,
+    })),
+  };
+}
+
+function draftFingerprint(form: FormDraft): string {
+  return JSON.stringify({
+    name: form.name,
+    slug: form.slug,
+    serviceArea: form.serviceArea,
+    offerHeadline: form.offerHeadline,
+    offerSubheadline: form.offerSubheadline,
+    thankYouMessage: form.thankYouMessage,
+    questions: form.questions.map(question => ({
+      questionText: question.questionText,
+      questionType: question.questionType,
+      options: question.options,
+    })),
+  });
+}
 
 const QUESTION_TYPE_LABELS: Record<SurveyQuestionType, string> = {
   radio: "Single choice",
@@ -273,59 +323,33 @@ export function FunnelConfigEditor({
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [deployMessage, setDeployMessage] = useState("");
   const [exportedConfig, setExportedConfig] = useState("");
+  const formRef = useRef<FormDraft | null>(null);
+  const lastHydratedFingerprint = useRef<string | null>(null);
+  const pendingDeployRef = useRef(false);
 
   useEffect(() => {
     setExportedConfig("");
     setDeployMessage("");
+    lastHydratedFingerprint.current = null;
+    pendingDeployRef.current = false;
   }, [clientId, funnelId]);
 
   useEffect(() => {
     const detail = detailQuery.data;
     if (!detail) return;
-    setForm({
-      name: detail.funnel.name,
-      slug: detail.funnel.slug,
-      serviceArea: detail.config.serviceArea || detail.profile.serviceArea,
-      offerHeadline: detail.config.offerHeadline,
-      offerSubheadline: detail.config.offerSubheadline,
-      thankYouMessage: detail.config.thankYouMessage,
-      questions: detail.questions.map(question => ({
-        id: question.id,
-        localKey: `saved-${question.id}`,
-        questionText: question.questionText,
-        questionType: question.questionType,
-        options: question.options,
-      })),
-    });
+    const incoming = formFromDetail(detail);
+    const current = formRef.current;
+    if (
+      current &&
+      !shouldHydrateRemoteForm(draftFingerprint(current), lastHydratedFingerprint.current)
+    ) {
+      return;
+    }
+    setForm(incoming);
+    lastHydratedFingerprint.current = draftFingerprint(incoming);
   }, [detailQuery.data]);
 
-  const saveMutation = trpc.funnelBuilder.save.useMutation({
-    onSuccess: async detail => {
-      setExportedConfig(detail.config.generatedConfig);
-      await Promise.all([
-        utils.funnelBuilder.get.invalidate({ clientId, funnelId }),
-        utils.funnelBuilder.list.invalidate({ clientId }),
-        utils.workspace.get.invalidate({ clientId }),
-      ]);
-      setForm(current =>
-        current
-          ? {
-              ...current,
-              questions: detail.questions.map(question => ({
-                id: question.id,
-                localKey: `saved-${question.id}`,
-                questionText: question.questionText,
-                questionType: question.questionType,
-                options: question.options,
-              })),
-            }
-          : current,
-      );
-      setDeployMessage("");
-      toast.success("Funnel saved and config generated.");
-    },
-    onError: error => toast.error(error.message),
-  });
+  formRef.current = form;
 
   const deployMutation = trpc.funnelBuilder.deploy.useMutation({
     onSuccess: async result => {
@@ -337,6 +361,45 @@ export function FunnelConfigEditor({
       toast.success("Funnel is ready to deploy.");
     },
     onError: error => toast.error(error.message),
+  });
+
+  const saveMutation = trpc.funnelBuilder.save.useMutation({
+    onSuccess: async detail => {
+      setExportedConfig(detail.config.generatedConfig);
+      await Promise.all([
+        utils.funnelBuilder.get.invalidate({ clientId, funnelId }),
+        utils.funnelBuilder.list.invalidate({ clientId }),
+        utils.workspace.get.invalidate({ clientId }),
+      ]);
+      const current = formRef.current;
+      const next: FormDraft | null = current
+        ? {
+            ...current,
+            questions: detail.questions.map(question => ({
+              id: question.id,
+              localKey: `saved-${question.id}`,
+              questionText: question.questionText,
+              questionType: question.questionType,
+              options: question.options,
+            })),
+          }
+        : current;
+      if (next) {
+        setForm(next);
+        formRef.current = next;
+        lastHydratedFingerprint.current = draftFingerprint(next);
+      }
+      setDeployMessage("");
+      toast.success("Funnel saved and config generated.");
+      if (pendingDeployRef.current) {
+        pendingDeployRef.current = false;
+        deployMutation.mutate({ clientId, funnelId });
+      }
+    },
+    onError: error => {
+      pendingDeployRef.current = false;
+      toast.error(error.message);
+    },
   });
 
   const markDeployedMutation = trpc.funnelBuilder.markDeployed.useMutation({
@@ -369,13 +432,31 @@ export function FunnelConfigEditor({
   }, [form]);
 
   const save = () => {
-    if (!cleanInput) return;
+    if (!cleanInput) {
+      pendingDeployRef.current = false;
+      return;
+    }
     const parsed = funnelEditorInputSchema.safeParse(cleanInput);
     if (!parsed.success) {
+      pendingDeployRef.current = false;
       toast.error(parsed.error.issues[0]?.message ?? "A few funnel details need attention.");
       return;
     }
     saveMutation.mutate({ clientId, funnelId, config: parsed.data });
+  };
+
+  const requestDeploy = () => {
+    const current = formRef.current;
+    const dirty =
+      Boolean(current) &&
+      lastHydratedFingerprint.current !== null &&
+      draftFingerprint(current!) !== lastHydratedFingerprint.current;
+    if (dirty) {
+      pendingDeployRef.current = true;
+      save();
+      return;
+    }
+    deployMutation.mutate({ clientId, funnelId });
   };
 
   const moveQuestion = (from: number, to: number) => {
@@ -433,7 +514,7 @@ export function FunnelConfigEditor({
             {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Save & Generate
           </Button>
-          <Button type="button" disabled={busy || status === "deployed"} onClick={() => deployMutation.mutate({ clientId, funnelId })} className="h-12 gap-2 rounded-xl bg-cyan-400 px-5 font-extrabold text-slate-950 hover:bg-cyan-300">
+          <Button type="button" disabled={busy || status === "deployed"} onClick={requestDeploy} className="h-12 gap-2 rounded-xl bg-cyan-400 px-5 font-extrabold text-slate-950 hover:bg-cyan-300">
             {deployMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
             Deploy Funnel
           </Button>
@@ -523,7 +604,7 @@ export function FunnelConfigEditor({
       </section>
 
       <div className="sticky bottom-20 z-30 rounded-2xl border border-white/10 bg-[rgba(8,15,24,0.94)] p-3 shadow-[0_20px_55px_rgba(0,0,0,0.4)] backdrop-blur-xl lg:bottom-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><p className="hidden text-sm font-bold text-muted-foreground sm:block">{form.questions.length} survey question{form.questions.length === 1 ? "" : "s"} · {funnelFormStepCount(form.questions.length)} form steps · {funnelStepCount(form.questions.length)} pages including Thank You</p><div className="grid grid-cols-2 gap-2"><Button type="button" disabled={busy} onClick={save} variant="outline" className="h-11 gap-2 rounded-xl border-white/10 bg-white/[0.03] px-3 text-xs font-extrabold sm:px-4 sm:text-sm"><Save className="h-4 w-4" /><span className="sm:hidden">Save</span><span className="hidden sm:inline">Save & Generate</span></Button><Button type="button" disabled={busy || status === "deployed"} onClick={() => deployMutation.mutate({ clientId, funnelId })} className="h-11 gap-2 rounded-xl bg-cyan-400 px-3 text-xs font-extrabold text-slate-950 hover:bg-cyan-300 sm:px-4 sm:text-sm"><Send className="h-4 w-4" /> Deploy Funnel</Button></div></div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><p className="hidden text-sm font-bold text-muted-foreground sm:block">{form.questions.length} survey question{form.questions.length === 1 ? "" : "s"} · {funnelFormStepCount(form.questions.length)} form steps · {funnelStepCount(form.questions.length)} pages including Thank You</p><div className="grid grid-cols-2 gap-2"><Button type="button" disabled={busy} onClick={save} variant="outline" className="h-11 gap-2 rounded-xl border-white/10 bg-white/[0.03] px-3 text-xs font-extrabold sm:px-4 sm:text-sm"><Save className="h-4 w-4" /><span className="sm:hidden">Save</span><span className="hidden sm:inline">Save & Generate</span></Button><Button type="button" disabled={busy || status === "deployed"} onClick={requestDeploy} className="h-11 gap-2 rounded-xl bg-cyan-400 px-3 text-xs font-extrabold text-slate-950 hover:bg-cyan-300 sm:px-4 sm:text-sm"><Send className="h-4 w-4" /> Deploy Funnel</Button></div></div>
       </div>
     </div>
   );

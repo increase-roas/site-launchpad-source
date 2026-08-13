@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrpcContext } from "./_core/context";
 import { ASSET_SLOT_VALUES, BUSINESS_DAY_VALUES } from "../shared/client";
 import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from "../shared/const";
+import { UpdateConflictError } from "./trpcErrors";
 
 const mocks = vi.hoisted(() => ({
   getClientById: vi.fn(),
@@ -10,7 +11,9 @@ const mocks = vi.hoisted(() => ({
   getClientSecretSetup: vi.fn(),
   updateClient: vi.fn(),
   listClients: vi.fn(),
-  createClient: vi.fn(),
+  listClientAssets: vi.fn(),
+  listClientSecretSetups: vi.fn(),
+  createClientWithSecrets: vi.fn(),
   saveClientSecretSetup: vi.fn(),
   upsertClientAsset: vi.fn(),
 }));
@@ -123,7 +126,9 @@ describe("client launch gating", () => {
     mocks.getClientSecretSetup.mockResolvedValue(undefined);
     mocks.updateClient.mockResolvedValue(undefined);
     mocks.listClients.mockResolvedValue([baseClient]);
-    mocks.createClient.mockResolvedValue(7);
+    mocks.listClientAssets.mockResolvedValue([]);
+    mocks.listClientSecretSetups.mockResolvedValue([]);
+    mocks.createClientWithSecrets.mockResolvedValue(7);
     mocks.saveClientSecretSetup.mockResolvedValue(undefined);
     workspaceMocks.ensureWorkspaceDefaults.mockResolvedValue(undefined);
   });
@@ -146,15 +151,12 @@ describe("client launch gating", () => {
     const caller = appRouter.createCaller(createContext());
     await caller.clients.create({ details: detailsInput, setup: setupInput });
 
-    expect(mocks.createClient).toHaveBeenCalledWith(
+    expect(mocks.createClientWithSecrets).toHaveBeenCalledWith(
       expect.objectContaining({ businessName: "Paradise Spas", status: "draft" }),
-    );
-    expect(mocks.saveClientSecretSetup).toHaveBeenCalledWith(
-      7,
       expect.objectContaining({
-        metaPixelIdEncrypted: expect.stringMatching(/^v1\./),
-        ghlApiKeyEncrypted: expect.stringMatching(/^v1\./),
-        ghlWebhookUrlEncrypted: expect.stringMatching(/^v1\./),
+        metaPixelIdEncrypted: expect.stringMatching(/^v[12]\./),
+        ghlApiKeyEncrypted: expect.stringMatching(/^v[12]\./),
+        ghlWebhookUrlEncrypted: expect.stringMatching(/^v[12]\./),
       }),
     );
     expect(workspaceMocks.ensureWorkspaceDefaults).toHaveBeenCalledWith(7);
@@ -178,6 +180,7 @@ describe("client launch gating", () => {
     expect(mocks.updateClient).toHaveBeenCalledWith(
       7,
       expect.objectContaining({ tagline: "A new client tagline." }),
+      undefined,
     );
     expect(mocks.saveClientSecretSetup).not.toHaveBeenCalled();
   });
@@ -251,6 +254,26 @@ describe("client launch gating", () => {
       },
     });
     expect(mocks.updateClient).toHaveBeenCalled();
+  });
+
+  it("returns CONFLICT when expectedUpdatedAt does not match", async () => {
+    mocks.updateClient.mockRejectedValue(new UpdateConflictError());
+    const caller = appRouter.createCaller(createContext());
+    await expect(
+      caller.clients.update({
+        clientId: 7,
+        details: detailsInput,
+        setup: {
+          metaPixelId: "",
+          ga4MeasurementId: "",
+          clarityId: "",
+          ghlApiKey: "",
+          ghlWebhookUrl: "",
+          cloudflareProjectName: "",
+        },
+        expectedUpdatedAt: new Date("2020-01-01T00:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
   });
 
   it("forbids a non-admin from launching", async () => {

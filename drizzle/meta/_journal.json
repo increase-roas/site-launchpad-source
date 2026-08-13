@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1717200000000,
+      "tag": "0000_busy_masked_marvel",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1717200001000,
+      "tag": "0001_far_miek",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1717200002000,
+      "tag": "0002_yellow_maverick",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1717200003000,
+      "tag": "0003_slow_speedball",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1717200004000,
+      "tag": "0004_previous_wilson_fisk",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1755096000000,
+      "tag": "0005_funnel_deployment_status_backfill",
+      "breakpoints": true
+    }
+  ]
+}

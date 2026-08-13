@@ -2,16 +2,17 @@
 // Uploads via Forge Server presigned URL to S3 (PUT direct).
 // Downloads return /manus-storage/{key} paths served via 307 redirect.
 
+import { randomUUID } from "node:crypto";
 import { ENV } from "./_core/env";
+
+const STORAGE_FETCH_TIMEOUT_MS = 15_000;
 
 function getForgeConfig() {
   const forgeUrl = ENV.forgeApiUrl;
   const forgeKey = ENV.forgeApiKey;
 
   if (!forgeUrl || !forgeKey) {
-    throw new Error(
-      "Storage config missing: set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY",
-    );
+    throw new Error("Storage config missing: set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY");
   }
 
   return { forgeUrl: forgeUrl.replace(/\/+$/, ""), forgeKey };
@@ -22,10 +23,14 @@ function normalizeKey(relKey: string): string {
 }
 
 function appendHashSuffix(relKey: string): string {
-  const hash = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
+  const hash = randomUUID().replace(/-/g, "").slice(0, 8);
   const lastDot = relKey.lastIndexOf(".");
   if (lastDot === -1) return `${relKey}_${hash}`;
   return `${relKey.slice(0, lastDot)}_${hash}${relKey.slice(lastDot)}`;
+}
+
+async function fetchWithTimeout(input: URL | string, init?: RequestInit): Promise<Response> {
+  return fetch(input, { ...init, signal: AbortSignal.timeout(STORAGE_FETCH_TIMEOUT_MS) });
 }
 
 async function putWithKey(
@@ -35,11 +40,10 @@ async function putWithKey(
 ): Promise<{ key: string; url: string }> {
   const { forgeUrl, forgeKey } = getForgeConfig();
 
-  // 1. Get presigned PUT URL from Forge
   const presignUrl = new URL("v1/storage/presign/put", forgeUrl + "/");
   presignUrl.searchParams.set("path", key);
 
-  const presignResp = await fetch(presignUrl, {
+  const presignResp = await fetchWithTimeout(presignUrl, {
     headers: { Authorization: `Bearer ${forgeKey}` },
   });
 
@@ -51,13 +55,10 @@ async function putWithKey(
   const { url: s3Url } = (await presignResp.json()) as { url: string };
   if (!s3Url) throw new Error("Forge returned empty presign URL");
 
-  // 2. PUT file directly to S3
   const blob =
-    typeof data === "string"
-      ? new Blob([data], { type: contentType })
-      : new Blob([data as any], { type: contentType });
+    typeof data === "string" ? new Blob([data], { type: contentType }) : new Blob([data as BlobPart], { type: contentType });
 
-  const uploadResp = await fetch(s3Url, {
+  const uploadResp = await fetchWithTimeout(s3Url, {
     method: "PUT",
     headers: { "Content-Type": contentType },
     body: blob,
@@ -83,7 +84,7 @@ export async function storagePutExact(
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream",
 ): Promise<{ key: string; url: string }> {
-  return putWithKey(normalizeKey(relKey), data, contentType);
+  return putWithKey(appendHashSuffix(normalizeKey(relKey)), data, contentType);
 }
 
 export async function storageGet(relKey: string): Promise<{ key: string; url: string }> {
@@ -98,7 +99,7 @@ export async function storageGetSignedUrl(relKey: string): Promise<string> {
   const getUrl = new URL("v1/storage/presign/get", forgeUrl + "/");
   getUrl.searchParams.set("path", key);
 
-  const resp = await fetch(getUrl, {
+  const resp = await fetchWithTimeout(getUrl, {
     headers: { Authorization: `Bearer ${forgeKey}` },
   });
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getClientIdFromWorkspacePath,
   getWorkspaceArea,
+  settingsRedirectFromLegacyClientPath,
   workspaceRoute,
 } from "./workspaceNavigation";
 
@@ -23,9 +24,15 @@ describe("selected-client workspace navigation", () => {
     expect(workspaceRoute("clients", 21)).toBe("/");
   });
 
-  it("loads a new client id from both modern and legacy client paths", () => {
+  it("loads a new client id from both modern and legacy client paths", async () => {
     expect(getClientIdFromWorkspacePath("/workspace/44/pages")).toBe(44);
     expect(getClientIdFromWorkspacePath("/clients/44")).toBe(44);
     expect(getClientIdFromWorkspacePath("/")).toBeUndefined();
+  });
+
+  it("redirects legacy client editor URLs to workspace settings", () => {
+    expect(settingsRedirectFromLegacyClientPath("/clients/5")).toBe("/workspace/5/settings");
+    expect(settingsRedirectFromLegacyClientPath("/clients/new")).toBeNull();
+    expect(settingsRedirectFromLegacyClientPath("/workspace/5/settings")).toBeNull();
   });
 });

@@ -19,9 +19,7 @@ import {
   isAssetSlot,
   secretSetupInputSchema,
   type AssetSlot,
-  type BusinessDay,
   type ClientInput,
-  type ProductCategory,
   type SecretField,
   type SecretStatus,
   type ThemeValue,
@@ -42,56 +40,7 @@ import {
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
-
-const DAY_LABELS: Record<BusinessDay, string> = {
-  monday: "Monday",
-  tuesday: "Tuesday",
-  wednesday: "Wednesday",
-  thursday: "Thursday",
-  friday: "Friday",
-  saturday: "Saturday",
-  sunday: "Sunday",
-};
-
-const CATEGORY_OPTIONS: { value: ProductCategory; label: string }[] = [
-  { value: "hotTubs", label: "Hot Tubs" },
-  { value: "swimSpas", label: "Swim Spas" },
-  { value: "saunas", label: "Saunas" },
-  { value: "coldPlunge", label: "Cold Plunge" },
-  { value: "massageChairs", label: "Massage Chairs" },
-];
-
-const THEME_OPTIONS: {
-  value: ThemeValue;
-  label: string;
-  description: string;
-  swatches: string[];
-}[] = [
-  {
-    value: "aqua",
-    label: "Aqua",
-    description: "Fresh, bright, and water focused",
-    swatches: ["#0e7490", "#22d3ee", "#ecfeff"],
-  },
-  {
-    value: "luxury",
-    label: "Luxury",
-    description: "Dark, polished, and premium",
-    swatches: ["#171717", "#d4af37", "#faf7ef"],
-  },
-  {
-    value: "natural",
-    label: "Natural",
-    description: "Warm, calm, and grounded",
-    swatches: ["#365314", "#a3b18a", "#f5f2e8"],
-  },
-  {
-    value: "mono",
-    label: "Mono",
-    description: "Neutral, crisp, and editorial",
-    swatches: ["#0a0a0a", "#737373", "#fafafa"],
-  },
-];
+import { CATEGORY_OPTIONS, DAY_LABELS, THEME_OPTIONS } from "@/components/client/clientEditorOptions";
 
 const PHOTO_GUIDANCE: Record<AssetSlot, string> = {
   logo: "Use a clear logo on a simple background.",
@@ -265,7 +214,7 @@ export default function ClientEditor({ clientId }: { clientId?: number }) {
     onSuccess: async view => {
       await utils.clients.list.invalidate();
       toast.success("Client saved. Add the logo and photos next.");
-      setLocation(`/clients/${view.client.id}`);
+      setLocation(`/workspace/${view.client.id}/settings`);
     },
     onError: error => toast.error(error.message),
   });
@@ -363,7 +312,11 @@ export default function ClientEditor({ clientId }: { clientId?: number }) {
     if (!valid) return;
 
     if (clientId) {
-      updateMutation.mutate({ clientId, ...valid });
+      updateMutation.mutate({
+        clientId,
+        ...valid,
+        expectedUpdatedAt: clientQuery.data?.client.updatedAt,
+      });
     } else {
       createMutation.mutate(valid);
     }

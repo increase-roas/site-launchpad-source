@@ -25,6 +25,7 @@ import {
   getDb,
   saveClientSecretSetup,
 } from "./db";
+import type { ProductCategory } from "../shared/client";
 
 async function requireDb() {
   const db = await getDb();
@@ -64,6 +65,16 @@ const legacyCategoryByAstro = {
   "cold-plunge": "coldPlunge",
   "massage-chairs": "massageChairs",
 } as const;
+
+export function resolveProductCategories(
+  input: AstroClientConfigInput,
+  existingCategories: ProductCategory[],
+): ProductCategory[] {
+  const enabled = ASTRO_CATEGORY_VALUES.filter(category => input.categories[category].enabled).map(
+    category => legacyCategoryByAstro[category],
+  );
+  return enabled.length > 0 ? enabled : existingCategories;
+}
 
 function isAstroAssetSlot(value: string): value is AstroAssetSlot {
   return (ASTRO_ASSET_SLOT_VALUES as readonly string[]).includes(value);
@@ -208,7 +219,7 @@ export async function saveAstroConfig(clientId: number, input: AstroClientConfig
         businessHours: normalized.hours,
         facebookUrl: normalized.socialLinks.facebook,
         theme: normalized.brand.theme,
-        productCategories: ASTRO_CATEGORY_VALUES.filter(category => normalized.categories[category].enabled).map(category => legacyCategoryByAstro[category]),
+        productCategories: resolveProductCategories(normalized, existing.productCategories),
       })
       .where(eq(clients.id, clientId));
 

@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Redirect, Route, Switch } from "wouter";
 import DashboardLayout from "./components/DashboardLayout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -20,13 +20,17 @@ function Router() {
         <ClientEditor />
       </Route>
       <Route path="/clients/:clientId">
-        {params => <ClientEditor clientId={Number(params.clientId)} />}
+        {params => <Redirect to={`/workspace/${Number(params.clientId)}/settings`} />}
       </Route>
       <Route path="/workspace/:clientId/pages">
-        {params => <WebsiteWorkspace clientId={Number(params.clientId)} />}
+        {params => (
+          <WebsiteWorkspace key={Number(params.clientId)} clientId={Number(params.clientId)} />
+        )}
       </Route>
       <Route path="/workspace/:clientId/funnels">
-        {params => <PaidAdsWorkspace clientId={Number(params.clientId)} />}
+        {params => (
+          <PaidAdsWorkspace key={Number(params.clientId)} clientId={Number(params.clientId)} />
+        )}
       </Route>
       <Route path="/workspace/:clientId/media">
         {params => <MediaWorkspace clientId={Number(params.clientId)} />}

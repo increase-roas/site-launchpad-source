@@ -18,6 +18,7 @@ import {
   type HomepageSectionType,
 } from "../shared/workspace";
 import { getClientById, getDb } from "./db";
+import { isDuplicateKeyError } from "./trpcErrors";
 
 async function requireDb() {
   const db = await getDb();
@@ -49,36 +50,48 @@ export async function ensureWorkspaceDefaults(clientId: number): Promise<void> {
   ]);
 
   if (existingPages.length === 0) {
-    await db.insert(sitePages).values(
-      DEFAULT_SITE_PAGES.map(page => ({
-        clientId,
-        ...page,
-        status: "draft" as const,
-        enabled: 1,
-      })),
-    );
+    try {
+      await db.insert(sitePages).values(
+        DEFAULT_SITE_PAGES.map(page => ({
+          clientId,
+          ...page,
+          status: "draft" as const,
+          enabled: 1,
+        })),
+      );
+    } catch (error) {
+      if (!isDuplicateKeyError(error)) throw error;
+    }
   }
 
   if (existingSections.length === 0) {
-    await db.insert(homepageSections).values(
-      DEFAULT_HOMEPAGE_SECTIONS.map((section, position) => ({
-        clientId,
-        sectionType: section.sectionType,
-        position,
-        enabled: section.enabled,
-      })),
-    );
+    try {
+      await db.insert(homepageSections).values(
+        DEFAULT_HOMEPAGE_SECTIONS.map((section, position) => ({
+          clientId,
+          sectionType: section.sectionType,
+          position,
+          enabled: section.enabled,
+        })),
+      );
+    } catch (error) {
+      if (!isDuplicateKeyError(error)) throw error;
+    }
   }
 
   if (existingFunnels.length === 0) {
-    for (const funnel of DEFAULT_FUNNELS) {
-      const created = await db
-        .insert(funnels)
-        .values({ clientId, ...funnel, status: "draft" })
-        .$returningId();
-      const funnelId = created[0]?.id;
-      if (!funnelId) throw new Error("Funnel could not be created.");
-      await db.insert(funnelSteps).values(stepRows(funnelId, funnel.slug, FUNNEL_SHAPES[funnel.shape]));
+    try {
+      for (const funnel of DEFAULT_FUNNELS) {
+        const created = await db
+          .insert(funnels)
+          .values({ clientId, ...funnel, status: "draft" })
+          .$returningId();
+        const funnelId = created[0]?.id;
+        if (!funnelId) throw new Error("Funnel could not be created.");
+        await db.insert(funnelSteps).values(stepRows(funnelId, funnel.slug, FUNNEL_SHAPES[funnel.shape]));
+      }
+    } catch (error) {
+      if (!isDuplicateKeyError(error)) throw error;
     }
     return;
   }

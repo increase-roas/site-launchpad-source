@@ -1,4 +1,3 @@
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { DEPLOY_SUCCESS_MESSAGE, funnelEditorInputSchema } from "../../shared/funnelConfig";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
@@ -12,13 +11,7 @@ import {
   saveFunnelBuilder,
 } from "../funnelConfigDb";
 import { ensureWorkspaceDefaults } from "../workspaceDb";
-
-function asPlainError(error: unknown, fallback: string) {
-  return new TRPCError({
-    code: "BAD_REQUEST",
-    message: error instanceof Error ? error.message : fallback,
-  });
-}
+import { mapRouterError } from "../trpcErrors";
 
 const ownedFunnelInput = z.object({
   clientId: z.number().int().positive(),
@@ -33,7 +26,7 @@ export const funnelBuilderRouter = router({
         await ensureWorkspaceDefaults(input.clientId);
         return await listFunnelBuilderCards(input.clientId);
       } catch (error) {
-        throw asPlainError(error, "Funnels could not be loaded.");
+        throw mapRouterError(error, "Funnels could not be loaded.");
       }
     }),
 
@@ -50,7 +43,7 @@ export const funnelBuilderRouter = router({
           includeGeneratedConfig: false,
         });
       } catch (error) {
-        throw asPlainError(error, "Funnel could not be created.");
+        throw mapRouterError(error, "Funnel could not be created.");
       }
     }),
 
@@ -60,7 +53,7 @@ export const funnelBuilderRouter = router({
         includeGeneratedConfig: false,
       });
     } catch (error) {
-      throw asPlainError(error, "Funnel could not be loaded.");
+      throw mapRouterError(error, "Funnel could not be loaded.");
     }
   }),
 
@@ -73,7 +66,7 @@ export const funnelBuilderRouter = router({
           { includeGeneratedConfig: true },
         );
       } catch (error) {
-        throw asPlainError(error, "Funnel could not be saved.");
+        throw mapRouterError(error, "Funnel could not be saved.");
       }
     }),
 
@@ -84,7 +77,7 @@ export const funnelBuilderRouter = router({
       });
       return { funnel: detail, message: DEPLOY_SUCCESS_MESSAGE };
     } catch (error) {
-      throw asPlainError(error, "Funnel is not ready to deploy.");
+      throw mapRouterError(error, "Funnel is not ready to deploy.");
     }
   }),
 
@@ -94,7 +87,7 @@ export const funnelBuilderRouter = router({
         includeGeneratedConfig: false,
       });
     } catch (error) {
-      throw asPlainError(error, "Deployed status could not be saved.");
+      throw mapRouterError(error, "Deployed status could not be saved.");
     }
   }),
 });

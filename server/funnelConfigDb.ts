@@ -70,6 +70,10 @@ function decryptOptional(value: string | null | undefined): string {
   return hasProtectedValue(value) ? decryptSetupValue(value as string) : "";
 }
 
+export function funnelContentUpdateFields(input: { name: string; slug: string }) {
+  return { name: input.name, slug: input.slug };
+}
+
 export function protectGeneratedFunnelConfig(value: string): string {
   return encryptSetupValue(value);
 }
@@ -296,14 +300,7 @@ export async function saveFunnelBuilder(
   await db.transaction(async transaction => {
     await transaction
       .update(funnels)
-      .set({
-        name: input.name,
-        slug: input.slug,
-        deploymentStatus: "draft",
-        status: "draft",
-        readyAt: null,
-        deployedAt: null,
-      })
+      .set(funnelContentUpdateFields(input))
       .where(eq(funnels.id, funnelId));
 
     if (current.slug !== input.slug) {

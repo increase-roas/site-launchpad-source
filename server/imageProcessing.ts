@@ -3,6 +3,8 @@ import type { AssetSlot } from "../shared/client";
 import type { AstroAssetSlot } from "../shared/astroConfig";
 
 export const MAX_MARKETING_PHOTO_BYTES = 150 * 1024;
+export const MAX_DATA_URL_CHARS = 8_000_000;
+export const MARKETING_PHOTO_COMPRESS_ATTEMPTS = 5;
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set([
   "image/jpeg",
@@ -76,7 +78,7 @@ export async function processUploadedImage(
   let maxDimension = 2000;
   let quality = 82;
 
-  for (let attempt = 0; attempt < 18; attempt += 1) {
+  for (let attempt = 0; attempt < MARKETING_PHOTO_COMPRESS_ATTEMPTS; attempt += 1) {
     const buffer = await renderWebp(source, maxDimension, quality);
     if (buffer.length < MAX_MARKETING_PHOTO_BYTES) {
       return { buffer, mimeType: "image/webp", ...(await describe(buffer)) };

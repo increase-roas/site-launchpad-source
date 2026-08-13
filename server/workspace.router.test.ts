@@ -112,4 +112,13 @@ describe("complete selected-client workspace", () => {
     await caller.saveSections({ clientId: 5, sections });
     expect(workspaceMocks.saveHomepageSectionOrder).toHaveBeenCalledWith(5, sections);
   });
+
+  it("maps missing clients to NOT_FOUND instead of BAD_REQUEST", async () => {
+    clientMocks.getClientView.mockRejectedValue(new Error("Client not found."));
+    const caller = workspaceRouter.createCaller(context());
+    await expect(caller.get({ clientId: 99 })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: "Client not found.",
+    });
+  });
 });
