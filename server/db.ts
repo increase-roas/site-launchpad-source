@@ -242,12 +242,21 @@ export async function saveClientSecretSetup(
 
 export async function listClientShortNames(): Promise<string[]> {
   const db = await requireDb();
+  return listClientShortNamesWithDb(db);
+}
+
+async function listClientShortNamesWithDb(db: WorkspaceSeedClient): Promise<string[]> {
   const rows = await db.select({ shortName: clients.shortName }).from(clients);
   return rows.map(row => row.shortName);
 }
 
-export async function allocateUniqueShortName(businessName: string): Promise<string> {
-  const used = new Set((await listClientShortNames()).map(name => name.toLowerCase()));
+async function allocateUniqueShortNameWithDb(
+  db: WorkspaceSeedClient,
+  businessName: string,
+): Promise<string> {
+  const used = new Set(
+    (await listClientShortNamesWithDb(db)).map(name => name.toLowerCase()),
+  );
   const base =
     sanitizeClientFolder(businessName).slice(0, 80) ||
     "client";
@@ -261,15 +270,34 @@ export async function allocateUniqueShortName(businessName: string): Promise<str
   }
 }
 
+export async function allocateUniqueShortName(businessName: string): Promise<string> {
+  const db = await requireDb();
+  return allocateUniqueShortNameWithDb(db, businessName);
+}
+
+export async function createDraftClientInTransaction(
+  transaction: WorkspaceSeedClient,
+  businessName: string,
+): Promise<number> {
+  const shortName = await allocateUniqueShortNameWithDb(transaction, businessName);
+  return createClientWithSecretsInTransaction(
+    transaction,
+    {
+      businessName: businessName.trim(),
+      shortName,
+      country: "US",
+      theme: "aqua",
+      businessHours: CLOSED_BUSINESS_HOURS,
+      productCategories: [],
+      status: "draft",
+    },
+    {},
+  );
+}
+
 export async function createDraftClient(businessName: string): Promise<number> {
-  const shortName = await allocateUniqueShortName(businessName);
-  return createClient({
-    businessName: businessName.trim(),
-    shortName,
-    country: "US",
-    theme: "aqua",
-    businessHours: CLOSED_BUSINESS_HOURS,
-    productCategories: [],
-    status: "draft",
-  });
+  const db = await requireDb();
+  return db.transaction(transaction =>
+    createDraftClientInTransaction(transaction, businessName),
+  );
 }

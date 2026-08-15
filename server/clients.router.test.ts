@@ -149,7 +149,7 @@ describe("client launch gating", () => {
     expect(detail.readiness.isComplete).toBe(false);
   });
 
-  it("creates a client and protects setup values before persistence", async () => {
+  it("creates a client without redundantly seeding after the transactional create", async () => {
     const caller = appRouter.createCaller(createContext());
     await caller.clients.create({ details: detailsInput, setup: setupInput });
 
@@ -161,14 +161,14 @@ describe("client launch gating", () => {
         ghlWebhookUrlEncrypted: expect.stringMatching(/^v[12]\./),
       }),
     );
-    expect(workspaceMocks.ensureWorkspaceDefaults).toHaveBeenCalledWith(7);
+    expect(workspaceMocks.ensureWorkspaceDefaults).not.toHaveBeenCalled();
   });
 
-  it("creates a draft client from business name only", async () => {
+  it("creates a draft client without redundantly seeding after the transactional create", async () => {
     const caller = appRouter.createCaller(createContext());
     await caller.clients.createDraft({ businessName: "Northland Spas" });
     expect(mocks.createDraftClient).toHaveBeenCalledWith("Northland Spas");
-    expect(workspaceMocks.ensureWorkspaceDefaults).toHaveBeenCalledWith(7);
+    expect(workspaceMocks.ensureWorkspaceDefaults).not.toHaveBeenCalled();
   });
 
   it("updates client details and keeps blank setup fields unchanged", async () => {

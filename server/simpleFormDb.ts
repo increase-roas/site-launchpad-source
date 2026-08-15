@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import type { MySql2Database } from "drizzle-orm/mysql2";
 import {
   funnelRuntimeSecrets,
   funnelSimpleFormConfigs,
@@ -17,6 +18,7 @@ import {
   type SimpleFormRuntimeSecretKey,
 } from "../shared/simpleFormContract";
 import {
+  buildSimpleFormValidatedConfiguration,
   buildSimpleFormReadiness,
   buildSimpleFormStoredRecord,
   resolveSimpleFormImages,
@@ -158,6 +160,11 @@ function parseStoredRecord(value: Record<string, unknown>): SimpleFormStoredReco
   return simpleFormStoredRecordSchema.parse(value);
 }
 
+function decryptedGhlWebhookUrl(row: FunnelRuntimeSecret | undefined): string | null {
+  const encrypted = row?.ghlWebhookUrlEncrypted;
+  return hasProtectedValue(encrypted) ? decryptSetupValue(encrypted as string) : null;
+}
+
 export async function getSimpleFormDetail(clientId: number, funnelId: number) {
   const db = await requireDb();
   const funnel = await getOwnedFunnel(clientId, funnelId);
@@ -175,7 +182,9 @@ export async function getSimpleFormDetail(clientId: number, funnelId: number) {
   const secrets = secretPresenceFromRow(secretRows[0]);
   const config = resolveSimpleFormImages(stored, assets);
   const record = { ...stored, config };
-  const readiness = buildSimpleFormReadiness(record, secrets);
+  const readiness = buildSimpleFormReadiness(record, secrets, {
+    GHL_WEBHOOK_URL: decryptedGhlWebhookUrl(secretRows[0]),
+  });
   return {
     funnel: {
       id: funnel.id,
@@ -208,6 +217,41 @@ export async function getSimpleFormDetail(clientId: number, funnelId: number) {
   };
 }
 
+type SimpleFormSaveClient = Pick<MySql2Database, "insert" | "select" | "update">;
+
+export async function saveSimpleFormConfigInTransaction(
+  transaction: SimpleFormSaveClient,
+  funnel: { id: number; slug: string },
+  record: SimpleFormStoredRecord,
+): Promise<void> {
+  await transaction
+    .insert(funnelSimpleFormConfigs)
+    .values({ funnelId: funnel.id, configJson: record })
+    .onDuplicateKeyUpdate({ set: { configJson: record } });
+  await transaction
+    .update(funnels)
+    .set({
+      name: simpleFormFunnelName(record.config.client.name),
+      slug: record.config.funnel.slug,
+    })
+    .where(eq(funnels.id, funnel.id));
+  if (funnel.slug === record.config.funnel.slug) return;
+
+  const steps = await transaction
+    .select()
+    .from(funnelSteps)
+    .where(eq(funnelSteps.funnelId, funnel.id));
+  for (const step of steps) {
+    const nextPath = step.path.startsWith(`/${funnel.slug}`)
+      ? `/${record.config.funnel.slug}${step.path.slice(funnel.slug.length + 1)}`
+      : step.path;
+    await transaction
+      .update(funnelSteps)
+      .set({ path: nextPath })
+      .where(eq(funnelSteps.id, step.id));
+  }
+}
+
 export async function saveSimpleFormConfig(
   clientId: number,
   funnelId: number,
@@ -220,26 +264,9 @@ export async function saveSimpleFormConfig(
   const record = simpleFormStoredRecordSchema.parse(recordInput);
   simpleFormOperatorConfigSchema.parse(record.config);
   const db = await requireDb();
-  await db
-    .insert(funnelSimpleFormConfigs)
-    .values({ funnelId, configJson: record })
-    .onDuplicateKeyUpdate({ set: { configJson: record } });
-  await db
-    .update(funnels)
-    .set({
-      name: simpleFormFunnelName(record.config.client.name),
-      slug: record.config.funnel.slug,
-    })
-    .where(eq(funnels.id, funnelId));
-  if (funnel.slug !== record.config.funnel.slug) {
-    const steps = await db.select().from(funnelSteps).where(eq(funnelSteps.funnelId, funnelId));
-    for (const step of steps) {
-      const nextPath = step.path.startsWith(`/${funnel.slug}`)
-        ? `/${record.config.funnel.slug}${step.path.slice(funnel.slug.length + 1)}`
-        : step.path;
-      await db.update(funnelSteps).set({ path: nextPath }).where(eq(funnelSteps.id, step.id));
-    }
-  }
+  await db.transaction(transaction =>
+    saveSimpleFormConfigInTransaction(transaction, funnel, record),
+  );
   return getSimpleFormDetail(clientId, funnelId);
 }
 
@@ -311,9 +338,21 @@ export async function getSimpleFormPublishHandoff(clientId: number, funnelId: nu
   const detail = await getSimpleFormDetail(clientId, funnelId);
   const client = await getClientById(clientId);
   if (!client) throw new Error("Client not found.");
+  const db = await requireDb();
+  const secretRows = await db
+    .select()
+    .from(funnelRuntimeSecrets)
+    .where(eq(funnelRuntimeSecrets.funnelId, funnelId))
+    .limit(1);
+  const validatedConfiguration = buildSimpleFormValidatedConfiguration(
+    detail.config,
+    { GHL_WEBHOOK_URL: decryptedGhlWebhookUrl(secretRows[0]) },
+  );
+  const configurationReady =
+    detail.readiness.configurationReady && validatedConfiguration !== null;
   return {
     published: false as const,
-    configurationReady: detail.readiness.configurationReady,
+    configurationReady,
     client: {
       id: client.id,
       businessName: client.businessName,
@@ -329,12 +368,7 @@ export async function getSimpleFormPublishHandoff(clientId: number, funnelId: nu
     contractVersion: SIMPLE_FORM_MANIFEST.contractVersion,
     secretsPresent: detail.secretStatus,
     requiredCloudflareInfrastructure: SIMPLE_FORM_CLOUDFLARE_INFRA,
-    validatedConfiguration: detail.readiness.configurationReady
-      ? {
-          ...detail.config,
-          ghlWebhookUrl: detail.secretStatus.GHL_WEBHOOK_URL ? "[PRESENT]" : "",
-        }
-      : null,
+    validatedConfiguration: configurationReady ? validatedConfiguration : null,
     missing: detail.readiness.sections.flatMap(section => section.missing),
   };
 }

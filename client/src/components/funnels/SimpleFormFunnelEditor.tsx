@@ -467,8 +467,11 @@ export function SimpleFormFunnelEditor({
                 <div className="space-y-3">
                   <p className="text-sm font-medium text-muted-foreground">
                     {query.data?.secretStatus.CRM_CALLBACK_SECRET
-                      ? "Generated and saved. It is not shown unless you choose Show once."
+                      ? "Generated and saved."
                       : "Not generated yet."}
+                  </p>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Revealing displays the currently stored secret. Keep it private.
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -478,7 +481,7 @@ export function SimpleFormFunnelEditor({
                       className="h-11 gap-2 rounded-xl font-extrabold"
                     >
                       <Eye className="h-4 w-4" />
-                      Show once
+                      Reveal secret
                     </Button>
                     <Button
                       type="button"

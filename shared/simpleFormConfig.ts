@@ -74,6 +74,7 @@ export const simpleFormOperatorConfigSchema = z.object({
   geoH1Template: z.string().trim().min(20).max(180),
   serviceAreaZipCodes: z.array(z.string().trim()),
   surveyQuestions: z.array(z.never()).max(0),
+  calendarUrl: optionalUrl.optional(),
   contact: z.object({
     headline: z.string().trim().min(12).max(180),
     submitLabel: z.string().trim().min(3).max(50),
@@ -108,6 +109,158 @@ export const simpleFormOperatorConfigSchema = z.object({
   }),
 });
 export type SimpleFormOperatorConfig = z.infer<typeof simpleFormOperatorConfigSchema>;
+
+const simpleFormCanonicalProductSchema = z.object({
+  id: z.string().trim().regex(productId),
+  name: z.string().trim().min(2).max(120),
+  description: z.string().trim().min(8).max(280).optional(),
+  imageUrl: z.string().trim().url(),
+  priceLabel: z.string().trim().min(2).max(60).optional(),
+  ctaLabel: z.string().trim().min(2).max(50),
+  ctaUrl: z.string().trim().url(),
+  active: z.boolean(),
+});
+
+export const simpleFormCanonicalShapeAConfigSchema = z
+  .object({
+    client: z.object({
+      name: z.string().trim().min(2).max(100),
+      phone: z.string().trim().regex(e164),
+      logoUrl: z.string().trim().min(1),
+      logoAlt: z.string().trim().min(2).max(120),
+    }),
+    funnel: z.object({
+      slug: z.string().trim().regex(funnelSlug),
+      shape: z.literal("A"),
+      entryStyle: z.enum(["simple", "hero"]).default("simple"),
+      ctaLabel: z.string().trim().min(3).max(50),
+      advertorialLabel: z.string().trim().min(3).max(50),
+      qualifyingLine: z.string().trim().min(12).max(180),
+    }),
+    offer: z.object({
+      headline: z.string().trim().min(12).max(140),
+      subheadline: z.string().trim().min(24).max(300),
+    }),
+    meta: z.object({
+      pixelId: z.string().regex(pixelId),
+      conversionEventName: z.string().trim().regex(/^[A-Za-z][A-Za-z0-9_]*$/),
+      viewContentDelayMs: z.number().int().min(3500).max(5000),
+      currency: z.string().length(3).transform(value => value.toUpperCase()),
+      defaultConversionValue: z.number().nonnegative(),
+    }),
+    ga4MeasurementId: z
+      .string()
+      .trim()
+      .regex(/^G-[A-Z0-9]{6,20}$/)
+      .optional(),
+    googleEnhancedConversions: z.boolean(),
+    progressStyle: z.enum(["counter", "bar", "both"]),
+    approvedFramingHeadline: z.string().trim().min(12).max(140),
+    geoH1Template: z.string().trim().min(20).max(180),
+    serviceAreaZipCodes: z
+      .array(z.string().regex(zip5))
+      .min(1)
+      .transform(zips => Array.from(new Set(zips))),
+    surveyQuestions: z.array(z.never()).max(0),
+    calendarUrl: z.string().url().optional(),
+    contact: z.object({
+      headline: z.string().trim().min(12).max(180),
+      submitLabel: z.string().trim().min(3).max(50),
+      emailRequired: z.boolean(),
+      consent: z.object({
+        version: z.string().trim().min(1).max(40),
+        text: z.string().trim().min(40).max(700),
+      }),
+    }),
+    trust: z.object({
+      eyebrow: z.string().trim().min(2).max(60),
+      statement: z.string().trim().min(20).max(400),
+    }),
+    thankYou: z.object({
+      headline: z.string().trim().min(6).max(120),
+      message: z.string().trim().min(20).max(400),
+    }),
+    outOfArea: z.object({
+      headline: z.string().trim().min(8).max(140),
+      message: z.string().trim().min(20).max(400),
+    }),
+    validation: z.object({
+      defaultCountry: z.string().trim().length(2).transform(value => value.toUpperCase()),
+      duplicateWindowHours: z.number().int().min(1).max(168),
+    }),
+    ghlWebhookUrl: z.string().url(),
+    inventory: z.object({
+      enabled: z.boolean(),
+      headline: z.string().trim().min(8).max(140),
+      subheadline: z.string().trim().min(12).max(280),
+      pageUrl: z.string().trim().url().optional(),
+      products: z.array(simpleFormCanonicalProductSchema).length(5),
+    }),
+  })
+  .superRefine((config, context) => {
+    for (const placeholder of ["{city}", "{state}"]) {
+      if (!config.geoH1Template.includes(placeholder)) {
+        context.addIssue({
+          code: "custom",
+          message: `geoH1Template must include the ${placeholder} placeholder.`,
+          path: ["geoH1Template"],
+        });
+      }
+    }
+
+    if (config.googleEnhancedConversions && !config.ga4MeasurementId) {
+      context.addIssue({
+        code: "custom",
+        message: "ga4MeasurementId is required when Google enhanced conversions are enabled.",
+        path: ["ga4MeasurementId"],
+      });
+    }
+
+    const productIds = config.inventory.products.map(product => product.id);
+    if (new Set(productIds).size !== productIds.length) {
+      context.addIssue({
+        code: "custom",
+        message: "Every inventory product id must be unique.",
+        path: ["inventory", "products"],
+      });
+    }
+
+    if (
+      config.inventory.enabled &&
+      !config.inventory.products.some(product => product.active)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Inventory requires at least one active product.",
+        path: ["inventory", "products"],
+      });
+    }
+  });
+
+type SimpleFormCanonicalShapeAConfig = z.output<
+  typeof simpleFormCanonicalShapeAConfigSchema
+>;
+export type SimpleFormValidatedConfiguration = Omit<
+  SimpleFormCanonicalShapeAConfig,
+  "ghlWebhookUrl"
+>;
+export type SimpleFormPrivateRuntimeValues = {
+  GHL_WEBHOOK_URL?: string | null;
+};
+
+export function buildSimpleFormValidatedConfiguration(
+  config: SimpleFormOperatorConfig,
+  privateValues: SimpleFormPrivateRuntimeValues,
+): SimpleFormValidatedConfiguration | null {
+  const result = simpleFormCanonicalShapeAConfigSchema.safeParse({
+    ...config,
+    ghlWebhookUrl: privateValues.GHL_WEBHOOK_URL ?? "",
+  });
+  if (!result.success) return null;
+  const { ghlWebhookUrl, ...validatedConfiguration } = result.data;
+  void ghlWebhookUrl;
+  return validatedConfiguration;
+}
 
 export const simpleFormStoredRecordSchema = z.object({
   recordVersion: z.literal(1),
@@ -307,6 +460,7 @@ function isHttpUrl(value: string): boolean {
 export function buildSimpleFormReadiness(
   record: SimpleFormStoredRecord,
   secrets: SimpleFormSecretPresence,
+  privateValues: SimpleFormPrivateRuntimeValues = {},
 ): SimpleFormReadiness {
   const { config } = record;
   const clientMissing: string[] = [];
@@ -361,6 +515,33 @@ export function buildSimpleFormReadiness(
   if (!secrets.CRM_CALLBACK_SECRET) secretMissing.push("CRM Callback Secret");
   if (secrets.META_TEST_EVENT_CODE) secretMissing.push("Remove Meta Test Event Code before production");
 
+  const canonicalResult = simpleFormCanonicalShapeAConfigSchema.safeParse({
+    ...config,
+    ghlWebhookUrl: privateValues.GHL_WEBHOOK_URL ?? "",
+  });
+  if (!canonicalResult.success) {
+    for (const issue of canonicalResult.error.issues) {
+      const path = issue.path.map(segment => String(segment)).join(".");
+      const message = `Canonical Shape A: ${path || "configuration"} — ${issue.message}`;
+      const root = issue.path[0];
+      const missing =
+        root === "client"
+          ? clientMissing
+          : root === "serviceAreaZipCodes" || root === "geoH1Template"
+            ? serviceMissing
+            : root === "meta" ||
+                root === "ga4MeasurementId" ||
+                root === "googleEnhancedConversions"
+              ? metaMissing
+              : root === "ghlWebhookUrl"
+                ? ghlMissing
+                : root === "inventory"
+                  ? inventoryMissing
+                  : offerMissing;
+      if (!missing.includes(message)) missing.push(message);
+    }
+  }
+
   const sections: SimpleFormReadinessSection[] = [
     { key: "client", label: "Client", ready: clientMissing.length === 0, missing: clientMissing },
     { key: "offer", label: "Offer", ready: offerMissing.length === 0, missing: offerMissing },
@@ -390,7 +571,7 @@ export function resolveSimpleFormImages(
   const bySlot = new Map(assets.map(asset => [asset.slot, asset.storageUrl]));
   const logoUrl =
     record.imageSources.logo.mode === "client-media"
-      ? (bySlot.get(record.imageSources.logo.slot) ?? record.config.client.logoUrl)
+      ? (bySlot.get(record.imageSources.logo.slot) ?? SIMPLE_FORM_TEMPLATE_LOGO_URL)
       : SIMPLE_FORM_TEMPLATE_LOGO_URL;
   const products = record.config.inventory.products.map((product, index) => {
     const source = record.imageSources.products[index];

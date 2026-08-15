@@ -11,6 +11,7 @@ vi.mock("./workspaceSeed", () => ({
 
 import {
   createClientWithSecretsInTransaction,
+  createDraftClientInTransaction,
   mysqlAffectedRows,
   resolveOptimisticUpdate,
 } from "./db";
@@ -96,6 +97,48 @@ describe("createClientWithSecretsInTransaction", () => {
         ),
       ),
     ).rejects.toThrow("workspace boom");
+    expect(committed).toEqual([]);
+  });
+});
+
+describe("createDraftClientInTransaction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    seedMocks.seedWorkspaceDefaults.mockResolvedValue(undefined);
+  });
+
+  it("rolls back the draft client when workspace seeding fails", async () => {
+    seedMocks.seedWorkspaceDefaults.mockRejectedValue(new Error("workspace boom"));
+    const committed: string[] = [];
+    const tx = {
+      select: () => ({
+        from: () => Promise.resolve([]),
+      }),
+      insert: () => ({
+        values: () => ({
+          $returningId: async () => {
+            committed.push("client");
+            return [{ id: 77 }];
+          },
+        }),
+      }),
+    };
+
+    async function runTransaction<T>(fn: (inner: typeof tx) => Promise<T>): Promise<T> {
+      try {
+        return await fn(tx);
+      } catch (error) {
+        committed.length = 0;
+        throw error;
+      }
+    }
+
+    await expect(
+      runTransaction(inner =>
+        createDraftClientInTransaction(inner as never, "Northland Spas"),
+      ),
+    ).rejects.toThrow("workspace boom");
+    expect(seedMocks.seedWorkspaceDefaults).toHaveBeenCalledWith(tx, 77);
     expect(committed).toEqual([]);
   });
 });

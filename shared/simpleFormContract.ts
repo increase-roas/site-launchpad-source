@@ -1,18 +1,7 @@
 import { z } from "zod";
+import simpleFormManifestJson from "../server/templates/simple-form/launchpad.template.json";
 
 export const SIMPLE_FORM_TEMPLATE_KEY = "simple-form" as const;
-
-export const SIMPLE_FORM_MANIFEST = {
-  schemaVersion: 1,
-  contractVersion: 1,
-  templateKey: SIMPLE_FORM_TEMPLATE_KEY,
-  name: "Simple Form Funnel",
-  repo: "increase-roas/paid-funnel-simple-form-funnel",
-  defaultBranch: "main",
-  type: "paid-funnel",
-  shape: "A",
-  active: true,
-} as const;
 
 export const simpleFormManifestSchema = z.object({
   schemaVersion: z.literal(1),
@@ -25,6 +14,10 @@ export const simpleFormManifestSchema = z.object({
   shape: z.literal("A"),
   active: z.literal(true),
 });
+
+export const SIMPLE_FORM_MANIFEST = simpleFormManifestSchema.parse(
+  simpleFormManifestJson,
+);
 
 export const SIMPLE_FORM_RUNTIME_SECRET_KEYS = [
   "META_CAPI_ACCESS_TOKEN",
@@ -101,7 +94,8 @@ export const SIMPLE_FORM_SECRET_GUIDES: SimpleFormSecretGuide[] = [
     friendlyName: "CRM Callback Secret",
     requirement: "generated",
     requiredFor: "Bearer auth on POST /api/funnel/{slug}/conversion for appointment, show, and sale",
-    whereToFind: "Launchpad generates this per funnel. Use Show once to copy it into the GHL callback workflow.",
+    whereToFind:
+      "Launchpad generates this per funnel. Use Reveal secret to copy the currently stored value into the GHL callback workflow, and keep it private.",
     docsUrl: "https://developers.cloudflare.com/workers/configuration/secrets/",
   },
   {

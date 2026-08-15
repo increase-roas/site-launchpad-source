@@ -33,7 +33,6 @@ import { encryptSetupValue, hasProtectedValue } from "../clientSecurity";
 import { decodeImageDataUrl, MAX_DATA_URL_CHARS, processUploadedImage } from "../imageProcessing";
 import { storagePutExact } from "../storage";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
-import { ensureWorkspaceDefaults } from "../workspaceDb";
 import { UpdateConflictError, isDuplicateKeyError } from "../trpcErrors";
 import type { Client, ClientAsset } from "../../drizzle/schema";
 
@@ -125,7 +124,6 @@ export const clientsRouter = router({
           { ...input.details, status: "draft" },
           encryptedSetupValues(input.setup),
         );
-        await ensureWorkspaceDefaults(clientId);
         return getClientView(clientId);
       } catch (error) {
         if (isDuplicateKeyError(error)) {
@@ -143,7 +141,6 @@ export const clientsRouter = router({
     .mutation(async ({ input }) => {
       try {
         const clientId = await createDraftClient(input.businessName);
-        await ensureWorkspaceDefaults(clientId);
         return getClientView(clientId);
       } catch (error) {
         if (isDuplicateKeyError(error)) {

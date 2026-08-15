@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  SIMPLE_FORM_TEMPLATE_LOGO_URL,
   buildSimpleFormOperatorDefaults,
   buildSimpleFormReadiness,
   buildSimpleFormStoredRecord,
+  buildSimpleFormValidatedConfiguration,
   parseServiceAreaZips,
+  resolveSimpleFormImages,
   simpleFormFunnelSlug,
+  type SimpleFormStoredRecord,
 } from "./simpleFormConfig";
 
 const missingSecrets = {
@@ -14,6 +18,29 @@ const missingSecrets = {
   CRM_CALLBACK_SECRET: false,
   SUBMISSION_ALERT_WEBHOOK_URL: false,
 };
+
+const readySecrets = {
+  META_CAPI_ACCESS_TOKEN: true,
+  META_TEST_EVENT_CODE: false,
+  GHL_WEBHOOK_URL: true,
+  CRM_CALLBACK_SECRET: true,
+  SUBMISSION_ALERT_WEBHOOK_URL: false,
+};
+
+function buildReadyRecord(): SimpleFormStoredRecord {
+  const record = buildSimpleFormStoredRecord({
+    businessName: "Northland Spas",
+    slug: "northland-spas-simple-form",
+    phone: "+17015551234",
+  });
+  record.config.meta.pixelId = "123456789012345";
+  record.config.serviceAreaZipCodes = ["58701"];
+  record.config.inventory.products = record.config.inventory.products.map((product, index) => ({
+    ...product,
+    ctaUrl: `https://northland.example/products/${index + 1}`,
+  }));
+  return record;
+}
 
 describe("Simple Form operator defaults", () => {
   it("uses the client name and does not invent phone, pixel, webhook, or ZIP data", () => {
@@ -78,6 +105,88 @@ describe("Simple Form readiness", () => {
         ?.missing,
     ).toContain("Remove Meta Test Event Code before production");
   });
+
+  it("marks a complete canonical Shape A candidate ready", () => {
+    const readiness = buildSimpleFormReadiness(buildReadyRecord(), readySecrets, {
+      GHL_WEBHOOK_URL: "https://services.leadconnectorhq.com/hooks/example",
+    });
+
+    expect(readiness.configurationReady).toBe(true);
+  });
+
+  it.each([
+    [
+      "product image URL",
+      (record: SimpleFormStoredRecord) => {
+        record.config.inventory.products[0].imageUrl = "not-a-url";
+      },
+    ],
+    [
+      "short product description",
+      (record: SimpleFormStoredRecord) => {
+        record.config.inventory.products[0].description = "short";
+      },
+    ],
+    [
+      "short price label",
+      (record: SimpleFormStoredRecord) => {
+        record.config.inventory.products[0].priceLabel = "x";
+      },
+    ],
+    [
+      "optional GA4 measurement ID while enhanced conversions are disabled",
+      (record: SimpleFormStoredRecord) => {
+        record.config.googleEnhancedConversions = false;
+        record.config.ga4MeasurementId = "invalid";
+      },
+    ],
+    [
+      "calendar URL",
+      (record: SimpleFormStoredRecord) => {
+        record.config.calendarUrl = "not-a-url";
+      },
+    ],
+    [
+      "inventory page URL",
+      (record: SimpleFormStoredRecord) => {
+        record.config.inventory.pageUrl = "not-a-url";
+      },
+    ],
+  ])("rejects an invalid canonical %s", (_label, mutate) => {
+    const record = buildReadyRecord();
+    mutate(record);
+
+    const readiness = buildSimpleFormReadiness(record, readySecrets, {
+      GHL_WEBHOOK_URL: "https://services.leadconnectorhq.com/hooks/example",
+    });
+
+    expect(readiness.configurationReady).toBe(false);
+  });
+
+  it("rejects an invalid stored GHL webhook URL", () => {
+    const readiness = buildSimpleFormReadiness(buildReadyRecord(), readySecrets, {
+      GHL_WEBHOOK_URL: "not-a-url",
+    });
+
+    expect(readiness.configurationReady).toBe(false);
+  });
+
+  it("returns transformed validated config without the GHL webhook secret", () => {
+    const record = buildReadyRecord();
+    record.config.meta.currency = "usd";
+    record.config.validation.defaultCountry = "us";
+
+    const validated = buildSimpleFormValidatedConfiguration(record.config, {
+      GHL_WEBHOOK_URL: "https://services.leadconnectorhq.com/hooks/example",
+    });
+
+    expect(validated?.meta.currency).toBe("USD");
+    expect(validated?.validation.defaultCountry).toBe("US");
+    expect(validated).not.toHaveProperty("ghlWebhookUrl");
+    expect(JSON.stringify(validated)).not.toContain(
+      "https://services.leadconnectorhq.com/hooks/example",
+    );
+  });
 });
 
 describe("Simple Form helpers", () => {
@@ -89,6 +198,16 @@ describe("Simple Form helpers", () => {
     expect(simpleFormFunnelSlug("Northland", [])).toBe("northland-simple-form");
     expect(simpleFormFunnelSlug("Northland", ["northland-simple-form"])).toBe(
       "northland-simple-form-2",
+    );
+  });
+
+  it("falls back to the template logo when selected client media is missing", () => {
+    const record = buildReadyRecord();
+    record.config.client.logoUrl = "https://cdn.example/stale-logo.png";
+    record.imageSources.logo = { mode: "client-media", slot: "logo" };
+
+    expect(resolveSimpleFormImages(record, []).client.logoUrl).toBe(
+      SIMPLE_FORM_TEMPLATE_LOGO_URL,
     );
   });
 });
