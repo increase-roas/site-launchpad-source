@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   listClientAssets: vi.fn(),
   listClientSecretSetups: vi.fn(),
   createClientWithSecrets: vi.fn(),
+  createDraftClient: vi.fn(),
   saveClientSecretSetup: vi.fn(),
   upsertClientAsset: vi.fn(),
 }));
@@ -129,6 +130,7 @@ describe("client launch gating", () => {
     mocks.listClientAssets.mockResolvedValue([]);
     mocks.listClientSecretSetups.mockResolvedValue([]);
     mocks.createClientWithSecrets.mockResolvedValue(7);
+    mocks.createDraftClient.mockResolvedValue(7);
     mocks.saveClientSecretSetup.mockResolvedValue(undefined);
     workspaceMocks.ensureWorkspaceDefaults.mockResolvedValue(undefined);
   });
@@ -159,6 +161,13 @@ describe("client launch gating", () => {
         ghlWebhookUrlEncrypted: expect.stringMatching(/^v[12]\./),
       }),
     );
+    expect(workspaceMocks.ensureWorkspaceDefaults).toHaveBeenCalledWith(7);
+  });
+
+  it("creates a draft client from business name only", async () => {
+    const caller = appRouter.createCaller(createContext());
+    await caller.clients.createDraft({ businessName: "Northland Spas" });
+    expect(mocks.createDraftClient).toHaveBeenCalledWith("Northland Spas");
     expect(workspaceMocks.ensureWorkspaceDefaults).toHaveBeenCalledWith(7);
   });
 

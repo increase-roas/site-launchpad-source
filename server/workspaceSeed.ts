@@ -7,7 +7,6 @@ import {
   sitePages,
 } from "../drizzle/schema";
 import {
-  DEFAULT_FUNNELS,
   DEFAULT_HOMEPAGE_SECTIONS,
   DEFAULT_SITE_PAGES,
   FUNNEL_SHAPES,
@@ -64,23 +63,6 @@ export async function seedWorkspaceDefaults(db: WorkspaceSeedClient, clientId: n
     } catch (error) {
       if (!isDuplicateKeyError(error)) throw error;
     }
-  }
-
-  if (existingFunnels.length === 0) {
-    try {
-      for (const funnel of DEFAULT_FUNNELS) {
-        const created = await db
-          .insert(funnels)
-          .values({ clientId, ...funnel, status: "draft" })
-          .$returningId();
-        const funnelId = created[0]?.id;
-        if (!funnelId) throw new Error("Funnel could not be created.");
-        await db.insert(funnelSteps).values(funnelStepRows(funnelId, funnel.slug, FUNNEL_SHAPES[funnel.shape]));
-      }
-    } catch (error) {
-      if (!isDuplicateKeyError(error)) throw error;
-    }
-    return;
   }
 
   for (const funnel of existingFunnels) {

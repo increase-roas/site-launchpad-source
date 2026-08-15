@@ -154,7 +154,19 @@ export async function getAstroConfigView(clientId: number) {
   ]);
   if (!client) throw new Error("Client not found.");
 
-  const defaults = createDefaultAstroConfig(client);
+  const defaults = createDefaultAstroConfig({
+    ...client,
+    foundedYear: client.foundedYear ?? 0,
+    tagline: client.tagline ?? "",
+    websiteUrl: client.websiteUrl ?? "",
+    phone: client.phone ?? "",
+    email: client.email ?? "",
+    streetAddress: client.streetAddress ?? "",
+    city: client.city ?? "",
+    state: client.state ?? "",
+    postalCode: client.postalCode ?? "",
+    facebookUrl: client.facebookUrl ?? "",
+  });
   const assetUrls = Object.fromEntries(
     assets.filter(asset => isAstroAssetSlot(asset.slot)).map(asset => [asset.slot, asset.storageUrl]),
   );

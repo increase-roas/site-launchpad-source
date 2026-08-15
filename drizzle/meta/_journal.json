@@ -43,6 +43,13 @@
       "when": 1755096000000,
       "tag": "0005_funnel_deployment_status_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1755259200000,
+      "tag": "0006_simple_form_launchpad",
+      "breakpoints": true
     }
   ]
 }

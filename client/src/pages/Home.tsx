@@ -102,7 +102,7 @@ export default function Home() {
           </div>
           <h2 className="mt-5 text-2xl font-extrabold tracking-tight">Add the first client</h2>
           <p className="mx-auto mt-2 max-w-md text-base font-medium leading-relaxed text-muted-foreground">
-            The form will guide you through every item needed for launch.
+            Start with the business name. You can add the rest later.
           </p>
           <Button
             type="button"

@@ -5,6 +5,7 @@ import { publicProcedure, router } from "./_core/trpc";
 import { clientsRouter } from "./routers/clients";
 import { astroConfigRouter } from "./routers/astroConfig";
 import { funnelBuilderRouter } from "./routers/funnelBuilder";
+import { simpleFormRouter } from "./routers/simpleForm";
 import { workspaceRouter } from "./routers/workspace";
 
 export const appRouter = router({
@@ -23,6 +24,7 @@ export const appRouter = router({
   clients: clientsRouter,
   astroConfig: astroConfigRouter,
   funnelBuilder: funnelBuilderRouter,
+  simpleForm: simpleFormRouter,
   workspace: workspaceRouter,
 });
 

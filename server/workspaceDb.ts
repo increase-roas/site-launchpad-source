@@ -72,6 +72,9 @@ export async function replaceFunnelShape(
     .limit(1);
   const funnel = rows[0];
   if (!funnel) throw new Error("Funnel not found.");
+  if (funnel.templateKey) {
+    throw new Error("This funnel uses a locked template. Shape cannot be changed.");
+  }
 
   await db.transaction(async transaction => {
     await transaction.update(funnels).set({ shape }).where(eq(funnels.id, funnelId));

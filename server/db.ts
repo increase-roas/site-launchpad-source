@@ -16,6 +16,7 @@ import {
 import { ENV } from "./_core/env";
 import { UpdateConflictError } from "./trpcErrors";
 import { seedWorkspaceDefaults, type WorkspaceSeedClient } from "./workspaceSeed";
+import { CLOSED_BUSINESS_HOURS, sanitizeClientFolder } from "../shared/client";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -237,4 +238,38 @@ export async function saveClientSecretSetup(
     .insert(clientSecretSetups)
     .values({ clientId, ...values })
     .onDuplicateKeyUpdate({ set: values });
+}
+
+export async function listClientShortNames(): Promise<string[]> {
+  const db = await requireDb();
+  const rows = await db.select({ shortName: clients.shortName }).from(clients);
+  return rows.map(row => row.shortName);
+}
+
+export async function allocateUniqueShortName(businessName: string): Promise<string> {
+  const used = new Set((await listClientShortNames()).map(name => name.toLowerCase()));
+  const base =
+    sanitizeClientFolder(businessName).slice(0, 80) ||
+    "client";
+  if (!used.has(base.toLowerCase())) return base;
+  let suffix = 2;
+  while (true) {
+    const token = `-${suffix}`;
+    const candidate = `${base.slice(0, Math.max(1, 80 - token.length))}${token}`;
+    if (!used.has(candidate.toLowerCase())) return candidate;
+    suffix += 1;
+  }
+}
+
+export async function createDraftClient(businessName: string): Promise<number> {
+  const shortName = await allocateUniqueShortName(businessName);
+  return createClient({
+    businessName: businessName.trim(),
+    shortName,
+    country: "US",
+    theme: "aqua",
+    businessHours: CLOSED_BUSINESS_HOURS,
+    productCategories: [],
+    status: "draft",
+  });
 }

@@ -5,19 +5,19 @@ import { Redirect, Route, Switch } from "wouter";
 import DashboardLayout from "./components/DashboardLayout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import ClientEditor from "./pages/ClientEditor";
-import AstroClientEditor from "./pages/AstroClientEditor";
+import DraftClientCreate from "./pages/DraftClientCreate";
 import Home from "./pages/Home";
 import MediaWorkspace from "./pages/MediaWorkspace";
 import PaidAdsWorkspace from "./pages/PaidAdsWorkspace";
 import WebsiteWorkspace from "./pages/WebsiteWorkspace";
+import AstroClientEditor from "./pages/AstroClientEditor";
 
 function Router() {
   return (
     <Switch>
       <Route path={"/"} component={Home} />
       <Route path="/clients/new">
-        <ClientEditor />
+        <DraftClientCreate />
       </Route>
       <Route path="/clients/:clientId">
         {params => <Redirect to={`/workspace/${Number(params.clientId)}/settings`} />}

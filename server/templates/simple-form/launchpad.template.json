@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": 1,
+  "templateKey": "simple-form",
+  "name": "Simple Form Funnel",
+  "repo": "increase-roas/paid-funnel-simple-form-funnel",
+  "defaultBranch": "main",
+  "type": "paid-funnel",
+  "shape": "A",
+  "active": true
+}

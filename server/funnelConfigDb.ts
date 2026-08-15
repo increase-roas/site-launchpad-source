@@ -48,8 +48,8 @@ function defaultQuestion(client: NonNullable<Awaited<ReturnType<typeof getClient
 function defaultConfig(client: NonNullable<Awaited<ReturnType<typeof getClientById>>>) {
   return {
     serviceArea: defaultServiceArea(client),
-    offerHeadline: client.primaryOffer.slice(0, 300),
-    offerSubheadline: client.tagline,
+    offerHeadline: (client.primaryOffer ?? "").slice(0, 300) || "Add an offer headline",
+    offerSubheadline: (client.tagline ?? "").slice(0, 2000) || "Add an offer subheadline",
     thankYouMessage: `Thanks! ${client.businessName} will contact you shortly.`,
   };
 }
@@ -88,7 +88,7 @@ export function buildFunnelAutofillProfile(
   const ghlWebhookUrl = decryptOptional(secretRow?.ghlWebhookUrlEncrypted);
   return {
     businessName: client.businessName,
-    phone: client.phone,
+    phone: client.phone ?? "",
     serviceArea: defaultServiceArea(client),
     metaPixelId,
     ghlWebhookUrl,

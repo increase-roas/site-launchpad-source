@@ -7,6 +7,7 @@ import {
   SECRET_FIELD_VALUES,
   buildReadiness,
   clientInputSchema,
+  draftClientInputSchema,
   emptySecretStatus,
   isAssetSlot,
   sanitizeClientFolder,
@@ -17,6 +18,7 @@ import {
 } from "../../shared/client";
 import {
   createClientWithSecrets,
+  createDraftClient,
   getClientAssets,
   getClientById,
   getClientSecretSetup,
@@ -130,6 +132,24 @@ export const clientsRouter = router({
           throw new TRPCError({
             code: "CONFLICT",
             message: "That short name is already used. Choose a different one.",
+          });
+        }
+        throw error;
+      }
+    }),
+
+  createDraft: protectedProcedure
+    .input(draftClientInputSchema)
+    .mutation(async ({ input }) => {
+      try {
+        const clientId = await createDraftClient(input.businessName);
+        await ensureWorkspaceDefaults(clientId);
+        return getClientView(clientId);
+      } catch (error) {
+        if (isDuplicateKeyError(error)) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "That short name is already used. Try a slightly different business name.",
           });
         }
         throw error;

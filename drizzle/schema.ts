@@ -81,33 +81,33 @@ export const clients = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     businessName: varchar("businessName", { length: 160 }).notNull(),
     shortName: varchar("shortName", { length: 80 }).notNull(),
-    phone: varchar("phone", { length: 24 }).notNull(),
+    phone: varchar("phone", { length: 24 }),
     smsPhone: varchar("smsPhone", { length: 24 }),
     phoneDisplayOverride: varchar("phoneDisplayOverride", { length: 80 }),
-    email: varchar("email", { length: 320 }).notNull(),
-    streetAddress: varchar("streetAddress", { length: 240 }).notNull(),
+    email: varchar("email", { length: 320 }),
+    streetAddress: varchar("streetAddress", { length: 240 }),
     street2: varchar("street2", { length: 240 }),
-    city: varchar("city", { length: 120 }).notNull(),
-    state: varchar("state", { length: 120 }).notNull(),
-    postalCode: varchar("postalCode", { length: 24 }).notNull(),
+    city: varchar("city", { length: 120 }),
+    state: varchar("state", { length: 120 }),
+    postalCode: varchar("postalCode", { length: 24 }),
     country: varchar("country", { length: 120 }).default("US").notNull(),
     latitude: varchar("latitude", { length: 32 }),
     longitude: varchar("longitude", { length: 32 }),
     googlePlaceId: varchar("googlePlaceId", { length: 300 }),
-    websiteUrl: varchar("websiteUrl", { length: 500 }).notNull(),
+    websiteUrl: varchar("websiteUrl", { length: 500 }),
     schemaType: mysqlEnum("schemaType", schemaTypeValues)
       .default("HomeAndConstructionBusiness")
       .notNull(),
-    foundedYear: int("foundedYear").notNull(),
-    tagline: varchar("tagline", { length: 240 }).notNull(),
+    foundedYear: int("foundedYear"),
+    tagline: varchar("tagline", { length: 240 }),
     theme: mysqlEnum("theme", themeValues).notNull(),
     businessHours: json("businessHours").$type<BusinessHour[]>().notNull(),
-    facebookUrl: varchar("facebookUrl", { length: 500 }).notNull(),
-    googleMapsUrl: varchar("googleMapsUrl", { length: 1000 }).notNull(),
+    facebookUrl: varchar("facebookUrl", { length: 500 }),
+    googleMapsUrl: varchar("googleMapsUrl", { length: 1000 }),
     productCategories: json("productCategories").$type<ProductCategory[]>().notNull(),
-    primaryOffer: text("primaryOffer").notNull(),
-    financingPromise: text("financingPromise").notNull(),
-    deliveryPromise: text("deliveryPromise").notNull(),
+    primaryOffer: text("primaryOffer"),
+    financingPromise: text("financingPromise"),
+    deliveryPromise: text("deliveryPromise"),
     status: mysqlEnum("status", clientStatusValues).default("draft").notNull(),
     readyAt: timestamp("readyAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -302,6 +302,9 @@ export const funnels = mysqlTable(
       .references(() => clients.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 160 }).notNull(),
     slug: varchar("slug", { length: 240 }).notNull(),
+    templateKey: varchar("templateKey", { length: 80 }),
+    templateRepo: varchar("templateRepo", { length: 240 }),
+    contractVersion: int("contractVersion"),
     shape: mysqlEnum("shape", funnelShapeValues).notNull(),
     status: mysqlEnum("status", workspaceStatusValues).default("draft").notNull(),
     deploymentStatus: mysqlEnum("deploymentStatus", funnelDeploymentStatusValues)
@@ -314,6 +317,7 @@ export const funnels = mysqlTable(
   },
   table => [
     uniqueIndex("funnels_client_slug_unique").on(table.clientId, table.slug),
+    uniqueIndex("funnels_client_template_unique").on(table.clientId, table.templateKey),
     index("funnels_client_idx").on(table.clientId),
   ],
 );
@@ -396,6 +400,34 @@ export const funnelSteps = mysqlTable(
 
 export type FunnelStep = typeof funnelSteps.$inferSelect;
 export type InsertFunnelStep = typeof funnelSteps.$inferInsert;
+
+export const funnelSimpleFormConfigs = mysqlTable("funnelSimpleFormConfigs", {
+  funnelId: int("funnelId")
+    .primaryKey()
+    .references(() => funnels.id, { onDelete: "cascade" }),
+  configJson: json("configJson").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type FunnelSimpleFormConfig = typeof funnelSimpleFormConfigs.$inferSelect;
+export type InsertFunnelSimpleFormConfig = typeof funnelSimpleFormConfigs.$inferInsert;
+
+export const funnelRuntimeSecrets = mysqlTable("funnelRuntimeSecrets", {
+  funnelId: int("funnelId")
+    .primaryKey()
+    .references(() => funnels.id, { onDelete: "cascade" }),
+  metaCapiAccessTokenEncrypted: text("metaCapiAccessTokenEncrypted"),
+  metaTestEventCodeEncrypted: text("metaTestEventCodeEncrypted"),
+  ghlWebhookUrlEncrypted: text("ghlWebhookUrlEncrypted"),
+  crmCallbackSecretEncrypted: text("crmCallbackSecretEncrypted"),
+  submissionAlertWebhookUrlEncrypted: text("submissionAlertWebhookUrlEncrypted"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type FunnelRuntimeSecret = typeof funnelRuntimeSecrets.$inferSelect;
+export type InsertFunnelRuntimeSecret = typeof funnelRuntimeSecrets.$inferInsert;
 
 export const homepageSectionTypeValues = [
   "hero",
