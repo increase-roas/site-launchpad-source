@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import {
   funnelSteps,
   funnels,
@@ -14,7 +14,7 @@ import {
 } from "../shared/workspace";
 import { isDuplicateKeyError } from "./trpcErrors";
 
-export type WorkspaceSeedClient = Pick<MySql2Database, "select" | "insert">;
+export type WorkspaceSeedClient = Pick<PostgresJsDatabase, "select" | "insert">;
 
 export function funnelStepRows(funnelId: number, slug: string, definitions: FunnelStepDefinition[]) {
   return definitions.map((definition, position) => ({

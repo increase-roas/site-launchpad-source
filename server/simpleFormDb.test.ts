@@ -17,6 +17,7 @@ const dbMocks = vi.hoisted(() => ({
 vi.mock("./db", () => dbMocks);
 
 import {
+  createSimpleFormFromTemplate,
   getSimpleFormDetail,
   getSimpleFormPublishHandoff,
   saveSimpleFormConfig,
@@ -84,6 +85,8 @@ function detailDatabase(
 describe("saveSimpleFormConfig", () => {
   it("rolls back config, funnel, and step updates when a step path update fails", async () => {
     const committed: string[] = [];
+    const conflictUpdates: Array<{ target: unknown; set: Record<string, unknown> }> = [];
+    const updateSets: Array<Record<string, unknown>> = [];
     let transactionCalls = 0;
 
     const funnel = {
@@ -114,25 +117,32 @@ describe("saveSimpleFormConfig", () => {
         }),
         insert: () => ({
           values: () => ({
-            onDuplicateKeyUpdate: async () => {
+            onConflictDoUpdate: async (options: {
+              target: unknown;
+              set: Record<string, unknown>;
+            }) => {
+              conflictUpdates.push(options);
               writes.push("config");
             },
           }),
         }),
         update: (table: unknown) => ({
-          set: () => ({
-            where: async () => {
-              if (table === funnels) {
-                writes.push("funnel");
-                return;
-              }
-              if (table === funnelSteps) {
-                stepUpdates += 1;
-                writes.push(`step-${stepUpdates}`);
-                if (stepUpdates === 2) throw new Error("step update failed");
-              }
-            },
-          }),
+          set: (values: Record<string, unknown>) => {
+            updateSets.push(values);
+            return {
+              where: async () => {
+                if (table === funnels) {
+                  writes.push("funnel");
+                  return;
+                }
+                if (table === funnelSteps) {
+                  stepUpdates += 1;
+                  writes.push(`step-${stepUpdates}`);
+                  if (stepUpdates === 2) throw new Error("step update failed");
+                }
+              },
+            };
+          },
         }),
       };
     };
@@ -162,6 +172,79 @@ describe("saveSimpleFormConfig", () => {
     );
     expect(transactionCalls).toBe(1);
     expect(committed).toEqual([]);
+    expect(conflictUpdates).toEqual([
+      {
+        target: funnelSimpleFormConfigs.funnelId,
+        set: expect.objectContaining({
+          configJson: record,
+          updatedAt: expect.any(Date),
+        }),
+      },
+    ]);
+    expect(updateSets).toHaveLength(3);
+    expect(updateSets.every(values => values.updatedAt instanceof Date)).toBe(true);
+  });
+});
+
+describe("createSimpleFormFromTemplate", () => {
+  function databaseThatRejectsTransaction(
+    transactionError: unknown,
+    racedRows: Array<{ id: number }>,
+  ) {
+    let funnelLookupCount = 0;
+    return {
+      select: (fields?: Record<string, unknown>) => ({
+        from: () => ({
+          where: () => {
+            const selectsSlug =
+              fields !== undefined && Object.prototype.hasOwnProperty.call(fields, "slug");
+            const rows = selectsSlug
+              ? []
+              : funnelLookupCount++ === 0
+                ? []
+                : racedRows;
+            return Object.assign(Promise.resolve(rows), {
+              limit: async (limit: number) => rows.slice(0, limit),
+            });
+          },
+        }),
+      }),
+      transaction: async <T>(_callback: (transaction: never) => Promise<T>): Promise<T> => {
+        throw transactionError;
+      },
+    };
+  }
+
+  it("re-reads and returns the raced funnel only for SQLSTATE 23505", async () => {
+    dbMocks.getClientById.mockResolvedValue({
+      id: 5,
+      businessName: "Northland Spas",
+      shortName: "northland",
+      phone: "+17015551234",
+    });
+    dbMocks.getDb.mockResolvedValue(
+      databaseThatRejectsTransaction({ code: "23505" }, [{ id: 88 }]),
+    );
+
+    await expect(createSimpleFormFromTemplate(5)).resolves.toEqual({
+      alreadyExists: true,
+      funnelId: 88,
+    });
+  });
+
+  it("rethrows unrelated transaction failures without treating them as a race", async () => {
+    const unrelated = new Error("database unavailable");
+    dbMocks.getClientById.mockResolvedValue({
+      id: 5,
+      businessName: "Northland Spas",
+      shortName: "northland",
+      phone: "+17015551234",
+    });
+    dbMocks.getDb.mockResolvedValue(
+      databaseThatRejectsTransaction(unrelated, [{ id: 88 }]),
+    );
+
+    await expect(createSimpleFormFromTemplate(5)).rejects.toBe(unrelated);
   });
 });
 

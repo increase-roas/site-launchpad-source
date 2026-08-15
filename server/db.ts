@@ -1,5 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import {
   Client,
   ClientAsset,
@@ -13,22 +14,28 @@ import {
   clients,
   users,
 } from "../drizzle/schema";
+import { CLOSED_BUSINESS_HOURS, sanitizeClientFolder } from "../shared/client";
 import { ENV } from "./_core/env";
+import {
+  postgresConflictTargets,
+  requireSinglePositiveId,
+  withUpdatedAt,
+} from "./postgresPersistence";
 import { UpdateConflictError } from "./trpcErrors";
 import { seedWorkspaceDefaults, type WorkspaceSeedClient } from "./workspaceSeed";
-import { CLOSED_BUSINESS_HOURS, sanitizeClientFolder } from "../shared/client";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+
+export const POSTGRES_RUNTIME_OPTIONS = {
+  prepare: false,
+  max: 1,
+} as const;
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
-    }
+    const client = postgres(process.env.DATABASE_URL, POSTGRES_RUNTIME_OPTIONS);
+    _db = drizzle(client);
   }
   return _db;
 }
@@ -47,7 +54,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     const values: InsertUser = {
       openId: user.openId,
     };
-    const updateSet: Record<string, unknown> = {};
+    const updateSet: Partial<InsertUser> = {};
 
     const textFields = ["name", "email", "loginMethod"] as const;
     type TextField = (typeof textFields)[number];
@@ -82,8 +89,9 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet.lastSignedIn = new Date();
     }
 
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
+    await db.insert(users).values(values).onConflictDoUpdate({
+      target: postgresConflictTargets.users,
+      set: withUpdatedAt(updateSet),
     });
   } catch (error) {
     console.error("[Database] Failed to upsert user:", error);
@@ -122,23 +130,15 @@ export async function getClientById(clientId: number): Promise<Client | undefine
 
 export async function createClient(values: InsertClient): Promise<number> {
   const db = await requireDb();
-  const result = await db.insert(clients).values(values).$returningId();
-  const created = result[0];
-  if (!created?.id) throw new Error("Client could not be created.");
-  return created.id;
+  const rows = await db.insert(clients).values(values).returning({ id: clients.id });
+  return requireSinglePositiveId(rows, "Client could not be created.");
 }
 
-export function mysqlAffectedRows(result: unknown): number {
-  const header = Array.isArray(result) ? result[0] : result;
-  if (header && typeof header === "object" && "affectedRows" in header) {
-    const value = header.affectedRows;
-    return typeof value === "number" ? value : 0;
-  }
-  return 0;
-}
-
-export function resolveOptimisticUpdate(affectedRows: number, existing: { id: number } | undefined): void {
-  if (affectedRows > 0) return;
+export function resolveOptimisticUpdate(
+  returnedRows: readonly { id: number }[],
+  existing: { id: number } | undefined,
+): void {
+  if (returnedRows.length > 0) return;
   if (!existing) throw new Error("Client not found.");
   throw new UpdateConflictError();
 }
@@ -151,10 +151,11 @@ export async function updateClient(
   const db = await requireDb();
   const result = await db
     .update(clients)
-    .set({ ...values, updatedAt: new Date() })
-    .where(and(eq(clients.id, clientId), eq(clients.updatedAt, expectedUpdatedAt)));
-  if (mysqlAffectedRows(result) > 0) return;
-  resolveOptimisticUpdate(0, await getClientById(clientId));
+    .set(withUpdatedAt(values))
+    .where(and(eq(clients.id, clientId), eq(clients.updatedAt, expectedUpdatedAt)))
+    .returning({ id: clients.id });
+  if (result.length > 0) return;
+  resolveOptimisticUpdate(result, await getClientById(clientId));
 }
 
 export async function listClientAssets(): Promise<ClientAsset[]> {
@@ -177,14 +178,16 @@ export async function createClientWithSecretsInTransaction(
   values: InsertClient,
   secretValues: Partial<Omit<InsertClientSecretSetup, "clientId">>,
 ): Promise<number> {
-  const result = await tx.insert(clients).values(values).$returningId();
-  const clientId = result[0]?.id;
-  if (!clientId) throw new Error("Client could not be created.");
+  const result = await tx.insert(clients).values(values).returning({ id: clients.id });
+  const clientId = requireSinglePositiveId(result, "Client could not be created.");
   if (Object.keys(secretValues).length > 0) {
     await tx
       .insert(clientSecretSetups)
       .values({ clientId, ...secretValues })
-      .onDuplicateKeyUpdate({ set: secretValues });
+      .onConflictDoUpdate({
+        target: postgresConflictTargets.clientSecretSetups,
+        set: withUpdatedAt(secretValues),
+      });
   }
   await seedWorkspaceDefaults(tx, clientId);
   return clientId;
@@ -203,8 +206,9 @@ export async function upsertClientAsset(values: InsertClientAsset): Promise<void
   await db
     .insert(clientAssets)
     .values(values)
-    .onDuplicateKeyUpdate({
-      set: {
+    .onConflictDoUpdate({
+      target: postgresConflictTargets.clientAssets,
+      set: withUpdatedAt({
         storageKey: values.storageKey,
         storageUrl: values.storageUrl,
         filename: values.filename,
@@ -213,7 +217,7 @@ export async function upsertClientAsset(values: InsertClientAsset): Promise<void
         byteSize: values.byteSize,
         width: values.width,
         height: values.height,
-      },
+      }),
     });
 }
 
@@ -237,7 +241,10 @@ export async function saveClientSecretSetup(
   await db
     .insert(clientSecretSetups)
     .values({ clientId, ...values })
-    .onDuplicateKeyUpdate({ set: values });
+    .onConflictDoUpdate({
+      target: postgresConflictTargets.clientSecretSetups,
+      set: withUpdatedAt(values),
+    });
 }
 
 export async function listClientShortNames(): Promise<string[]> {
@@ -295,9 +302,18 @@ export async function createDraftClientInTransaction(
   );
 }
 
-export async function createDraftClient(businessName: string): Promise<number> {
-  const db = await requireDb();
+type DraftClientDatabase = Pick<ReturnType<typeof drizzle>, "transaction">;
+
+export async function createDraftClientWithDb(
+  db: DraftClientDatabase,
+  businessName: string,
+): Promise<number> {
   return db.transaction(transaction =>
     createDraftClientInTransaction(transaction, businessName),
   );
+}
+
+export async function createDraftClient(businessName: string): Promise<number> {
+  const db = await requireDb();
+  return createDraftClientWithDb(db, businessName);
 }

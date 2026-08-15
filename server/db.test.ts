@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { clientSecretSetups } from "../drizzle/schema";
 import { UpdateConflictError } from "./trpcErrors";
 
 const seedMocks = vi.hoisted(() => ({
@@ -10,29 +11,32 @@ vi.mock("./workspaceSeed", () => ({
 }));
 
 import {
+  POSTGRES_RUNTIME_OPTIONS,
   createClientWithSecretsInTransaction,
+  createDraftClientWithDb,
   createDraftClientInTransaction,
-  mysqlAffectedRows,
   resolveOptimisticUpdate,
 } from "./db";
 
-describe("optimistic client updates", () => {
-  it("reads affectedRows from a mysql2 result tuple", () => {
-    expect(mysqlAffectedRows([{ affectedRows: 1 }, []])).toBe(1);
-    expect(mysqlAffectedRows([{ affectedRows: 0 }, []])).toBe(0);
-    expect(mysqlAffectedRows({ affectedRows: 2 })).toBe(2);
+describe("PostgreSQL runtime configuration", () => {
+  it("uses transaction-pooler-safe options without exposing a URL", () => {
+    expect(POSTGRES_RUNTIME_OPTIONS).toEqual({ prepare: false, max: 1 });
+    expect(POSTGRES_RUNTIME_OPTIONS).not.toHaveProperty("url");
+    expect(JSON.stringify(POSTGRES_RUNTIME_OPTIONS)).not.toContain("DATABASE_URL");
   });
+});
 
+describe("optimistic client updates", () => {
   it("treats a matching update as success", () => {
-    expect(() => resolveOptimisticUpdate(1, { id: 7 })).not.toThrow();
+    expect(() => resolveOptimisticUpdate([{ id: 7 }], undefined)).not.toThrow();
   });
 
   it("maps zero rows with a missing client to not found", () => {
-    expect(() => resolveOptimisticUpdate(0, undefined)).toThrow("Client not found.");
+    expect(() => resolveOptimisticUpdate([], undefined)).toThrow("Client not found.");
   });
 
   it("maps zero rows with a still-present client to conflict", () => {
-    expect(() => resolveOptimisticUpdate(0, { id: 7 })).toThrow(UpdateConflictError);
+    expect(() => resolveOptimisticUpdate([], { id: 7 })).toThrow(UpdateConflictError);
   });
 });
 
@@ -43,11 +47,12 @@ describe("createClientWithSecretsInTransaction", () => {
   });
 
   it("inserts the client, secrets, and workspace defaults in one transaction", async () => {
+    const onConflictDoUpdate = vi.fn(async () => undefined);
     const tx = {
       insert: vi.fn(() => ({
         values: vi.fn(() => ({
-          $returningId: async () => [{ id: 42 }],
-          onDuplicateKeyUpdate: async () => undefined,
+          returning: async () => [{ id: 42 }],
+          onConflictDoUpdate,
         })),
       })),
     };
@@ -60,6 +65,13 @@ describe("createClientWithSecretsInTransaction", () => {
 
     expect(clientId).toBe(42);
     expect(seedMocks.seedWorkspaceDefaults).toHaveBeenCalledWith(tx, 42);
+    expect(onConflictDoUpdate).toHaveBeenCalledWith({
+      target: clientSecretSetups.clientId,
+      set: expect.objectContaining({
+        metaPixelIdEncrypted: "v2.secret",
+        updatedAt: expect.any(Date),
+      }),
+    });
   });
 
   it("lets the caller roll back when workspace seed fails after the client insert", async () => {
@@ -68,11 +80,11 @@ describe("createClientWithSecretsInTransaction", () => {
     const tx = {
       insert: () => ({
         values: () => ({
-          $returningId: async () => {
+          returning: async () => {
             committed.push("client");
             return [{ id: 9 }];
           },
-          onDuplicateKeyUpdate: async () => {
+          onConflictDoUpdate: async () => {
             committed.push("secrets");
           },
         }),
@@ -116,7 +128,7 @@ describe("createDraftClientInTransaction", () => {
       }),
       insert: () => ({
         values: () => ({
-          $returningId: async () => {
+          returning: async () => {
             committed.push("client");
             return [{ id: 77 }];
           },
@@ -140,5 +152,27 @@ describe("createDraftClientInTransaction", () => {
     ).rejects.toThrow("workspace boom");
     expect(seedMocks.seedWorkspaceDefaults).toHaveBeenCalledWith(tx, 77);
     expect(committed).toEqual([]);
+  });
+
+  it("uses the production transaction wrapper for allocation, insert, and workspace seed", async () => {
+    const tx = {
+      select: () => ({
+        from: () => Promise.resolve([]),
+      }),
+      insert: () => ({
+        values: () => ({
+          returning: async () => [{ id: 78 }],
+        }),
+      }),
+    };
+    const db = {
+      transaction: vi.fn(async (callback: (transaction: typeof tx) => Promise<number>) =>
+        callback(tx),
+      ),
+    };
+
+    await expect(createDraftClientWithDb(db as never, "Northland Spas")).resolves.toBe(78);
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+    expect(seedMocks.seedWorkspaceDefaults).toHaveBeenCalledWith(tx, 78);
   });
 });

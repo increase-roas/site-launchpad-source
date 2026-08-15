@@ -21,6 +21,11 @@ import {
 import { FUNNEL_SHAPES } from "../shared/workspace";
 import { decryptSetupValue, encryptSetupValue, hasProtectedValue } from "./clientSecurity";
 import { getClientById, getDb } from "./db";
+import {
+  postgresConflictTargets,
+  requireSinglePositiveId,
+  withUpdatedAt,
+} from "./postgresPersistence";
 
 async function requireDb() {
   const db = await getDb();
@@ -159,9 +164,11 @@ async function ensureFunnelConfiguration(clientId: number, funnelId: number) {
   const created = await db
     .insert(funnelConfigRows)
     .values({ funnelId, ...defaultConfig(client) })
-    .$returningId();
-  const configId = created[0]?.id;
-  if (!configId) throw new Error("Funnel configuration could not be created.");
+    .returning({ id: funnelConfigRows.id });
+  const configId = requireSinglePositiveId(
+    created,
+    "Funnel configuration could not be created.",
+  );
 
   const existingQuestions = await db
     .select({ id: funnelSurveyQuestions.id })
@@ -238,9 +245,8 @@ export async function createFunnelBuilder(clientId: number, requestedName: strin
         status: "draft",
         deploymentStatus: "draft",
       })
-      .$returningId();
-    const funnelId = inserted[0]?.id;
-    if (!funnelId) throw new Error("Funnel could not be created.");
+      .returning({ id: funnels.id });
+    const funnelId = requireSinglePositiveId(inserted, "Funnel could not be created.");
     await transaction.insert(funnelSteps).values(stepRows(funnelId, slug));
     await transaction.insert(funnelConfigRows).values({ funnelId, ...defaultConfig(client) });
     await transaction
@@ -300,7 +306,7 @@ export async function saveFunnelBuilder(
   await db.transaction(async transaction => {
     await transaction
       .update(funnels)
-      .set(funnelContentUpdateFields(input))
+      .set(withUpdatedAt(funnelContentUpdateFields(input)))
       .where(eq(funnels.id, funnelId));
 
     if (current.slug !== input.slug) {
@@ -312,7 +318,10 @@ export async function saveFunnelBuilder(
         const nextPath = step.path.startsWith(`/${current.slug}`)
           ? `/${input.slug}${step.path.slice(current.slug.length + 1)}`
           : step.path;
-        await transaction.update(funnelSteps).set({ path: nextPath }).where(eq(funnelSteps.id, step.id));
+        await transaction
+          .update(funnelSteps)
+          .set(withUpdatedAt({ path: nextPath }))
+          .where(eq(funnelSteps.id, step.id));
       }
     }
 
@@ -327,15 +336,16 @@ export async function saveFunnelBuilder(
         generatedConfigEncrypted: protectGeneratedFunnelConfig(generatedConfig),
         generatedAt,
       })
-      .onDuplicateKeyUpdate({
-        set: {
+      .onConflictDoUpdate({
+        target: postgresConflictTargets.funnelConfigs,
+        set: withUpdatedAt({
           serviceArea: input.serviceArea,
           offerHeadline: input.offerHeadline,
           offerSubheadline: input.offerSubheadline,
           thankYouMessage: input.thankYouMessage,
           generatedConfigEncrypted: protectGeneratedFunnelConfig(generatedConfig),
           generatedAt,
-        },
+        }),
       });
 
     await transaction.delete(funnelSurveyQuestions).where(eq(funnelSurveyQuestions.funnelId, funnelId));
@@ -369,7 +379,7 @@ export async function markFunnelReady(clientId: number, funnelId: number) {
 
   await db
     .update(funnels)
-    .set({ deploymentStatus: "ready", status: "ready", readyAt: new Date() })
+    .set(withUpdatedAt({ deploymentStatus: "ready", status: "ready", readyAt: new Date() }))
     .where(and(eq(funnels.id, funnelId), eq(funnels.clientId, clientId)));
   return getFunnelBuilderDetail(clientId, funnelId);
 }
@@ -383,7 +393,7 @@ export async function markFunnelDeployed(clientId: number, funnelId: number) {
 
   await db
     .update(funnels)
-    .set({ deploymentStatus: "deployed", status: "live", deployedAt: new Date() })
+    .set(withUpdatedAt({ deploymentStatus: "deployed", status: "live", deployedAt: new Date() }))
     .where(and(eq(funnels.id, funnelId), eq(funnels.clientId, clientId)));
   return getFunnelBuilderDetail(clientId, funnelId);
 }

@@ -25,6 +25,7 @@ import {
   getDb,
   saveClientSecretSetup,
 } from "./db";
+import { postgresConflictTargets, withUpdatedAt } from "./postgresPersistence";
 import type { ProductCategory } from "../shared/client";
 
 async function requireDb() {
@@ -208,7 +209,7 @@ export async function saveAstroConfig(clientId: number, input: AstroClientConfig
   await db.transaction(async transaction => {
     await transaction
       .update(clients)
-      .set({
+      .set(withUpdatedAt({
         businessName: normalized.identity.businessName,
         shortName: normalized.identity.shortName,
         foundedYear: normalized.identity.foundedYear,
@@ -232,7 +233,7 @@ export async function saveAstroConfig(clientId: number, input: AstroClientConfig
         facebookUrl: normalized.socialLinks.facebook,
         theme: normalized.brand.theme,
         productCategories: resolveProductCategories(normalized, existing.productCategories),
-      })
+      }))
       .where(eq(clients.id, clientId));
 
     await transaction
@@ -250,8 +251,9 @@ export async function saveAstroConfig(clientId: number, input: AstroClientConfig
         generatedConfigEncrypted: encryptSetupValue(generatedConfig),
         generatedAt,
       })
-      .onDuplicateKeyUpdate({
-        set: {
+      .onConflictDoUpdate({
+        target: postgresConflictTargets.astroClientConfigs,
+        set: withUpdatedAt({
           socialLinks: normalized.socialLinks,
           fonts: normalized.brand.fonts,
           borderRadii: normalized.brand.borderRadii,
@@ -262,7 +264,7 @@ export async function saveAstroConfig(clientId: number, input: AstroClientConfig
           integrations: normalized.integrations,
           generatedConfigEncrypted: encryptSetupValue(generatedConfig),
           generatedAt,
-        },
+        }),
       });
   });
 
@@ -282,7 +284,10 @@ export async function saveWranglerSecrets(
     await db
       .insert(wranglerSecretSetups)
       .values({ clientId, ...updates })
-      .onDuplicateKeyUpdate({ set: updates });
+      .onConflictDoUpdate({
+        target: postgresConflictTargets.wranglerSecretSetups,
+        set: withUpdatedAt(updates),
+      });
   }
 
   const legacyUpdates: Record<string, string> = {};

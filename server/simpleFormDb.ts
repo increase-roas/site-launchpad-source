@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import {
   funnelRuntimeSecrets,
   funnelSimpleFormConfigs,
@@ -31,6 +31,12 @@ import {
 } from "../shared/simpleFormConfig";
 import { encryptSetupValue, generateCrmCallbackSecret, hasProtectedValue, decryptSetupValue } from "./clientSecurity";
 import { getClientAssets, getClientById, getDb } from "./db";
+import {
+  postgresConflictTargets,
+  requireSinglePositiveId,
+  withUpdatedAt,
+} from "./postgresPersistence";
+import { isDuplicateKeyError } from "./trpcErrors";
 import { funnelStepRows } from "./workspaceSeed";
 
 /** Website wrangler rows keep older names. Funnel secrets use the Simple Form contract names:
@@ -137,9 +143,8 @@ export async function createSimpleFormFromTemplate(clientId: number) {
           status: "draft",
           deploymentStatus: "draft",
         })
-        .$returningId();
-      const id = inserted[0]?.id;
-      if (!id) throw new Error("Funnel could not be created.");
+        .returning({ id: funnels.id });
+      const id = requireSinglePositiveId(inserted, "Funnel could not be created.");
       await transaction.insert(funnelSteps).values(funnelStepRows(id, slug, SIMPLE_FORM_STEPS));
       await transaction.insert(funnelSimpleFormConfigs).values({ funnelId: id, configJson: record });
       await transaction.insert(funnelRuntimeSecrets).values({
@@ -150,6 +155,7 @@ export async function createSimpleFormFromTemplate(clientId: number) {
     });
     return { alreadyExists: false as const, funnelId };
   } catch (error) {
+    if (!isDuplicateKeyError(error)) throw error;
     const raced = await findSimpleFormFunnel(clientId);
     if (raced) return { alreadyExists: true as const, funnelId: raced.id };
     throw error;
@@ -217,7 +223,7 @@ export async function getSimpleFormDetail(clientId: number, funnelId: number) {
   };
 }
 
-type SimpleFormSaveClient = Pick<MySql2Database, "insert" | "select" | "update">;
+type SimpleFormSaveClient = Pick<PostgresJsDatabase, "insert" | "select" | "update">;
 
 export async function saveSimpleFormConfigInTransaction(
   transaction: SimpleFormSaveClient,
@@ -227,13 +233,16 @@ export async function saveSimpleFormConfigInTransaction(
   await transaction
     .insert(funnelSimpleFormConfigs)
     .values({ funnelId: funnel.id, configJson: record })
-    .onDuplicateKeyUpdate({ set: { configJson: record } });
+    .onConflictDoUpdate({
+      target: postgresConflictTargets.funnelSimpleFormConfigs,
+      set: withUpdatedAt({ configJson: record }),
+    });
   await transaction
     .update(funnels)
-    .set({
+    .set(withUpdatedAt({
       name: simpleFormFunnelName(record.config.client.name),
       slug: record.config.funnel.slug,
-    })
+    }))
     .where(eq(funnels.id, funnel.id));
   if (funnel.slug === record.config.funnel.slug) return;
 
@@ -247,7 +256,7 @@ export async function saveSimpleFormConfigInTransaction(
       : step.path;
     await transaction
       .update(funnelSteps)
-      .set({ path: nextPath })
+      .set(withUpdatedAt({ path: nextPath }))
       .where(eq(funnelSteps.id, step.id));
   }
 }
@@ -308,7 +317,10 @@ export async function saveSimpleFormSecrets(
     await db
       .insert(funnelRuntimeSecrets)
       .values({ funnelId, ...updates })
-      .onDuplicateKeyUpdate({ set: updates });
+      .onConflictDoUpdate({
+        target: postgresConflictTargets.funnelRuntimeSecrets,
+        set: withUpdatedAt(updates),
+      });
   }
   return getSimpleFormDetail(clientId, funnelId);
 }

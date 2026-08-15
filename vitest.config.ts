@@ -19,6 +19,8 @@ export default defineConfig({
       "server/**/*.spec.ts",
       "shared/**/*.test.ts",
       "shared/**/*.spec.ts",
+      "drizzle/**/*.test.ts",
+      "drizzle/**/*.spec.ts",
       "client/src/**/*.test.ts",
       "client/src/**/*.spec.ts",
     ],

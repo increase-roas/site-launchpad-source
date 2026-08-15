@@ -26,10 +26,5 @@ export function assertWritableVersion(
 }
 
 export function isDuplicateKeyError(error: unknown): boolean {
-  return Boolean(
-    error &&
-      typeof error === "object" &&
-      "code" in error &&
-      (error as { code?: string }).code === "ER_DUP_ENTRY",
-  );
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === "23505");
 }
