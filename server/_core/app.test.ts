@@ -20,8 +20,6 @@ const PRODUCTION_ENV = {
   AUTH_ADMIN_EMAILS: "owner@example.com",
   JWT_SECRET: "legacy-decryption-test-key",
   DATABASE_URL: "postgresql://runtime.invalid/site-launchpad",
-  BUILT_IN_FORGE_API_URL: "https://forge.invalid",
-  BUILT_IN_FORGE_API_KEY: "forge-test-key",
   R2_ACCOUNT_ID: "0123456789abcdef0123456789abcdef",
   R2_ACCESS_KEY_ID: "test-access-key",
   R2_SECRET_ACCESS_KEY: "test-secret-key",
@@ -160,6 +158,8 @@ describe("createApp", () => {
     const message = caught instanceof Error ? caught.message : "";
     expect(message).toContain("JWT_SECRET");
     expect(message).toContain("SECRETS_ENCRYPTION_KEY");
+    expect(message).not.toContain("BUILT_IN_FORGE_API_URL");
+    expect(message).not.toContain("BUILT_IN_FORGE_API_KEY");
     expect(message).not.toContain(configuredValue);
   });
 });
