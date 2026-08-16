@@ -5,12 +5,13 @@ import { Redirect, Route, Switch } from "wouter";
 import DashboardLayout from "./components/DashboardLayout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import AuthCallback from "./pages/AuthCallback";
+import AstroClientEditor from "./pages/AstroClientEditor";
 import DraftClientCreate from "./pages/DraftClientCreate";
 import Home from "./pages/Home";
 import MediaWorkspace from "./pages/MediaWorkspace";
 import PaidAdsWorkspace from "./pages/PaidAdsWorkspace";
 import WebsiteWorkspace from "./pages/WebsiteWorkspace";
-import AstroClientEditor from "./pages/AstroClientEditor";
 
 function Router() {
   return (
@@ -55,9 +56,14 @@ function App() {
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <Toaster />
-          <DashboardLayout>
-            <Router />
-          </DashboardLayout>
+          <Switch>
+            <Route path="/auth/callback" component={AuthCallback} />
+            <Route>
+              <DashboardLayout>
+                <Router />
+              </DashboardLayout>
+            </Route>
+          </Switch>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

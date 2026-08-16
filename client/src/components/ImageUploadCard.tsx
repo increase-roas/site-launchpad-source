@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Camera, ImagePlus, Loader2, RefreshCw } from "lucide-react";
 import { useId, useRef, useState } from "react";
+import { AuthenticatedImage } from "./AuthenticatedImage";
 import { StatusDot } from "./StatusDot";
 
 type StoredImage = {
@@ -57,7 +58,7 @@ export function ImageUploadCard({
     >
       {image ? (
         <div className="relative aspect-[16/10] bg-black/25">
-          <img
+          <AuthenticatedImage
             src={image.storageUrl}
             alt={`${label} preview`}
             className="h-full w-full object-cover"

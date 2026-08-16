@@ -15,6 +15,13 @@
       "when": 1786832516098,
       "tag": "0001_narrow_loa",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786839498323,
+      "tag": "0002_supabase_auth",
+      "breakpoints": true
     }
   ]
 }

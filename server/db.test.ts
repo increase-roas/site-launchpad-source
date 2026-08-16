@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { clientSecretSetups } from "../drizzle/schema";
+import { clientSecretSetups, users } from "../drizzle/schema";
 import { UpdateConflictError } from "./trpcErrors";
 
 const seedMocks = vi.hoisted(() => ({
@@ -16,6 +16,7 @@ import {
   createDraftClientWithDb,
   createDraftClientInTransaction,
   resolveOptimisticUpdate,
+  upsertUserWithDb,
 } from "./db";
 
 describe("PostgreSQL runtime configuration", () => {
@@ -24,6 +25,52 @@ describe("PostgreSQL runtime configuration", () => {
     expect(POSTGRES_RUNTIME_OPTIONS).not.toHaveProperty("url");
     expect(JSON.stringify(POSTGRES_RUNTIME_OPTIONS)).not.toContain("DATABASE_URL");
   });
+});
+
+describe("Supabase user synchronization", () => {
+  it.each(["admin", "user"] as const)(
+    "persists an explicit %s role so promotion and downgrade both synchronize",
+    async role => {
+      const returnedUser = {
+        id: 7,
+        authUserId: "123e4567-e89b-12d3-a456-426614174000",
+        email: "operator@example.com",
+        name: "Site Operator",
+        loginMethod: "google",
+        role,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastSignedIn: new Date(),
+      };
+      const returning = vi.fn(async () => [returnedUser]);
+      const onConflictDoUpdate = vi.fn(() => ({ returning }));
+      const values = vi.fn(() => ({ onConflictDoUpdate }));
+      const database = {
+        insert: vi.fn(() => ({ values })),
+      };
+
+      const result = await upsertUserWithDb(database as never, {
+        authUserId: returnedUser.authUserId,
+        email: returnedUser.email,
+        name: returnedUser.name,
+        loginMethod: "google",
+        role,
+        lastSignedIn: returnedUser.lastSignedIn,
+      });
+
+      expect(result).toBe(returnedUser);
+      expect(database.insert).toHaveBeenCalledWith(users);
+      expect(onConflictDoUpdate).toHaveBeenCalledWith({
+        target: users.authUserId,
+        set: expect.objectContaining({
+          email: "operator@example.com",
+          loginMethod: "google",
+          role,
+          updatedAt: expect.any(Date),
+        }),
+      });
+    },
+  );
 });
 
 describe("optimistic client updates", () => {

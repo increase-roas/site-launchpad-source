@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { ENV } from "./env";
-import { sdk } from "./sdk";
 import { isAllowedRedirectUrl, parseStorageKey, redirectHostsFromForgeUrl } from "./storageKeyPolicy";
+import { authenticateSupabaseRequest } from "./supabaseAuth";
 
 type StorageProxyDeps = {
   authenticate: (req: Request) => Promise<unknown>;
@@ -10,8 +10,8 @@ type StorageProxyDeps = {
   forgeApiKey: string;
 };
 
-const defaultDeps = (): StorageProxyDeps => ({
-  authenticate: req => sdk.authenticateRequest(req),
+export const createStorageProxyDependencies = (): StorageProxyDeps => ({
+  authenticate: authenticateSupabaseRequest,
   fetchFn: fetch,
   forgeApiUrl: ENV.forgeApiUrl,
   forgeApiKey: ENV.forgeApiKey,
@@ -26,7 +26,7 @@ function storageKeyFromRequest(req: Request): string {
 export async function handleStorageProxyGet(
   req: Request,
   res: Response,
-  deps: StorageProxyDeps = defaultDeps(),
+  deps: StorageProxyDeps = createStorageProxyDependencies(),
 ): Promise<void> {
   const key = storageKeyFromRequest(req);
   if (!key) {

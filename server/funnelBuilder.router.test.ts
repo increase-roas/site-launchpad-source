@@ -31,7 +31,7 @@ function context(role: "admin" | "user" | null = "admin"): TrpcContext {
         ? null
         : {
             id: 1,
-            openId: "funnel-test-user",
+            authUserId: "123e4567-e89b-12d3-a456-426614174001",
             name: "Funnel Test",
             email: "funnel@example.com",
             loginMethod: "manus",

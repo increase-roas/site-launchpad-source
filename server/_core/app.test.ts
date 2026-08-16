@@ -12,20 +12,25 @@ vi.mock("./vite", () => {
   };
 });
 
-const PRODUCTION_ENV_NAMES = [
-  "VITE_APP_ID",
-  "JWT_SECRET",
-  "DATABASE_URL",
-  "OAUTH_SERVER_URL",
-  "OWNER_OPEN_ID",
-  "BUILT_IN_FORGE_API_URL",
-  "BUILT_IN_FORGE_API_KEY",
-  "SECRETS_ENCRYPTION_KEY",
-] as const;
+const PRODUCTION_ENV = {
+  VITE_SUPABASE_URL: "https://project-ref.supabase.co",
+  VITE_SUPABASE_PUBLISHABLE_KEY: "publishable-test-key",
+  AUTH_ALLOWED_EMAILS: "owner@example.com",
+  AUTH_ADMIN_EMAILS: "owner@example.com",
+  JWT_SECRET: "legacy-decryption-test-key",
+  DATABASE_URL: "postgresql://runtime.invalid/site-launchpad",
+  BUILT_IN_FORGE_API_URL: "https://forge.invalid",
+  BUILT_IN_FORGE_API_KEY: "forge-test-key",
+  SECRETS_ENCRYPTION_KEY: "encryption-test-key",
+} as const;
+
+const PRODUCTION_ENV_NAMES = Object.keys(
+  PRODUCTION_ENV,
+) as Array<keyof typeof PRODUCTION_ENV>;
 
 function setProductionEnv(): void {
   for (const name of PRODUCTION_ENV_NAMES) {
-    vi.stubEnv(name, `configured-${name.toLowerCase()}`);
+    vi.stubEnv(name, PRODUCTION_ENV[name]);
   }
 }
 
@@ -79,6 +84,16 @@ describe("createApp", () => {
     expect(response.body).toEqual({ error: "Not Found" });
   });
 
+  it("does not expose the legacy Manus OAuth callback route", async () => {
+    const { createApp } = await import("./app");
+    const app = await createApp({ mode: "test" });
+
+    const response = await request(app).get("/api/oauth/callback");
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({ error: "Not Found" });
+  });
+
   it("does not evaluate development Vite in production", async () => {
     setProductionEnv();
     const { createApp } = await import("./app");
@@ -93,7 +108,7 @@ describe("createApp", () => {
       vi.stubEnv(name, "");
     }
     const configuredValue = "configured-value-must-not-leak";
-    vi.stubEnv("VITE_APP_ID", configuredValue);
+    vi.stubEnv("VITE_SUPABASE_PUBLISHABLE_KEY", configuredValue);
     const { createApp } = await import("./app");
 
     let caught: unknown;

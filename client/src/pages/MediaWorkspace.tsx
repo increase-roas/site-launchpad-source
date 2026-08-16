@@ -1,3 +1,4 @@
+import { AuthenticatedImage } from "@/components/AuthenticatedImage";
 import { StatusDot } from "@/components/StatusDot";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
@@ -40,7 +41,7 @@ export default function MediaWorkspace({ clientId }: { clientId: number }) {
           return (
             <div key={slot} className="overflow-hidden rounded-2xl border border-white/8 bg-card/70">
               {asset ? (
-                <img src={asset.storageUrl} alt={`${ASSET_SLOT_LABELS[slot]} preview`} className="aspect-[16/10] w-full object-cover" />
+                <AuthenticatedImage src={asset.storageUrl} alt={`${ASSET_SLOT_LABELS[slot]} preview`} className="aspect-[16/10] w-full object-cover" />
               ) : (
                 <div className="grid aspect-[16/10] place-items-center bg-black/20">
                   <div className="text-center">

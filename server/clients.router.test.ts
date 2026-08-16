@@ -104,7 +104,7 @@ function createContext(role: "admin" | "user" | null = "admin"): TrpcContext {
         ? null
         : {
             id: 1,
-            openId: "test-user",
+            authUserId: "123e4567-e89b-12d3-a456-426614174002",
             name: "Test User",
             email: "test@example.com",
             loginMethod: "manus",

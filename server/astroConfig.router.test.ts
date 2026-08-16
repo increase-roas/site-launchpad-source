@@ -40,7 +40,7 @@ function context(role: "admin" | "user" | null = "admin"): TrpcContext {
         ? null
         : {
             id: 1,
-            openId: "astro-test-user",
+            authUserId: "123e4567-e89b-12d3-a456-426614174003",
             name: "Astro Test",
             email: "astro@example.com",
             loginMethod: "manus",

@@ -1,6 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Request, Response } from "express";
-import { handleStorageProxyGet } from "./storageProxy";
+
+const authMocks = vi.hoisted(() => ({
+  authenticateSupabaseRequest: vi.fn(),
+}));
+
+vi.mock("./supabaseAuth", () => ({
+  authenticateSupabaseRequest: authMocks.authenticateSupabaseRequest,
+}));
+
+import {
+  createStorageProxyDependencies,
+  handleStorageProxyGet,
+} from "./storageProxy";
 
 function mockRes() {
   const res = {
@@ -29,6 +41,17 @@ function mockRes() {
 }
 
 describe("storage proxy handler", () => {
+  it("uses the shared Supabase Bearer authentication boundary", async () => {
+    const req = {
+      headers: { authorization: "Bearer signed-token" },
+    } as Request;
+    authMocks.authenticateSupabaseRequest.mockResolvedValueOnce({ id: 1 });
+
+    await createStorageProxyDependencies().authenticate(req);
+
+    expect(authMocks.authenticateSupabaseRequest).toHaveBeenCalledWith(req);
+  });
+
   it("returns 401 and does not call Forge without a session", async () => {
     const fetchFn = vi.fn();
     const res = mockRes();

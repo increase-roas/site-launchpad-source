@@ -1,3 +1,4 @@
+import { AuthenticatedImage } from "@/components/AuthenticatedImage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -141,7 +142,7 @@ function ImageSourcePicker({
           <RadioGroupItem value="template" />
           <div className="min-w-0 flex-1">
             <p className="font-extrabold">Use Template Default</p>
-            <img src={previewUrl} alt="" className="mt-3 max-h-28 rounded-lg object-cover" />
+            <AuthenticatedImage src={previewUrl} alt="" className="mt-3 max-h-28 rounded-lg object-cover" />
           </div>
         </label>
         <label className="flex items-start gap-3 rounded-xl border border-white/8 p-3">

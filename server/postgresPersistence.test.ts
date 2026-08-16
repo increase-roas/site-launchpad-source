@@ -150,7 +150,7 @@ function collectConflictCallsites(path: string, source: string): ConflictCallsit
 
 describe("PostgreSQL persistence helpers", () => {
   it("uses the exact schema columns for every application conflict target", () => {
-    expect(postgresConflictTargets.users).toBe(users.openId);
+    expect(postgresConflictTargets.users).toBe(users.authUserId);
     expect(postgresConflictTargets.clientSecretSetups).toBe(clientSecretSetups.clientId);
     expect(postgresConflictTargets.clientAssets).toEqual([
       clientAssets.clientId,

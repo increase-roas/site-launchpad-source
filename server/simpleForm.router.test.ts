@@ -25,7 +25,7 @@ function context(role: "admin" | "user" | null = "user"): TrpcContext {
         ? null
         : {
             id: 1,
-            openId: "simple-form-test-user",
+            authUserId: "123e4567-e89b-12d3-a456-426614174004",
             name: "Operator",
             email: "operator@example.com",
             loginMethod: "manus",

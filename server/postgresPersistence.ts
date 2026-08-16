@@ -10,7 +10,7 @@ import {
 } from "../drizzle/schema";
 
 export const postgresConflictTargets = {
-  users: users.openId,
+  users: users.authUserId,
   clientSecretSetups: clientSecretSetups.clientId,
   clientAssets: [clientAssets.clientId, clientAssets.slot],
   astroClientConfigs: astroClientConfigs.clientId,

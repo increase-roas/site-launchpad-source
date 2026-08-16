@@ -8,7 +8,6 @@ import {
   type RuntimeMode,
   validateRuntimeEnv,
 } from "./env";
-import { registerOAuthRoutes } from "./oauth";
 import { serveStatic } from "./static";
 import { registerStorageProxy } from "./storageProxy";
 
@@ -28,7 +27,6 @@ export async function createApp(
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
   registerStorageProxy(app);
-  registerOAuthRoutes(app);
   app.use(
     "/api/trpc",
     createExpressMiddleware({
