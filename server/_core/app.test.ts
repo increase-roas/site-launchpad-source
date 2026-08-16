@@ -1,4 +1,5 @@
 import express from "express";
+import { createServer } from "node:http";
 import { Server as NetServer } from "node:net";
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -124,6 +125,20 @@ describe("createApp", () => {
     await createApp({ mode: "production" });
 
     expect(viteEvaluation.evaluated).toBe(false);
+  });
+
+  it("keeps local development on Vite and requires a development server", async () => {
+    setProductionEnv();
+    const { createApp } = await import("./app");
+
+    await expect(createApp({ mode: "development" })).rejects.toThrow(
+      "A developmentServer is required in development mode.",
+    );
+
+    const developmentServer = createServer();
+    await createApp({ mode: "development", developmentServer });
+    const { setupVite } = await import("./vite");
+    expect(setupVite).toHaveBeenCalledWith(expect.anything(), developmentServer);
   });
 
   it("reports only missing production environment variable names", async () => {

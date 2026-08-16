@@ -13,6 +13,8 @@ import { serveStatic } from "./static";
 export type CreateAppOptions = {
   mode?: RuntimeMode;
   developmentServer?: Server;
+  serveClientAssets?: boolean;
+  clientAssetDirectory?: string;
 };
 
 const handleOversizedBody: ErrorRequestHandler = (error, _req, res, next) => {
@@ -64,8 +66,8 @@ export async function createApp(
     }
     const { setupVite } = await import("./vite");
     await setupVite(app, options.developmentServer);
-  } else if (mode === "production") {
-    serveStatic(app);
+  } else if (mode === "production" && options.serveClientAssets !== false) {
+    serveStatic(app, options.clientAssetDirectory);
   }
 
   return app;
