@@ -218,6 +218,48 @@ export const clientAssets = pgTable(
 export type ClientAsset = typeof clientAssets.$inferSelect;
 export type InsertClientAsset = typeof clientAssets.$inferInsert;
 
+export const assetUploadKindEnum = pgEnum("asset_upload_kind", ["client", "astro"]);
+export const assetUploadStatusEnum = pgEnum("asset_upload_status", [
+  "pending",
+  "completed",
+  "failed",
+]);
+
+export const assetUploadSessions = pgTable(
+  "assetUploadSessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    clientId: integer("clientId")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    assetKind: assetUploadKindEnum("assetKind").notNull(),
+    slot: varchar("slot", { length: 80 }).notNull(),
+    originalFilename: varchar("originalFilename", { length: 500 }).notNull(),
+    declaredMimeType: varchar("declaredMimeType", { length: 120 }).notNull(),
+    declaredSizeBytes: integer("declaredSizeBytes").notNull(),
+    tempKey: varchar("tempKey", { length: 800 })
+      .notNull()
+      .unique("asset_upload_sessions_temp_key_unique"),
+    status: assetUploadStatusEnum("status").default("pending").notNull(),
+    expiresAt: timestamp("expiresAt", { withTimezone: true, mode: "date" }).notNull(),
+    completedAt: timestamp("completedAt", { withTimezone: true, mode: "date" }),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  table => [
+    index("asset_upload_sessions_client_idx").on(table.clientId),
+    index("asset_upload_sessions_status_idx").on(table.status),
+    index("asset_upload_sessions_expires_at_idx").on(table.expiresAt),
+  ],
+).enableRLS();
+
+export type AssetUploadSession = typeof assetUploadSessions.$inferSelect;
+export type InsertAssetUploadSession = typeof assetUploadSessions.$inferInsert;
+
 export const astroClientConfigs = pgTable(
   "astroClientConfigs",
   {

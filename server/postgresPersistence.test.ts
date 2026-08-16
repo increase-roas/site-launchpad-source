@@ -31,12 +31,14 @@ const expectedConflictCallsites = {
       target: "clientSecretSetups",
       usesUpdatedAt: true,
     },
-    { insertedTable: "clientAssets", target: "clientAssets", usesUpdatedAt: true },
     {
       insertedTable: "clientSecretSetups",
       target: "clientSecretSetups",
       usesUpdatedAt: true,
     },
+  ],
+  "server/assetUploadDb.ts": [
+    { insertedTable: "clientAssets", target: "clientAssets", usesUpdatedAt: true },
   ],
   "server/astroConfigDb.ts": [
     {
@@ -210,7 +212,7 @@ describe("PostgreSQL query callsites", () => {
   });
 
   it("detects a swapped table-specific conflict target", () => {
-    const path = "server/db.ts";
+    const path = "server/assetUploadDb.ts";
     const source = readFileSync(path, "utf8");
     const mutated = source.replace(
       "target: postgresConflictTargets.clientAssets",
@@ -224,6 +226,7 @@ describe("PostgreSQL query callsites", () => {
 
   it("writes updatedAt for every active update query", () => {
     for (const path of [
+      "server/assetUploadDb.ts",
       "server/db.ts",
       "server/astroConfigDb.ts",
       "server/funnelConfigDb.ts",

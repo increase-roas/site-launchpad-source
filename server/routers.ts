@@ -1,5 +1,6 @@
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
+import { assetsRouter } from "./routers/assets";
 import { clientsRouter } from "./routers/clients";
 import { astroConfigRouter } from "./routers/astroConfig";
 import { funnelBuilderRouter } from "./routers/funnelBuilder";
@@ -12,6 +13,7 @@ export const appRouter = router({
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
   }),
+  assets: assetsRouter,
   clients: clientsRouter,
   astroConfig: astroConfigRouter,
   funnelBuilder: funnelBuilderRouter,

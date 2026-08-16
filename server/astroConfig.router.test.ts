@@ -8,11 +8,6 @@ const mocks = vi.hoisted(() => ({
   getAstroConfigView: vi.fn(),
   saveAstroConfig: vi.fn(),
   saveWranglerSecrets: vi.fn(),
-  getClientById: vi.fn(),
-  upsertClientAsset: vi.fn(),
-  decodeImageDataUrl: vi.fn(),
-  processAstroUploadedImage: vi.fn(),
-  storagePutExact: vi.fn(),
 }));
 
 vi.mock("./astroConfigDb", () => ({
@@ -20,17 +15,6 @@ vi.mock("./astroConfigDb", () => ({
   saveAstroConfig: mocks.saveAstroConfig,
   saveWranglerSecrets: mocks.saveWranglerSecrets,
 }));
-vi.mock("./db", () => ({
-  getClientById: mocks.getClientById,
-  upsertClientAsset: mocks.upsertClientAsset,
-}));
-vi.mock("./imageProcessing", () => ({
-  decodeImageDataUrl: mocks.decodeImageDataUrl,
-  processAstroUploadedImage: mocks.processAstroUploadedImage,
-  MAX_DATA_URL_CHARS: 8_000_000,
-}));
-vi.mock("./storage", () => ({ storagePutExact: mocks.storagePutExact }));
-
 import { astroConfigRouter } from "./routers/astroConfig";
 
 function context(role: "admin" | "user" | null = "admin"): TrpcContext {
@@ -102,11 +86,6 @@ describe("authenticated Astro config procedures", () => {
     mocks.getAstroConfigView.mockResolvedValue(view);
     mocks.saveAstroConfig.mockResolvedValue(view);
     mocks.saveWranglerSecrets.mockResolvedValue({ ...view, secretStatus: { ...view.secretStatus, GHL_API_KEY: true } });
-    mocks.getClientById.mockResolvedValue({ id: 5, shortName: "test-spas" });
-    mocks.decodeImageDataUrl.mockReturnValue({ buffer: Buffer.from("image"), mimeType: "image/png" });
-    mocks.processAstroUploadedImage.mockResolvedValue({ buffer: Buffer.from("webp"), mimeType: "image/webp", byteSize: 4, width: 1200, height: 800 });
-    mocks.storagePutExact.mockResolvedValue({ key: "clients/5-test/astro/category-hot-tubs-hero.webp", url: "/manus-storage/category-hot-tubs-hero.webp" });
-    mocks.upsertClientAsset.mockResolvedValue(undefined);
   });
 
   it("loads and saves the complete selected-client configuration", async () => {
@@ -148,23 +127,6 @@ describe("authenticated Astro config procedures", () => {
     expect(result.secretStatus.GHL_API_KEY).toBe(true);
     expect(JSON.stringify(result)).not.toContain("raw-secret");
     expect(result.generatedConfig).toBe("");
-  });
-
-  it("processes and persists a category hero in its exact Astro asset slot", async () => {
-    const caller = astroConfigRouter.createCaller(context());
-    await caller.uploadAsset({
-      clientId: 5,
-      slot: "categoryHotTubs",
-      originalFilename: "hero.png",
-      dataUrl: "data:image/png;base64,AAAAAAAAAAAAAAAAAAAA",
-    });
-    expect(mocks.processAstroUploadedImage).toHaveBeenCalledWith(expect.any(Buffer), "categoryHotTubs");
-    expect(mocks.storagePutExact).toHaveBeenCalledWith(
-      expect.stringContaining("category-hot-tubs-hero.webp"),
-      expect.any(Buffer),
-      "image/webp",
-    );
-    expect(mocks.upsertClientAsset).toHaveBeenCalledWith(expect.objectContaining({ clientId: 5, slot: "categoryHotTubs" }));
   });
 
   it("exports generated Astro config through a dedicated authenticated RPC", async () => {

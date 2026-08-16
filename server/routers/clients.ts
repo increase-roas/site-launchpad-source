@@ -2,15 +2,12 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import type { ClientSecretSetup } from "../../drizzle/schema";
 import {
-  ASSET_SLOT_FILENAMES,
-  ASSET_SLOT_VALUES,
   SECRET_FIELD_VALUES,
   buildReadiness,
   clientInputSchema,
   draftClientInputSchema,
   emptySecretStatus,
   isAssetSlot,
-  sanitizeClientFolder,
   secretSetupInputSchema,
   type ClientInput,
   type SecretSetupInput,
@@ -27,11 +24,8 @@ import {
   listClients,
   saveClientSecretSetup,
   updateClient,
-  upsertClientAsset,
 } from "../db";
 import { encryptSetupValue, hasProtectedValue } from "../clientSecurity";
-import { decodeImageDataUrl, MAX_DATA_URL_CHARS, processUploadedImage } from "../imageProcessing";
-import { storagePutExact } from "../storage";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { UpdateConflictError, isDuplicateKeyError } from "../trpcErrors";
 import type { Client, ClientAsset } from "../../drizzle/schema";
@@ -181,52 +175,6 @@ export const clientsRouter = router({
           });
         }
         throw error;
-      }
-    }),
-
-  uploadAsset: protectedProcedure
-    .input(
-      z.object({
-        clientId: z.number().int().positive(),
-        slot: z.enum(ASSET_SLOT_VALUES),
-        originalFilename: z.string().trim().min(1).max(500),
-        dataUrl: z.string().min(20).max(MAX_DATA_URL_CHARS),
-      }),
-    )
-    .mutation(async ({ input }) => {
-      const client = await getClientById(input.clientId);
-      if (!client) throw new TRPCError({ code: "NOT_FOUND", message: "Client not found." });
-
-      try {
-        const decoded = decodeImageDataUrl(input.dataUrl);
-        const processed = await processUploadedImage(decoded.buffer, input.slot);
-        const folder = sanitizeClientFolder(client.shortName) || `client-${client.id}`;
-        const filename = ASSET_SLOT_FILENAMES[input.slot];
-        const stored = await storagePutExact(
-          `clients/${client.id}-${folder}/${filename}`,
-          processed.buffer,
-          processed.mimeType,
-        );
-
-        await upsertClientAsset({
-          clientId: client.id,
-          slot: input.slot,
-          storageKey: stored.key,
-          storageUrl: stored.url,
-          filename,
-          originalFilename: input.originalFilename,
-          mimeType: processed.mimeType,
-          byteSize: processed.byteSize,
-          width: processed.width,
-          height: processed.height,
-        });
-
-        return getClientView(client.id);
-      } catch (error) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: error instanceof Error ? error.message : "That image could not be uploaded.",
-        });
       }
     }),
 

@@ -43,19 +43,16 @@ describe("active client authentication wiring", () => {
     expect(layoutSource).toContain("startLogin,");
   });
 
-  it("loads protected storage previews through authenticated fetches", () => {
-    const imageSource = source("components/AuthenticatedImage.tsx");
+  it("loads public R2 previews directly without protected storage fetches", () => {
     const previewSources = [
       source("components/ImageUploadCard.tsx"),
       source("pages/MediaWorkspace.tsx"),
       source("components/funnels/SimpleFormFunnelEditor.tsx"),
     ];
 
-    expect(imageSource).toContain(
-      "fetchAuthenticatedStorageObject",
-    );
     for (const previewSource of previewSources) {
-      expect(previewSource).toContain("AuthenticatedImage");
+      expect(previewSource).toContain("<img");
+      expect(previewSource).not.toContain("AuthenticatedImage");
     }
   });
 });

@@ -10,6 +10,11 @@ const validDevelopmentEnv: NodeJS.ProcessEnv = {
   DATABASE_URL: "postgresql://runtime.invalid/site-launchpad",
   BUILT_IN_FORGE_API_URL: "https://forge.invalid",
   BUILT_IN_FORGE_API_KEY: "forge-test-key",
+  R2_ACCOUNT_ID: "0123456789abcdef0123456789abcdef",
+  R2_ACCESS_KEY_ID: "test-access-key",
+  R2_SECRET_ACCESS_KEY: "test-secret-key",
+  R2_BUCKET: "site-launchpad-assets",
+  R2_PUBLIC_ASSET_BASE_URL: "https://assets.example.com",
 };
 
 describe("Supabase authentication environment validation", () => {
@@ -78,4 +83,40 @@ describe("Supabase authentication environment validation", () => {
       ).toThrow(/AUTH_ALLOWED_EMAILS/);
     },
   );
+});
+
+describe("R2 environment validation", () => {
+  it.each([
+    "R2_ACCOUNT_ID",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "R2_BUCKET",
+    "R2_PUBLIC_ASSET_BASE_URL",
+  ] as const)("requires %s in development", name => {
+    expect(() =>
+      validateRuntimeEnv("development", {
+        ...validDevelopmentEnv,
+        [name]: "",
+      }),
+    ).toThrow(name);
+  });
+
+  it("does not expose invalid R2 values in errors", () => {
+    const invalidValue = "unsafe-secret-like-bucket_value";
+    let caught: unknown;
+
+    try {
+      validateRuntimeEnv("development", {
+        ...validDevelopmentEnv,
+        R2_BUCKET: invalidValue,
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    const message = caught instanceof Error ? caught.message : "";
+    expect(message).toContain("R2_BUCKET");
+    expect(message).not.toContain(invalidValue);
+  });
 });

@@ -3,7 +3,6 @@ import {
   AUTH_CALLBACK_ERROR_MESSAGE,
   UNAPPROVED_ACCOUNT_MESSAGE,
   createAuthCallbackHandler,
-  fetchAuthenticatedStorageObject,
   getSupabaseBearerHeaders,
   signOutAndClearAuth,
   startGoogleLogin,
@@ -170,40 +169,6 @@ describe("Supabase browser authentication", () => {
   it("uses the required unauthorized-account message exactly", () => {
     expect(UNAPPROVED_ACCOUNT_MESSAGE).toBe(
       "This Google account isn't approved for Site Launchpad. Ask the owner to add you.",
-    );
-  });
-
-  it("authenticates storage proxy fetches with the same current access token", async () => {
-    const fetchFn = vi.fn(async () => ({
-      ok: true,
-      blob: async () => new Blob(["image"]),
-    }));
-    const getSession = vi.fn(async () => ({
-      data: {
-        session: {
-          access_token: "verified-access-token",
-        },
-      },
-      error: null,
-    }));
-
-    await fetchAuthenticatedStorageObject(
-      "/manus-storage/clients/7/hero.webp",
-      {
-        auth: { getSession } as never,
-        fetchFn: fetchFn as never,
-      },
-    );
-
-    expect(fetchFn).toHaveBeenCalledWith(
-      "/manus-storage/clients/7/hero.webp",
-      {
-        credentials: "omit",
-        headers: {
-          Authorization: "Bearer verified-access-token",
-        },
-        signal: undefined,
-      },
     );
   });
 });

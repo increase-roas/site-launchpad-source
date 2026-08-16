@@ -117,27 +117,3 @@ export async function getSupabaseBearerHeaders(
     Authorization: `Bearer ${data.session.access_token}`,
   };
 }
-
-export async function fetchAuthenticatedStorageObject(
-  url: string,
-  dependencies: {
-    auth: SessionAuth;
-    fetchFn: typeof fetch;
-    signal?: AbortSignal;
-  },
-): Promise<Blob> {
-  const headers = await getSupabaseBearerHeaders(dependencies.auth);
-  if (!headers.Authorization) {
-    throw new Error("Authentication is required to load this file.");
-  }
-
-  const response = await dependencies.fetchFn(url, {
-    credentials: "omit",
-    headers,
-    signal: dependencies.signal,
-  });
-  if (!response.ok) {
-    throw new Error("File could not be loaded.");
-  }
-  return await response.blob();
-}

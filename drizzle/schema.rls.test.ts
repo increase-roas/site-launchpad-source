@@ -3,6 +3,7 @@ import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import * as schema from "./schema";
 import {
+  assetUploadSessions,
   astroClientConfigs,
   clientAssets,
   clientSecretSetups,
@@ -20,6 +21,10 @@ import {
 } from "./schema";
 
 const applicationTables = {
+  assetUploadSessions: {
+    table: assetUploadSessions,
+    databaseName: "assetUploadSessions",
+  },
   astroClientConfigs: { table: astroClientConfigs, databaseName: "astroClientConfigs" },
   clientAssets: { table: clientAssets, databaseName: "clientAssets" },
   clientSecretSetups: { table: clientSecretSetups, databaseName: "clientSecretSetups" },
@@ -59,7 +64,7 @@ describe("PostgreSQL application-table RLS", () => {
       .sort((left, right) => left.exportName.localeCompare(right.exportName));
 
     expect(discovered).toEqual(expected);
-    expect(discovered).toHaveLength(14);
+    expect(discovered).toHaveLength(15);
   });
 
   it("enables RLS without schema policies on every application table", () => {

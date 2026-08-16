@@ -21,6 +21,11 @@ const PRODUCTION_ENV = {
   DATABASE_URL: "postgresql://runtime.invalid/site-launchpad",
   BUILT_IN_FORGE_API_URL: "https://forge.invalid",
   BUILT_IN_FORGE_API_KEY: "forge-test-key",
+  R2_ACCOUNT_ID: "0123456789abcdef0123456789abcdef",
+  R2_ACCESS_KEY_ID: "test-access-key",
+  R2_SECRET_ACCESS_KEY: "test-secret-key",
+  R2_BUCKET: "site-launchpad-assets",
+  R2_PUBLIC_ASSET_BASE_URL: "https://assets.example.com",
   SECRETS_ENCRYPTION_KEY: "encryption-test-key",
 } as const;
 
@@ -82,6 +87,24 @@ describe("createApp", () => {
     expect(response.status).toBe(404);
     expect(response.type).toBe("application/json");
     expect(response.body).toEqual({ error: "Not Found" });
+  });
+
+  it("rejects API request bodies above five megabytes with safe JSON", async () => {
+    const { createApp } = await import("./app");
+    const app = await createApp({ mode: "test" });
+
+    const response = await request(app)
+      .post("/api/trpc/auth.me")
+      .set("Content-Type", "application/json")
+      .send({ oversized: "x".repeat(5 * 1024 * 1024) });
+
+    expect(response.status).toBe(413);
+    expect(response.type).toBe("application/json");
+    expect(response.body).toEqual({
+      error: "Request body is too large. Maximum size is 4 MB.",
+    });
+    expect(response.text).not.toContain("PayloadTooLargeError");
+    expect(response.text).not.toContain("stack");
   });
 
   it("does not expose the legacy Manus OAuth callback route", async () => {

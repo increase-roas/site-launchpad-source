@@ -16,7 +16,6 @@ const mocks = vi.hoisted(() => ({
   createClientWithSecrets: vi.fn(),
   createDraftClient: vi.fn(),
   saveClientSecretSetup: vi.fn(),
-  upsertClientAsset: vi.fn(),
 }));
 
 const workspaceMocks = vi.hoisted(() => ({
@@ -211,7 +210,7 @@ describe("client launch gating", () => {
         clientId: 7,
         slot,
         storageKey: `clients/7/${slot}.webp`,
-        storageUrl: `/manus-storage/clients/7/${slot}.webp`,
+        storageUrl: `https://assets.example.com/clients/7/${slot}.webp`,
         filename: `${slot}.webp`,
         originalFilename: `${slot}.jpg`,
         mimeType: "image/webp",

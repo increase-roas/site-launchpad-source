@@ -2,8 +2,8 @@ import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import {
   MARKETING_PHOTO_COMPRESS_ATTEMPTS,
-  MAX_DATA_URL_CHARS,
   MAX_MARKETING_PHOTO_BYTES,
+  inspectSupportedImageMimeType,
   processAstroUploadedImage,
   processUploadedImage,
 } from "./imageProcessing";
@@ -86,8 +86,21 @@ describe("server-side image preparation", () => {
     }
   });
 
-  it("bounds upload payload size and sharp compression attempts", () => {
-    expect(MAX_DATA_URL_CHARS).toBe(8_000_000);
+  it("identifies actual image content and rejects corrupt bytes", async () => {
+    const png = await sharp({
+      create: {
+        width: 10,
+        height: 10,
+        channels: 3,
+        background: { r: 1, g: 2, b: 3 },
+      },
+    }).png().toBuffer();
+
+    await expect(inspectSupportedImageMimeType(png)).resolves.toBe("image/png");
+    await expect(inspectSupportedImageMimeType(Buffer.from("not-an-image"))).rejects.toThrow();
+  });
+
+  it("bounds sharp compression attempts", () => {
     expect(MARKETING_PHOTO_COMPRESS_ATTEMPTS).toBeLessThan(18);
   });
 });

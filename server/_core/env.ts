@@ -9,6 +9,11 @@ const DEVELOPMENT_RUNTIME_ENV = [
   "DATABASE_URL",
   "BUILT_IN_FORGE_API_URL",
   "BUILT_IN_FORGE_API_KEY",
+  "R2_ACCOUNT_ID",
+  "R2_ACCESS_KEY_ID",
+  "R2_SECRET_ACCESS_KEY",
+  "R2_BUCKET",
+  "R2_PUBLIC_ASSET_BASE_URL",
 ] as const;
 
 const PRODUCTION_RUNTIME_ENV = [
@@ -68,6 +73,7 @@ export function validateRuntimeEnv(
 
   if (mode === "development" || mode === "production") {
     readSupabaseAuthConfiguration(environment);
+    readR2Configuration(environment);
   }
 }
 
@@ -106,6 +112,67 @@ export type SupabaseAuthConfiguration = {
   allowedEmails: ReadonlySet<string>;
   adminEmails: ReadonlySet<string>;
 };
+
+export type R2Configuration = {
+  accountId: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucket: string;
+  publicAssetBaseUrl: string;
+};
+
+const R2_ACCOUNT_ID_PATTERN = /^[a-f0-9]{32}$/i;
+const R2_BUCKET_PATTERN = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
+
+export function readR2Configuration(
+  environment: NodeJS.ProcessEnv = process.env,
+): R2Configuration {
+  const accountId = environment.R2_ACCOUNT_ID?.trim();
+  if (!accountId || !R2_ACCOUNT_ID_PATTERN.test(accountId)) {
+    throw new Error("R2_ACCOUNT_ID must be a valid Cloudflare account ID.");
+  }
+
+  const accessKeyId = environment.R2_ACCESS_KEY_ID?.trim();
+  if (!accessKeyId) {
+    throw new Error("R2_ACCESS_KEY_ID is required.");
+  }
+
+  const secretAccessKey = environment.R2_SECRET_ACCESS_KEY?.trim();
+  if (!secretAccessKey) {
+    throw new Error("R2_SECRET_ACCESS_KEY is required.");
+  }
+
+  const bucket = environment.R2_BUCKET?.trim();
+  if (!bucket || !R2_BUCKET_PATTERN.test(bucket)) {
+    throw new Error("R2_BUCKET must be a safe lowercase bucket name.");
+  }
+
+  const rawPublicAssetBaseUrl = environment.R2_PUBLIC_ASSET_BASE_URL?.trim();
+  let publicAssetBaseUrl: URL;
+  try {
+    publicAssetBaseUrl = new URL(rawPublicAssetBaseUrl ?? "");
+  } catch {
+    throw new Error("R2_PUBLIC_ASSET_BASE_URL must be a valid HTTPS origin.");
+  }
+  if (
+    publicAssetBaseUrl.protocol !== "https:" ||
+    publicAssetBaseUrl.pathname !== "/" ||
+    publicAssetBaseUrl.search ||
+    publicAssetBaseUrl.hash ||
+    publicAssetBaseUrl.username ||
+    publicAssetBaseUrl.password
+  ) {
+    throw new Error("R2_PUBLIC_ASSET_BASE_URL must be a valid HTTPS origin.");
+  }
+
+  return {
+    accountId,
+    accessKeyId,
+    secretAccessKey,
+    bucket,
+    publicAssetBaseUrl: publicAssetBaseUrl.origin,
+  };
+}
 
 export function readSupabaseAuthConfiguration(
   environment: NodeJS.ProcessEnv = process.env,

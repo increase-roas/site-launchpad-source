@@ -6,7 +6,6 @@ import {
   ClientAsset,
   ClientSecretSetup,
   InsertClient,
-  InsertClientAsset,
   InsertClientSecretSetup,
   InsertUser,
   User,
@@ -188,26 +187,6 @@ export async function createClientWithSecrets(
 ): Promise<number> {
   const db = await requireDb();
   return db.transaction(tx => createClientWithSecretsInTransaction(tx, values, secretValues));
-}
-
-export async function upsertClientAsset(values: InsertClientAsset): Promise<void> {
-  const db = await requireDb();
-  await db
-    .insert(clientAssets)
-    .values(values)
-    .onConflictDoUpdate({
-      target: postgresConflictTargets.clientAssets,
-      set: withUpdatedAt({
-        storageKey: values.storageKey,
-        storageUrl: values.storageUrl,
-        filename: values.filename,
-        originalFilename: values.originalFilename,
-        mimeType: values.mimeType,
-        byteSize: values.byteSize,
-        width: values.width,
-        height: values.height,
-      }),
-    });
 }
 
 export async function getClientSecretSetup(
