@@ -2,6 +2,10 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Request } from "express";
 import type { User } from "../../drizzle/schema";
 import {
+  fetchWithTimeout,
+  RequestTimeoutError,
+} from "../../shared/requestTimeout";
+import {
   ForbiddenError,
   UnauthorizedError,
 } from "../../shared/_core/errors";
@@ -13,15 +17,18 @@ import {
   readSupabaseAuthConfiguration,
   type SupabaseAuthConfiguration,
 } from "./env";
+import { observeRuntimeOperation } from "./operationTelemetry";
 
 export type AuthUserSyncInput = UserSyncInput;
 export type AuthenticatedUser = User;
+export const SUPABASE_TOKEN_TIMEOUT_MS = 10_000;
 
 export type SupabaseAuthDependencies = {
   environment: NodeJS.ProcessEnv;
   verifyToken: (
     token: string,
     configuration: SupabaseAuthConfiguration,
+    signal: AbortSignal,
   ) => Promise<Record<string, unknown>>;
   synchronizeUser: (input: AuthUserSyncInput) => Promise<AuthenticatedUser>;
   now: () => Date;
@@ -55,6 +62,15 @@ function getVerifierClient(
             detectSessionInUrl: false,
             persistSession: false,
           },
+          global: {
+            fetch: (input, init) =>
+              fetchWithTimeout(
+                globalThis.fetch,
+                input,
+                init,
+                SUPABASE_TOKEN_TIMEOUT_MS,
+              ),
+          },
         },
       ),
     };
@@ -65,6 +81,7 @@ function getVerifierClient(
 async function verifyTokenWithSupabase(
   token: string,
   configuration: SupabaseAuthConfiguration,
+  _signal: AbortSignal,
 ): Promise<Record<string, unknown>> {
   const { data, error } = await getVerifierClient(
     configuration,
@@ -73,6 +90,40 @@ async function verifyTokenWithSupabase(
     throw new Error("Supabase rejected the access token.");
   }
   return data.claims as Record<string, unknown>;
+}
+
+async function verifyTokenWithinDeadline(
+  token: string,
+  configuration: SupabaseAuthConfiguration,
+  dependencies: SupabaseAuthDependencies,
+): Promise<Record<string, unknown>> {
+  const nativeTimeoutSignal = AbortSignal.timeout(
+    SUPABASE_TOKEN_TIMEOUT_MS,
+  );
+  const deadlineController = new AbortController();
+  const signal = AbortSignal.any([
+    nativeTimeoutSignal,
+    deadlineController.signal,
+  ]);
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      const error = new RequestTimeoutError(SUPABASE_TOKEN_TIMEOUT_MS);
+      deadlineController.abort(error);
+      reject(error);
+    }, SUPABASE_TOKEN_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([
+      dependencies.verifyToken(token, configuration, signal),
+      deadline,
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
 }
 
 function defaultDependencies(): SupabaseAuthDependencies {
@@ -162,14 +213,21 @@ export async function authenticateSupabaseRequest(
   request: Request,
   dependencies: SupabaseAuthDependencies = defaultDependencies(),
 ): Promise<AuthenticatedUser> {
+  const token = readBearerToken(request);
   const configuration = readSupabaseAuthConfiguration(
     dependencies.environment,
   );
-  const token = readBearerToken(request);
 
   let claims: Record<string, unknown>;
   try {
-    claims = await dependencies.verifyToken(token, configuration);
+    claims = await observeRuntimeOperation(
+      "token_verification",
+      () => verifyTokenWithinDeadline(
+        token,
+        configuration,
+        dependencies,
+      ),
+    );
   } catch {
     throw UnauthorizedError("Invalid access token.");
   }
@@ -186,16 +244,15 @@ export async function authenticateSupabaseRequest(
   const role = configuration.adminEmails.has(identity.email)
     ? "admin"
     : "user";
-  try {
-    return await dependencies.synchronizeUser({
+  return observeRuntimeOperation(
+    "user_synchronization",
+    () => dependencies.synchronizeUser({
       authUserId: identity.authUserId,
       email: identity.email,
       name: identity.name,
       loginMethod: "google",
       role,
       lastSignedIn: dependencies.now(),
-    });
-  } catch {
-    throw ForbiddenError("Authentication failed.");
-  }
+    }),
+  );
 }

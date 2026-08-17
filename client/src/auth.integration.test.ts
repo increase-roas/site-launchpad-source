@@ -15,6 +15,8 @@ describe("active client authentication wiring", () => {
 
     expect(mainSource).toContain("getSupabaseBearerHeaders");
     expect(mainSource).toContain('credentials: "same-origin"');
+    expect(mainSource).toContain("API_REQUEST_TIMEOUT_MS");
+    expect(mainSource).toContain("fetchWithTimeout");
     expect(mainSource).not.toContain("sessionStorage");
     expect(mainSource).not.toContain("manus-cookie");
     expect(mainSource).not.toContain("startLogin");
@@ -22,6 +24,17 @@ describe("active client authentication wiring", () => {
     expect(useAuthSource).toContain("signOutAndClearAuth");
     expect(useAuthSource).not.toContain("manus-runtime-user-info");
     expect(useAuthSource).not.toContain("startLogin");
+  });
+
+  it("bounds clients.list without automatic retries and preserves the visible retry state", () => {
+    const homeSource = source("pages/Home.tsx");
+    const workspaceSource = source("contexts/WorkspaceContext.tsx");
+
+    for (const clientsListSource of [homeSource, workspaceSource]) {
+      expect(clientsListSource).toContain("retry: false");
+    }
+    expect(homeSource).toContain("Clients could not be loaded");
+    expect(homeSource).toContain("clientsQuery.refetch()");
   });
 
   it("routes the explicit callback outside the authenticated dashboard shell", () => {
@@ -54,5 +67,11 @@ describe("active client authentication wiring", () => {
       expect(previewSource).toContain("<img");
       expect(previewSource).not.toContain("AuthenticatedImage");
     }
+  });
+
+  it("keeps direct R2 upload requests credential-free", () => {
+    const uploadSource = source("lib/assetUpload.ts");
+
+    expect(uploadSource).toContain('credentials: "omit"');
   });
 });

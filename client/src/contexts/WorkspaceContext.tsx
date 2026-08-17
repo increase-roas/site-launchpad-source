@@ -20,7 +20,9 @@ const STORAGE_KEY = "site-launchpad-selected-client";
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [location] = useLocation();
-  const clientsQuery = trpc.clients.list.useQuery();
+  const clientsQuery = trpc.clients.list.useQuery(undefined, {
+    retry: false,
+  });
   const clients = clientsQuery.data ?? [];
   const [selectedClientId, setSelectedClientId] = useState<number | undefined>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);

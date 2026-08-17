@@ -5,7 +5,13 @@ import { createApp } from "./app";
 let appPromise: Promise<Express> | undefined;
 
 function getApp(): Promise<Express> {
-  appPromise ??= createApp({ mode: "production", serveClientAssets: false });
+  appPromise ??= createApp({
+    mode: "production",
+    serveClientAssets: false,
+  }).catch(error => {
+    appPromise = undefined;
+    throw error;
+  });
   return appPromise;
 }
 

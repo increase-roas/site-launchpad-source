@@ -12,6 +12,7 @@ type VercelRewrite = {
 
 type VercelConfig = {
   framework: null;
+  functions: Record<string, { maxDuration: number }>;
   outputDirectory: string;
   rewrites: VercelRewrite[];
 };
@@ -240,6 +241,9 @@ describe("Vercel production-equivalent routing", () => {
     const config = loadVercelConfig();
     expect(config.outputDirectory).toBe("dist/public");
     expect(config.framework).toBeNull();
+    expect(config.functions).toEqual({
+      "api/**/*.js": { maxDuration: 60 },
+    });
 
     expect(routeVercelRequest("/clients/new")).toEqual({
       kind: "spa",

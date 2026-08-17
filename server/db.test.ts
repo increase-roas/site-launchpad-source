@@ -21,7 +21,17 @@ import {
 
 describe("PostgreSQL runtime configuration", () => {
   it("uses transaction-pooler-safe options without exposing a URL", () => {
-    expect(POSTGRES_RUNTIME_OPTIONS).toEqual({ prepare: false, max: 1 });
+    expect(POSTGRES_RUNTIME_OPTIONS).toEqual({
+      prepare: false,
+      max: 1,
+      idle_timeout: 20,
+      connect_timeout: 10,
+      max_lifetime: 1_800,
+      connection: {
+        statement_timeout: 15_000,
+        idle_in_transaction_session_timeout: 30_000,
+      },
+    });
     expect(POSTGRES_RUNTIME_OPTIONS).not.toHaveProperty("url");
     expect(JSON.stringify(POSTGRES_RUNTIME_OPTIONS)).not.toContain("DATABASE_URL");
   });

@@ -1,5 +1,6 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
+import { HttpError } from "../../shared/_core/errors";
 import { authenticateSupabaseRequest } from "./supabaseAuth";
 
 export type TrpcContext = {
@@ -15,8 +16,15 @@ export async function createContext(
 
   try {
     user = await authenticateSupabaseRequest(opts.req);
-  } catch {
-    // Authentication is optional for public procedures.
+  } catch (error) {
+    if (
+      !(error instanceof HttpError) ||
+      (error.statusCode !== 401 && error.statusCode !== 403)
+    ) {
+      throw error;
+    }
+    // Missing, invalid, or disallowed authentication stays optional for
+    // public procedures. Runtime/database failures remain visible.
     user = null;
   }
 

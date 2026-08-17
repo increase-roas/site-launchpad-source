@@ -148,6 +148,34 @@ describe("client launch gating", () => {
     expect(detail.readiness.isComplete).toBe(false);
   });
 
+  it("classifies clients.list database failures without logging sensitive details", async () => {
+    const unsafeDetail =
+      "postgresql://private-user:private-password@private-host/database";
+    mocks.listClients.mockRejectedValueOnce(
+      Object.assign(new Error(unsafeDetail), {
+        code: "CONNECT_TIMEOUT",
+      }),
+    );
+    const logError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const caller = appRouter.createCaller(createContext());
+
+      await expect(caller.clients.list()).rejects.toThrow(unsafeDetail);
+
+      expect(logError).toHaveBeenCalledWith(
+        "[RuntimeOperation]",
+        expect.objectContaining({
+          operation: "clients_list_database",
+          outcome: "failure",
+          classification: "database_connection",
+        }),
+      );
+      expect(JSON.stringify(logError.mock.calls)).not.toContain(unsafeDetail);
+    } finally {
+      logError.mockRestore();
+    }
+  });
+
   it("creates a client without redundantly seeding after the transactional create", async () => {
     const caller = appRouter.createCaller(createContext());
     await caller.clients.create({ details: detailsInput, setup: setupInput });

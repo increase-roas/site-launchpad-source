@@ -7,7 +7,9 @@ import { useLocation } from "wouter";
 
 export default function Home() {
   const [, setLocation] = useLocation();
-  const clientsQuery = trpc.clients.list.useQuery();
+  const clientsQuery = trpc.clients.list.useQuery(undefined, {
+    retry: false,
+  });
   const clientViews = clientsQuery.data ?? [];
   const readyCount = clientViews.filter(
     view => view.client.status === "ready" || view.client.status === "live",

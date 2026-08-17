@@ -20,23 +20,108 @@ import {
   requireSinglePositiveId,
   withUpdatedAt,
 } from "./postgresPersistence";
+import { classifyRuntimeError } from "./_core/operationTelemetry";
 import { UpdateConflictError } from "./trpcErrors";
 import { seedWorkspaceDefaults, type WorkspaceSeedClient } from "./workspaceSeed";
 
-let _db: ReturnType<typeof drizzle> | null = null;
+type Database = ReturnType<typeof drizzle>;
+type DatabaseClient = ReturnType<typeof postgres>;
+
+type DatabaseRuntime = {
+  client: DatabaseClient;
+  db: Database;
+};
+
+let databaseRuntime: DatabaseRuntime | null = null;
 
 export const POSTGRES_RUNTIME_OPTIONS = {
   prepare: false,
   max: 1,
+  idle_timeout: 20,
+  connect_timeout: 10,
+  max_lifetime: 1_800,
+  connection: {
+    statement_timeout: 15_000,
+    idle_in_transaction_session_timeout: 30_000,
+  },
 } as const;
+
+export const DATABASE_OPERATION_TIMEOUT_MS = 20_000;
+
+export class DatabaseOperationTimeoutError extends Error {
+  readonly code = "DATABASE_OPERATION_TIMEOUT";
+
+  constructor(readonly operation: string) {
+    super("The database operation exceeded its deadline.");
+    this.name = "DatabaseOperationTimeoutError";
+  }
+}
+
+function getDatabaseRuntime(): DatabaseRuntime | null {
+  if (!databaseRuntime && process.env.DATABASE_URL) {
+    const client = postgres(
+      process.env.DATABASE_URL,
+      POSTGRES_RUNTIME_OPTIONS,
+    );
+    databaseRuntime = {
+      client,
+      db: drizzle(client),
+    };
+  }
+  return databaseRuntime;
+}
+
+async function discardDatabaseRuntime(runtime: DatabaseRuntime): Promise<void> {
+  if (databaseRuntime !== runtime) {
+    return;
+  }
+  databaseRuntime = null;
+  try {
+    await runtime.client.end({ timeout: 0 });
+  } catch (error) {
+    console.error("[DatabaseRuntime]", {
+      outcome: "close_failure",
+      classification: classifyRuntimeError(error),
+    });
+  }
+}
+
+async function runDatabaseOperation<T>(
+  operationName: string,
+  operation: (database: Database) => Promise<T>,
+): Promise<T> {
+  const runtime = getDatabaseRuntime();
+  if (!runtime) {
+    throw new Error("Database is not available.");
+  }
+
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      reject(new DatabaseOperationTimeoutError(operationName));
+    }, DATABASE_OPERATION_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([
+      Promise.resolve().then(() => operation(runtime.db)),
+      deadline,
+    ]);
+  } catch (error) {
+    if (error instanceof DatabaseOperationTimeoutError) {
+      await discardDatabaseRuntime(runtime);
+    }
+    throw error;
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
+}
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    const client = postgres(process.env.DATABASE_URL, POSTGRES_RUNTIME_OPTIONS);
-    _db = drizzle(client);
-  }
-  return _db;
+  return getDatabaseRuntime()?.db ?? null;
 }
 
 export type UserSyncInput = Pick<
@@ -86,17 +171,9 @@ export async function upsertUserWithDb(
 }
 
 export async function upsertUser(user: UserSyncInput): Promise<User> {
-  const db = await getDb();
-  if (!db) {
-    throw new Error("Database is not available.");
-  }
-
-  try {
-    return await upsertUserWithDb(db, user);
-  } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
-    throw error;
-  }
+  return runDatabaseOperation("user_synchronization", database =>
+    upsertUserWithDb(database, user),
+  );
 }
 
 async function requireDb() {
@@ -106,8 +183,9 @@ async function requireDb() {
 }
 
 export async function listClients(): Promise<Client[]> {
-  const db = await requireDb();
-  return db.select().from(clients).orderBy(desc(clients.updatedAt));
+  return runDatabaseOperation("clients_list_database", database =>
+    database.select().from(clients).orderBy(desc(clients.updatedAt)),
+  );
 }
 
 export async function getClientById(clientId: number): Promise<Client | undefined> {
@@ -147,13 +225,15 @@ export async function updateClient(
 }
 
 export async function listClientAssets(): Promise<ClientAsset[]> {
-  const db = await requireDb();
-  return db.select().from(clientAssets);
+  return runDatabaseOperation("clients_list_database", database =>
+    database.select().from(clientAssets),
+  );
 }
 
 export async function listClientSecretSetups(): Promise<ClientSecretSetup[]> {
-  const db = await requireDb();
-  return db.select().from(clientSecretSetups);
+  return runDatabaseOperation("clients_list_database", database =>
+    database.select().from(clientSecretSetups),
+  );
 }
 
 export async function getClientAssets(clientId: number): Promise<ClientAsset[]> {

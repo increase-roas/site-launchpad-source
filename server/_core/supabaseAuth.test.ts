@@ -65,6 +65,21 @@ describe("Supabase request authentication", () => {
     expect(dependencies.synchronizeUser).not.toHaveBeenCalled();
   });
 
+  it("requires Supabase configuration when a Bearer token is present", async () => {
+    const dependencies = createDependencies({
+      environment: {},
+    });
+
+    await expect(
+      authenticateSupabaseRequest(
+        requestWithAuthorization("Bearer signed-token"),
+        dependencies,
+      ),
+    ).rejects.toThrow("VITE_SUPABASE_URL is required.");
+    expect(dependencies.verifyToken).not.toHaveBeenCalled();
+    expect(dependencies.synchronizeUser).not.toHaveBeenCalled();
+  });
+
   it.each([
     "Basic token",
     "Bearer",
@@ -101,6 +116,38 @@ describe("Supabase request authentication", () => {
       expect(dependencies.synchronizeUser).not.toHaveBeenCalled();
     },
   );
+
+  it("bounds token verification with a ten-second AbortSignal deadline", async () => {
+    vi.useFakeTimers();
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+    try {
+      const dependencies = createDependencies({
+        verifyToken: vi.fn(() => new Promise(() => undefined)),
+      });
+      const completion = vi.fn();
+      void authenticateSupabaseRequest(
+        requestWithAuthorization("Bearer signed-token"),
+        dependencies,
+      ).then(
+        () => completion("resolved"),
+        error => completion(error),
+      );
+
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect(timeoutSpy).toHaveBeenCalledWith(10_000);
+      expect(completion).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 401,
+          message: "Invalid access token.",
+        }),
+      );
+      expect(dependencies.synchronizeUser).not.toHaveBeenCalled();
+    } finally {
+      timeoutSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
 
   it("rejects a token from the wrong Supabase issuer or project", async () => {
     const dependencies = createDependencies({
@@ -321,9 +368,10 @@ describe("Supabase request authentication", () => {
   });
 
   it("denies the request when database synchronization fails", async () => {
+    const synchronizationFailure = new Error("database unavailable");
     const dependencies = createDependencies({
       synchronizeUser: vi.fn(async () => {
-        throw new Error("database unavailable");
+        throw synchronizationFailure;
       }),
     });
 
@@ -332,6 +380,6 @@ describe("Supabase request authentication", () => {
         requestWithAuthorization("Bearer signed-token"),
         dependencies,
       ),
-    ).rejects.toThrow(/authentication failed/i);
+    ).rejects.toBe(synchronizationFailure);
   });
 });

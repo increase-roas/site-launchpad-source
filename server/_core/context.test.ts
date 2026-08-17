@@ -1,4 +1,5 @@
 import type { User } from "../../drizzle/schema";
+import { UnauthorizedError } from "../../shared/_core/errors";
 import { describe, expect, it, vi } from "vitest";
 
 const authMocks = vi.hoisted(() => ({
@@ -35,9 +36,9 @@ describe("tRPC Supabase authentication context", () => {
     expect(context.user).toBe(user);
   });
 
-  it("keeps public procedures anonymous when authentication fails", async () => {
+  it("keeps public procedures anonymous for an unauthenticated request", async () => {
     authMocks.authenticateSupabaseRequest.mockRejectedValueOnce(
-      new Error("Invalid access token."),
+      UnauthorizedError("Invalid access token."),
     );
 
     const context = await createContext({
@@ -46,5 +47,19 @@ describe("tRPC Supabase authentication context", () => {
     } as never);
 
     expect(context.user).toBeNull();
+  });
+
+  it("propagates user synchronization failures instead of treating them as anonymous", async () => {
+    const synchronizationFailure = new Error("database unavailable");
+    authMocks.authenticateSupabaseRequest.mockRejectedValueOnce(
+      synchronizationFailure,
+    );
+
+    await expect(
+      createContext({
+        req: { headers: { authorization: "Bearer signed-token" } },
+        res: {},
+      } as never),
+    ).rejects.toBe(synchronizationFailure);
   });
 });

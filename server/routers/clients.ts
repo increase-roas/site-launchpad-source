@@ -26,6 +26,7 @@ import {
   updateClient,
 } from "../db";
 import { encryptSetupValue, hasProtectedValue } from "../clientSecurity";
+import { observeRuntimeOperation } from "../_core/operationTelemetry";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { UpdateConflictError, isDuplicateKeyError } from "../trpcErrors";
 import type { Client, ClientAsset } from "../../drizzle/schema";
@@ -91,11 +92,15 @@ export async function getClientView(clientId: number) {
 
 export const clientsRouter = router({
   list: protectedProcedure.query(async () => {
-    const [rows, assets, secretRows] = await Promise.all([
-      listClients(),
-      listClientAssets(),
-      listClientSecretSetups(),
-    ]);
+    const [rows, assets, secretRows] = await observeRuntimeOperation(
+      "clients_list_database",
+      () =>
+        Promise.all([
+          listClients(),
+          listClientAssets(),
+          listClientSecretSetups(),
+        ]),
+    );
     const assetsByClient = new Map<number, ClientAsset[]>();
     for (const asset of assets) {
       const current = assetsByClient.get(asset.clientId) ?? [];

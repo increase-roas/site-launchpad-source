@@ -1,6 +1,7 @@
 import { getSupabaseBearerHeaders } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
+import { fetchWithTimeout } from "@shared/requestTimeout";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import { createRoot } from "react-dom/client";
@@ -8,6 +9,7 @@ import superjson from "superjson";
 import App from "./App";
 import "./index.css";
 
+const API_REQUEST_TIMEOUT_MS = 45_000;
 const queryClient = new QueryClient();
 
 queryClient.getQueryCache().subscribe(event => {
@@ -33,10 +35,15 @@ const trpcClient = trpc.createClient({
         return await getSupabaseBearerHeaders(supabase.auth);
       },
       fetch(input, init) {
-        return globalThis.fetch(input, {
-          ...(init ?? {}),
-          credentials: "same-origin",
-        });
+        return fetchWithTimeout(
+          globalThis.fetch,
+          input,
+          {
+            ...(init ?? {}),
+            credentials: "same-origin",
+          },
+          API_REQUEST_TIMEOUT_MS,
+        );
       },
     }),
   ],
