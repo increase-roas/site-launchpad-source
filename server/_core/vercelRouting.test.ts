@@ -101,12 +101,12 @@ function matchApiFunction(pathname: string): string | null {
     ? readdirSync(API_DIRECTORY).filter(name => !name.startsWith("_") && !name.startsWith("."))
     : [];
 
-  if ((pathname === "/api" || pathname === "/api/") && files.includes("index.ts")) {
-    return "api/index.ts";
+  if ((pathname === "/api" || pathname === "/api/") && files.includes("index.js")) {
+    return "api/index.js";
   }
 
-  if (pathname.startsWith("/api/") && pathname !== "/api/" && files.includes("[...path].ts")) {
-    return "api/[...path].ts";
+  if (pathname.startsWith("/api/") && pathname !== "/api/" && files.includes("[...path].js")) {
+    return "api/[...path].js";
   }
 
   return null;
@@ -140,7 +140,7 @@ function routeVercelRequest(
     }
     return {
       kind: "function",
-      file: matchApiFunction(applied.pathname) ?? "api/index.ts",
+      file: matchApiFunction(applied.pathname) ?? "api/index.js",
       url: `${applied.pathname}${applied.search}`,
     };
   }
@@ -228,7 +228,7 @@ describe("Vercel production-equivalent routing", () => {
     const exactApi = routeVercelRequest("/api");
     expect(exactApi.kind).toBe("function");
     if (exactApi.kind === "function") {
-      expect(exactApi.file).toBe("api/index.ts");
+      expect(exactApi.file).toBe("api/index.js");
       expect(exactApi.url).toBe("/api");
       const { response } = await dispatchToExpress(exactApi.url);
       expect(response.status).toBe(404);

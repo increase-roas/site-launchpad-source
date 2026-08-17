@@ -1,5 +1,6 @@
-import type { Express, Request, Response } from "express";
-import { createApp } from "../server/_core/app";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import type { Express } from "express";
+import { createApp } from "./app";
 
 let appPromise: Promise<Express> | undefined;
 
@@ -9,8 +10,8 @@ function getApp(): Promise<Express> {
 }
 
 export default async function handler(
-  request: Request,
-  response: Response,
+  request: IncomingMessage,
+  response: ServerResponse,
 ): Promise<void> {
   const app = await getApp();
   app(request, response);

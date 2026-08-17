@@ -206,7 +206,7 @@ describe("Vercel handler", () => {
     const netListen = vi.spyOn(NetServer.prototype, "listen");
 
     try {
-      const apiModule = await import("../../api/index");
+      const apiModule = await import("./vercelApiHandler");
 
       expect(apiModule.default).toBeTypeOf("function");
       expect(expressListen).not.toHaveBeenCalled();
