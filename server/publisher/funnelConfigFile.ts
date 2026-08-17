@@ -1,13 +1,13 @@
 import {
   simpleFormOperatorConfigSchema,
-  type SimpleFormValidatedConfiguration,
+  type SimpleFormOperatorConfig,
 } from "../../shared/simpleFormConfig";
 
 export const SAFE_GHL_WEBHOOK_PLACEHOLDER =
   "https://example.invalid/ghl-webhook";
 
 export function renderFunnelConfigTs(
-  configuration: SimpleFormValidatedConfiguration
+  configuration: SimpleFormOperatorConfig
 ): string {
   const publicConfiguration =
     simpleFormOperatorConfigSchema.parse(configuration);

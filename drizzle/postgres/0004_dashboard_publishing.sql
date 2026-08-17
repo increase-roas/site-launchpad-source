@@ -1,5 +1,5 @@
 CREATE TYPE "public"."funnel_publish_status" AS ENUM('pending', 'running', 'failed', 'published');--> statement-breakpoint
-CREATE TYPE "public"."funnel_publish_step" AS ENUM('create_repository', 'commit_source', 'configure_cloudflare', 'dispatch_workflow', 'locate_workflow', 'monitor_workflow', 'published');--> statement-breakpoint
+CREATE TYPE "public"."funnel_publish_step" AS ENUM('create_repository', 'ensure_kv_namespace', 'ensure_d1_database', 'ensure_queues', 'commit_source', 'dispatch_workflow', 'monitor_workflow', 'patch_runtime_secrets', 'get_live_url', 'published');--> statement-breakpoint
 CREATE TABLE "funnelPublishes" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"clientId" integer NOT NULL,
@@ -14,12 +14,17 @@ CREATE TABLE "funnelPublishes" (
 	"repositoryFullName" varchar(240),
 	"repositoryUrl" varchar(1000),
 	"defaultBranch" varchar(120),
+	"kvNamespaceId" varchar(120),
+	"d1DatabaseId" varchar(120),
+	"primaryQueueId" varchar(120),
+	"deadLetterQueueId" varchar(120),
 	"commitSha" varchar(120),
 	"liveUrl" varchar(1000),
 	"dispatchRequestedAt" timestamp with time zone,
 	"workflowRunId" varchar(120),
 	"workflowStatus" varchar(80),
 	"workflowCheckedAt" timestamp with time zone,
+	"runtimeSecretsPatchedAt" timestamp with time zone,
 	"leaseToken" uuid,
 	"leaseUntil" timestamp with time zone,
 	"lastError" text,

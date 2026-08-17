@@ -77,6 +77,12 @@ function setPublishValues(
   }
   if ("repositoryUrl" in values) target.repositoryUrl = values.repositoryUrl;
   if ("defaultBranch" in values) target.defaultBranch = values.defaultBranch;
+  if ("kvNamespaceId" in values) target.kvNamespaceId = values.kvNamespaceId;
+  if ("d1DatabaseId" in values) target.d1DatabaseId = values.d1DatabaseId;
+  if ("primaryQueueId" in values) target.primaryQueueId = values.primaryQueueId;
+  if ("deadLetterQueueId" in values) {
+    target.deadLetterQueueId = values.deadLetterQueueId;
+  }
   if ("commitSha" in values) target.commitSha = values.commitSha;
   if ("liveUrl" in values) target.liveUrl = values.liveUrl;
   if ("dispatchRequestedAt" in values) {
@@ -88,6 +94,9 @@ function setPublishValues(
   }
   if ("workflowCheckedAt" in values) {
     target.workflowCheckedAt = values.workflowCheckedAt;
+  }
+  if ("runtimeSecretsPatchedAt" in values) {
+    target.runtimeSecretsPatchedAt = values.runtimeSecretsPatchedAt;
   }
 }
 

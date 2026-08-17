@@ -17,6 +17,11 @@ describe("funnel publish job schema", () => {
     expect(columns.leaseUntil?.notNull).toBe(false);
     expect(columns.dispatchRequestedAt?.notNull).toBe(false);
     expect(columns.workflowRunId?.notNull).toBe(false);
+    expect(columns.kvNamespaceId?.notNull).toBe(false);
+    expect(columns.d1DatabaseId?.notNull).toBe(false);
+    expect(columns.primaryQueueId?.notNull).toBe(false);
+    expect(columns.deadLetterQueueId?.notNull).toBe(false);
+    expect(columns.runtimeSecretsPatchedAt?.notNull).toBe(false);
     expect(indexes).toEqual(
       expect.arrayContaining([
         "funnel_publishes_funnel_unique",

@@ -213,6 +213,37 @@ describe("GitHub publisher client", () => {
     expect(requests.some(request => request.url.includes("/runs"))).toBe(false);
   });
 
+  it("looks up only the persisted workflow run id", async () => {
+    const { fetchFn, requests } = createMockFetch([
+      jsonResponse({
+        id: 987654321,
+        status: "completed",
+        conclusion: "success",
+      }),
+    ]);
+    const client = createGitHubApiClient({
+      token: "opaque-test-credential",
+      fetchFn,
+    });
+
+    await expect(
+      client.getWorkflowRun({
+        owner: "customer-repositories",
+        repository: "northland-simple-form",
+        workflowRunId: 987654321,
+      })
+    ).resolves.toEqual({
+      id: 987654321,
+      status: "completed",
+      conclusion: "success",
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({
+      url: "https://api.github.com/repos/customer-repositories/northland-simple-form/actions/runs/987654321",
+      init: { method: "GET" },
+    });
+  });
+
   it("rejects an untyped dispatch response without exposing its body", async () => {
     const unsafeResponseValue = "opaque-response-value";
     const { fetchFn } = createMockFetch([

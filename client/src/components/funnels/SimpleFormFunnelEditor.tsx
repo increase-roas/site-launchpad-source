@@ -28,12 +28,7 @@ import {
   Rocket,
   Save,
 } from "lucide-react";
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 type PublishStateLike = {
@@ -42,7 +37,7 @@ type PublishStateLike = {
 };
 
 export function publishActionLabel(
-  publish: PublishStateLike | null,
+  publish: PublishStateLike | null
 ): "Publish" | "Retry" | null {
   if (!publish) return "Publish";
   if (publish.status === "published") return null;
@@ -50,12 +45,12 @@ export function publishActionLabel(
 }
 
 export function shouldAutoAdvancePublish(
-  publish: PublishStateLike | null,
+  publish: PublishStateLike | null
 ): boolean {
   return Boolean(
     publish &&
       (publish.status === "pending" || publish.status === "running") &&
-      publish.step !== "published",
+      publish.step !== "published"
   );
 }
 
@@ -66,7 +61,7 @@ export function publishProgressPercent(progress: {
   if (progress.total <= 0) return 0;
   return Math.min(
     100,
-    Math.max(0, Math.round((progress.completed / progress.total) * 100)),
+    Math.max(0, Math.round((progress.completed / progress.total) * 100))
   );
 }
 
@@ -74,16 +69,22 @@ function publishStepLabel(step: FunnelPublishStep): string {
   switch (step) {
     case "create_repository":
       return "Creating repository";
+    case "ensure_kv_namespace":
+      return "Configuring session storage";
+    case "ensure_d1_database":
+      return "Configuring funnel database";
+    case "ensure_queues":
+      return "Configuring retry queues";
     case "commit_source":
       return "Committing generated source";
-    case "configure_cloudflare":
-      return "Configuring Cloudflare";
     case "dispatch_workflow":
       return "Starting deployment workflow";
-    case "locate_workflow":
-      return "Waiting for workflow";
     case "monitor_workflow":
       return "Monitoring deployment";
+    case "patch_runtime_secrets":
+      return "Installing runtime secrets";
+    case "get_live_url":
+      return "Checking workers.dev";
     case "published":
       return "Published";
     default: {
@@ -106,7 +107,11 @@ function Field({
     <label className="block space-y-2">
       <span className="text-sm font-extrabold">{label}</span>
       {children}
-      {hint ? <span className="block text-xs font-semibold text-muted-foreground">{hint}</span> : null}
+      {hint ? (
+        <span className="block text-xs font-semibold text-muted-foreground">
+          {hint}
+        </span>
+      ) : null}
     </label>
   );
 }
@@ -146,13 +151,17 @@ function SecretField({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="font-extrabold">{guide.friendlyName}</p>
-          <p className="mt-1 font-mono text-xs text-cyan-300">{guide.runtimeKey}</p>
+          <p className="mt-1 font-mono text-xs text-cyan-300">
+            {guide.runtimeKey}
+          </p>
         </div>
         <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground">
           {requirement}
         </span>
       </div>
-      <p className="text-sm font-medium text-muted-foreground">Required for: {guide.requiredFor}</p>
+      <p className="text-sm font-medium text-muted-foreground">
+        Required for: {guide.requiredFor}
+      </p>
       {guide.requirement === "generated" ? (
         extra
       ) : (
@@ -161,13 +170,19 @@ function SecretField({
           autoComplete="off"
           value={value}
           onChange={event => onChange(event.target.value)}
-          placeholder={present ? "Saved — paste a new value to replace" : "Paste value"}
+          placeholder={
+            present ? "Saved — paste a new value to replace" : "Paste value"
+          }
           className="h-12 rounded-xl border-white/10 bg-white/[0.035] font-mono text-sm"
         />
       )}
       <div>
-        <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-muted-foreground">Where do I find this?</p>
-        <p className="mt-1 text-sm font-medium leading-relaxed text-muted-foreground">{guide.whereToFind}</p>
+        <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-muted-foreground">
+          Where do I find this?
+        </p>
+        <p className="mt-1 text-sm font-medium leading-relaxed text-muted-foreground">
+          {guide.whereToFind}
+        </p>
         <a
           href={guide.docsUrl}
           target="_blank"
@@ -202,7 +217,14 @@ function ImageSourcePicker({
         value={source.mode}
         onValueChange={value => {
           if (value === "template") onChange({ mode: "template" });
-          else onChange({ mode: "client-media", slot: source.mode === "client-media" ? source.slot : assets[0]?.slot ?? "logo" });
+          else
+            onChange({
+              mode: "client-media",
+              slot:
+                source.mode === "client-media"
+                  ? source.slot
+                  : (assets[0]?.slot ?? "logo"),
+            });
         }}
         className="gap-3"
       >
@@ -210,7 +232,11 @@ function ImageSourcePicker({
           <RadioGroupItem value="template" />
           <div className="min-w-0 flex-1">
             <p className="font-extrabold">Use Template Default</p>
-            <img src={previewUrl} alt="" className="mt-3 max-h-28 rounded-lg object-cover" />
+            <img
+              src={previewUrl}
+              alt=""
+              className="mt-3 max-h-28 rounded-lg object-cover"
+            />
           </div>
         </label>
         <label className="flex items-start gap-3 rounded-xl border border-white/8 p-3">
@@ -218,12 +244,18 @@ function ImageSourcePicker({
           <div className="min-w-0 flex-1 space-y-2">
             <p className="font-extrabold">Use Client Media</p>
             {assets.length === 0 ? (
-              <p className="text-sm font-medium text-muted-foreground">Upload a photo in Media first.</p>
+              <p className="text-sm font-medium text-muted-foreground">
+                Upload a photo in Media first.
+              </p>
             ) : (
               <select
                 className="h-11 w-full rounded-xl border border-white/10 bg-white/[0.035] px-3 text-sm font-bold"
-                value={source.mode === "client-media" ? source.slot : assets[0]?.slot}
-                onChange={event => onChange({ mode: "client-media", slot: event.target.value })}
+                value={
+                  source.mode === "client-media" ? source.slot : assets[0]?.slot
+                }
+                onChange={event =>
+                  onChange({ mode: "client-media", slot: event.target.value })
+                }
               >
                 {assets.map(asset => (
                   <option key={asset.slot} value={asset.slot}>
@@ -252,7 +284,7 @@ export function SimpleFormFunnelEditor({
   const query = trpc.simpleForm.get.useQuery({ clientId, funnelId });
   const publishQuery = trpc.simpleForm.publishStatus.useQuery(
     { clientId, funnelId },
-    { refetchInterval: 3_000 },
+    { refetchInterval: 3_000 }
   );
   const [record, setRecord] = useState<SimpleFormStoredRecord | null>(null);
   const [zipText, setZipText] = useState("");
@@ -321,8 +353,7 @@ export function SimpleFormFunnelEditor({
     const delay =
       activePublish.status === "running"
         ? 3_000
-        : activePublish.step === "locate_workflow" ||
-            activePublish.step === "monitor_workflow"
+        : activePublish.step === "monitor_workflow"
           ? 2_000
           : 0;
     const timeout = window.setTimeout(() => {
@@ -345,14 +376,16 @@ export function SimpleFormFunnelEditor({
 
   const readiness = query.data?.readiness;
   const assets = query.data?.assets ?? [];
-  const guides = useMemo(() => query.data?.secretGuides ?? [], [query.data?.secretGuides]);
+  const guides = useMemo(
+    () => query.data?.secretGuides ?? [],
+    [query.data?.secretGuides]
+  );
   const publishAction =
     activePublish && shouldAutoAdvancePublish(activePublish)
       ? null
       : publishActionLabel(publish);
-  const publishBusy =
-    startPublishMutation.isPending || publishAdvancePending;
-  const progress = publish?.progress ?? { completed: 0, total: 6 };
+  const publishBusy = startPublishMutation.isPending || publishAdvancePending;
+  const progress = publish?.progress ?? { completed: 0, total: 9 };
 
   if (query.isLoading || !record || !config) {
     return (
@@ -363,13 +396,21 @@ export function SimpleFormFunnelEditor({
   }
 
   if (query.error) {
-    return <div className="rounded-2xl border border-red-400/20 p-5 font-bold text-red-200">{query.error.message}</div>;
+    return (
+      <div className="rounded-2xl border border-red-400/20 p-5 font-bold text-red-200">
+        {query.error.message}
+      </div>
+    );
   }
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-extrabold text-muted-foreground hover:text-foreground">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex items-center gap-2 text-sm font-extrabold text-muted-foreground hover:text-foreground"
+        >
           <ArrowLeft className="h-4 w-4" />
           All funnels
         </button>
@@ -391,7 +432,11 @@ export function SimpleFormFunnelEditor({
           }
           className="h-11 gap-2 rounded-xl bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
         >
-          {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {saveMutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
           Save settings
         </Button>
       </div>
@@ -399,12 +444,18 @@ export function SimpleFormFunnelEditor({
       <section className="rounded-2xl border border-white/8 bg-card/70 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-300">Readiness</p>
-            <h2 className="mt-1 text-2xl font-extrabold">{query.data?.funnel.name}</h2>
+            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-300">
+              Readiness
+            </p>
+            <h2 className="mt-1 text-2xl font-extrabold">
+              {query.data?.funnel.name}
+            </h2>
           </div>
           <div className="text-right">
             <p className="text-sm font-extrabold text-cyan-300">
-              {readiness?.configurationReady ? "CONFIGURATION READY" : "Not ready"}
+              {readiness?.configurationReady
+                ? "CONFIGURATION READY"
+                : "Not ready"}
             </p>
             <p className="text-xs font-bold text-muted-foreground">
               {publish ? publishStepLabel(publish.step) : "Not published"}
@@ -489,7 +540,10 @@ export function SimpleFormFunnelEditor({
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {(readiness?.sections ?? []).map(section => (
-            <div key={section.key} className="rounded-xl border border-white/8 p-4">
+            <div
+              key={section.key}
+              className="rounded-xl border border-white/8 p-4"
+            >
               <div className="flex items-center justify-between gap-3">
                 <p className="font-extrabold">{section.label}</p>
                 {section.ready ? (
@@ -497,7 +551,9 @@ export function SimpleFormFunnelEditor({
                     <CheckCircle2 className="h-4 w-4" /> Ready
                   </span>
                 ) : (
-                  <span className="text-sm font-extrabold text-amber-200">Missing</span>
+                  <span className="text-sm font-extrabold text-amber-200">
+                    Missing
+                  </span>
                 )}
               </div>
               {!section.ready ? (
@@ -516,14 +572,22 @@ export function SimpleFormFunnelEditor({
         <Field label="Business name shown on the funnel">
           <Input
             value={config.client.name}
-            onChange={event => patchConfig({ client: { ...config.client, name: event.target.value } })}
+            onChange={event =>
+              patchConfig({
+                client: { ...config.client, name: event.target.value },
+              })
+            }
             className="h-12 rounded-xl border-white/10 bg-white/[0.035]"
           />
         </Field>
         <Field label="Phone" hint="International format, such as +17015551234">
           <Input
             value={config.client.phone}
-            onChange={event => patchConfig({ client: { ...config.client, phone: event.target.value } })}
+            onChange={event =>
+              patchConfig({
+                client: { ...config.client, phone: event.target.value },
+              })
+            }
             className="h-12 rounded-xl border-white/10 bg-white/[0.035]"
           />
         </Field>
@@ -532,7 +596,12 @@ export function SimpleFormFunnelEditor({
           source={record.imageSources.logo}
           previewUrl={SIMPLE_FORM_TEMPLATE_LOGO_URL}
           assets={assets}
-          onChange={logo => setRecord({ ...record, imageSources: { ...record.imageSources, logo } })}
+          onChange={logo =>
+            setRecord({
+              ...record,
+              imageSources: { ...record.imageSources, logo },
+            })
+          }
         />
       </Section>
 
@@ -540,14 +609,22 @@ export function SimpleFormFunnelEditor({
         <Field label="Headline">
           <Input
             value={config.offer.headline}
-            onChange={event => patchConfig({ offer: { ...config.offer, headline: event.target.value } })}
+            onChange={event =>
+              patchConfig({
+                offer: { ...config.offer, headline: event.target.value },
+              })
+            }
             className="h-12 rounded-xl border-white/10 bg-white/[0.035]"
           />
         </Field>
         <Field label="Subheadline">
           <Textarea
             value={config.offer.subheadline}
-            onChange={event => patchConfig({ offer: { ...config.offer, subheadline: event.target.value } })}
+            onChange={event =>
+              patchConfig({
+                offer: { ...config.offer, subheadline: event.target.value },
+              })
+            }
             className="min-h-24 rounded-xl border-white/10 bg-white/[0.035]"
           />
         </Field>
@@ -555,7 +632,12 @@ export function SimpleFormFunnelEditor({
           <Input
             value={config.funnel.qualifyingLine}
             onChange={event =>
-              patchConfig({ funnel: { ...config.funnel, qualifyingLine: event.target.value } })
+              patchConfig({
+                funnel: {
+                  ...config.funnel,
+                  qualifyingLine: event.target.value,
+                },
+              })
             }
             className="h-12 rounded-xl border-white/10 bg-white/[0.035]"
           />
@@ -563,21 +645,33 @@ export function SimpleFormFunnelEditor({
         <Field label="Contact headline">
           <Textarea
             value={config.contact.headline}
-            onChange={event => patchConfig({ contact: { ...config.contact, headline: event.target.value } })}
+            onChange={event =>
+              patchConfig({
+                contact: { ...config.contact, headline: event.target.value },
+              })
+            }
             className="min-h-24 rounded-xl border-white/10 bg-white/[0.035]"
           />
         </Field>
         <Field label="Thank-you headline">
           <Input
             value={config.thankYou.headline}
-            onChange={event => patchConfig({ thankYou: { ...config.thankYou, headline: event.target.value } })}
+            onChange={event =>
+              patchConfig({
+                thankYou: { ...config.thankYou, headline: event.target.value },
+              })
+            }
             className="h-12 rounded-xl border-white/10 bg-white/[0.035]"
           />
         </Field>
         <Field label="Thank-you message">
           <Textarea
             value={config.thankYou.message}
-            onChange={event => patchConfig({ thankYou: { ...config.thankYou, message: event.target.value } })}
+            onChange={event =>
+              patchConfig({
+                thankYou: { ...config.thankYou, message: event.target.value },
+              })
+            }
             className="min-h-24 rounded-xl border-white/10 bg-white/[0.035]"
           />
         </Field>
@@ -591,34 +685,57 @@ export function SimpleFormFunnelEditor({
             className="min-h-36 rounded-xl border-white/10 bg-white/[0.035] font-mono"
           />
         </Field>
-        <Field label="ZIP results headline" hint="Must include {city} and {state}">
+        <Field
+          label="ZIP results headline"
+          hint="Must include {city} and {state}"
+        >
           <Input
             value={config.geoH1Template}
-            onChange={event => patchConfig({ geoH1Template: event.target.value })}
+            onChange={event =>
+              patchConfig({ geoH1Template: event.target.value })
+            }
             className="h-12 rounded-xl border-white/10 bg-white/[0.035]"
           />
         </Field>
         <Field label="Out of area headline">
           <Input
             value={config.outOfArea.headline}
-            onChange={event => patchConfig({ outOfArea: { ...config.outOfArea, headline: event.target.value } })}
+            onChange={event =>
+              patchConfig({
+                outOfArea: {
+                  ...config.outOfArea,
+                  headline: event.target.value,
+                },
+              })
+            }
             className="h-12 rounded-xl border-white/10 bg-white/[0.035]"
           />
         </Field>
         <Field label="Out of area message">
           <Textarea
             value={config.outOfArea.message}
-            onChange={event => patchConfig({ outOfArea: { ...config.outOfArea, message: event.target.value } })}
+            onChange={event =>
+              patchConfig({
+                outOfArea: { ...config.outOfArea, message: event.target.value },
+              })
+            }
             className="min-h-24 rounded-xl border-white/10 bg-white/[0.035]"
           />
         </Field>
       </Section>
 
       <Section title="Meta">
-        <Field label="Meta Pixel ID" hint="This is config, not a secret. Numbers only.">
+        <Field
+          label="Meta Pixel ID"
+          hint="This is config, not a secret. Numbers only."
+        >
           <Input
             value={config.meta.pixelId}
-            onChange={event => patchConfig({ meta: { ...config.meta, pixelId: event.target.value } })}
+            onChange={event =>
+              patchConfig({
+                meta: { ...config.meta, pixelId: event.target.value },
+              })
+            }
             className="h-12 rounded-xl border-white/10 bg-white/[0.035] font-mono"
           />
         </Field>
@@ -629,21 +746,33 @@ export function SimpleFormFunnelEditor({
             value={config.meta.defaultConversionValue}
             onChange={event =>
               patchConfig({
-                meta: { ...config.meta, defaultConversionValue: Number(event.target.value) || 0 },
+                meta: {
+                  ...config.meta,
+                  defaultConversionValue: Number(event.target.value) || 0,
+                },
               })
             }
             className="h-12 rounded-xl border-white/10 bg-white/[0.035]"
           />
         </Field>
         {guides
-          .filter(guide => guide.runtimeKey === "META_CAPI_ACCESS_TOKEN" || guide.runtimeKey === "META_TEST_EVENT_CODE")
+          .filter(
+            guide =>
+              guide.runtimeKey === "META_CAPI_ACCESS_TOKEN" ||
+              guide.runtimeKey === "META_TEST_EVENT_CODE"
+          )
           .map(guide => (
             <SecretField
               key={guide.runtimeKey}
               guide={guide}
               present={Boolean(query.data?.secretStatus[guide.runtimeKey])}
               value={secretDrafts[guide.runtimeKey] ?? ""}
-              onChange={value => setSecretDrafts(current => ({ ...current, [guide.runtimeKey]: value }))}
+              onChange={value =>
+                setSecretDrafts(current => ({
+                  ...current,
+                  [guide.runtimeKey]: value,
+                }))
+              }
             />
           ))}
         {query.data?.secretStatus.META_TEST_EVENT_CODE ? (
@@ -651,7 +780,11 @@ export function SimpleFormFunnelEditor({
             type="button"
             variant="outline"
             onClick={() =>
-              secretsMutation.mutate({ clientId, funnelId, clearMetaTestEventCode: true })
+              secretsMutation.mutate({
+                clientId,
+                funnelId,
+                clearMetaTestEventCode: true,
+              })
             }
             className="h-11 rounded-xl border-amber-300/30 font-extrabold text-amber-200"
           >
@@ -662,14 +795,23 @@ export function SimpleFormFunnelEditor({
 
       <Section title="GHL">
         {guides
-          .filter(guide => guide.runtimeKey === "GHL_WEBHOOK_URL" || guide.runtimeKey === "CRM_CALLBACK_SECRET")
+          .filter(
+            guide =>
+              guide.runtimeKey === "GHL_WEBHOOK_URL" ||
+              guide.runtimeKey === "CRM_CALLBACK_SECRET"
+          )
           .map(guide => (
             <SecretField
               key={guide.runtimeKey}
               guide={guide}
               present={Boolean(query.data?.secretStatus[guide.runtimeKey])}
               value={secretDrafts[guide.runtimeKey] ?? ""}
-              onChange={value => setSecretDrafts(current => ({ ...current, [guide.runtimeKey]: value }))}
+              onChange={value =>
+                setSecretDrafts(current => ({
+                  ...current,
+                  [guide.runtimeKey]: value,
+                }))
+              }
               extra={
                 <div className="space-y-3">
                   <p className="text-sm font-medium text-muted-foreground">
@@ -678,13 +820,16 @@ export function SimpleFormFunnelEditor({
                       : "Not generated yet."}
                   </p>
                   <p className="text-sm font-medium text-muted-foreground">
-                    Revealing displays the currently stored secret. Keep it private.
+                    Revealing displays the currently stored secret. Keep it
+                    private.
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => revealMutation.mutate({ clientId, funnelId })}
+                      onClick={() =>
+                        revealMutation.mutate({ clientId, funnelId })
+                      }
                       className="h-11 gap-2 rounded-xl font-extrabold"
                     >
                       <Eye className="h-4 w-4" />
@@ -694,7 +839,11 @@ export function SimpleFormFunnelEditor({
                       type="button"
                       variant="outline"
                       onClick={() =>
-                        secretsMutation.mutate({ clientId, funnelId, regenerateCrmCallbackSecret: true })
+                        secretsMutation.mutate({
+                          clientId,
+                          funnelId,
+                          regenerateCrmCallbackSecret: true,
+                        })
                       }
                       className="h-11 rounded-xl font-extrabold"
                     >
@@ -702,7 +851,11 @@ export function SimpleFormFunnelEditor({
                     </Button>
                   </div>
                   {revealedSecret ? (
-                    <Input readOnly value={revealedSecret} className="h-12 rounded-xl border-white/10 bg-white/[0.035] font-mono text-sm" />
+                    <Input
+                      readOnly
+                      value={revealedSecret}
+                      className="h-12 rounded-xl border-white/10 bg-white/[0.035] font-mono text-sm"
+                    />
                   ) : null}
                 </div>
               }
@@ -718,7 +871,8 @@ export function SimpleFormFunnelEditor({
               META_CAPI_ACCESS_TOKEN: secretDrafts.META_CAPI_ACCESS_TOKEN,
               META_TEST_EVENT_CODE: secretDrafts.META_TEST_EVENT_CODE,
               GHL_WEBHOOK_URL: secretDrafts.GHL_WEBHOOK_URL,
-              SUBMISSION_ALERT_WEBHOOK_URL: secretDrafts.SUBMISSION_ALERT_WEBHOOK_URL,
+              SUBMISSION_ALERT_WEBHOOK_URL:
+                secretDrafts.SUBMISSION_ALERT_WEBHOOK_URL,
             })
           }
           className="h-11 rounded-xl bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
@@ -741,13 +895,21 @@ export function SimpleFormFunnelEditor({
           <Input
             value={config.inventory.headline}
             onChange={event =>
-              patchConfig({ inventory: { ...config.inventory, headline: event.target.value } })
+              patchConfig({
+                inventory: {
+                  ...config.inventory,
+                  headline: event.target.value,
+                },
+              })
             }
             className="h-12 rounded-xl border-white/10 bg-white/[0.035]"
           />
         </Field>
         {config.inventory.products.map((product, index) => (
-          <div key={product.id} className="space-y-3 rounded-xl border border-white/8 p-4">
+          <div
+            key={product.id}
+            className="space-y-3 rounded-xl border border-white/8 p-4"
+          >
             <div className="flex items-center justify-between gap-3">
               <p className="font-extrabold">Slot {index + 1}</p>
               <label className="flex items-center gap-2 text-sm font-extrabold">
@@ -755,10 +917,13 @@ export function SimpleFormFunnelEditor({
                 <Switch
                   checked={product.active}
                   onCheckedChange={active => {
-                    const products = config.inventory.products.map((item, itemIndex) =>
-                      itemIndex === index ? { ...item, active } : item,
+                    const products = config.inventory.products.map(
+                      (item, itemIndex) =>
+                        itemIndex === index ? { ...item, active } : item
                     );
-                    patchConfig({ inventory: { ...config.inventory, products } });
+                    patchConfig({
+                      inventory: { ...config.inventory, products },
+                    });
                   }}
                 />
               </label>
@@ -767,8 +932,11 @@ export function SimpleFormFunnelEditor({
               <Input
                 value={product.name}
                 onChange={event => {
-                  const products = config.inventory.products.map((item, itemIndex) =>
-                    itemIndex === index ? { ...item, name: event.target.value } : item,
+                  const products = config.inventory.products.map(
+                    (item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, name: event.target.value }
+                        : item
                   );
                   patchConfig({ inventory: { ...config.inventory, products } });
                 }}
@@ -779,8 +947,11 @@ export function SimpleFormFunnelEditor({
               <Textarea
                 value={product.description ?? ""}
                 onChange={event => {
-                  const products = config.inventory.products.map((item, itemIndex) =>
-                    itemIndex === index ? { ...item, description: event.target.value } : item,
+                  const products = config.inventory.products.map(
+                    (item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, description: event.target.value }
+                        : item
                   );
                   patchConfig({ inventory: { ...config.inventory, products } });
                 }}
@@ -792,10 +963,15 @@ export function SimpleFormFunnelEditor({
                 <Input
                   value={product.priceLabel ?? ""}
                   onChange={event => {
-                    const products = config.inventory.products.map((item, itemIndex) =>
-                      itemIndex === index ? { ...item, priceLabel: event.target.value } : item,
+                    const products = config.inventory.products.map(
+                      (item, itemIndex) =>
+                        itemIndex === index
+                          ? { ...item, priceLabel: event.target.value }
+                          : item
                     );
-                    patchConfig({ inventory: { ...config.inventory, products } });
+                    patchConfig({
+                      inventory: { ...config.inventory, products },
+                    });
                   }}
                   className="h-11 rounded-xl border-white/10 bg-white/[0.035]"
                 />
@@ -804,10 +980,15 @@ export function SimpleFormFunnelEditor({
                 <Input
                   value={product.ctaLabel}
                   onChange={event => {
-                    const products = config.inventory.products.map((item, itemIndex) =>
-                      itemIndex === index ? { ...item, ctaLabel: event.target.value } : item,
+                    const products = config.inventory.products.map(
+                      (item, itemIndex) =>
+                        itemIndex === index
+                          ? { ...item, ctaLabel: event.target.value }
+                          : item
                     );
-                    patchConfig({ inventory: { ...config.inventory, products } });
+                    patchConfig({
+                      inventory: { ...config.inventory, products },
+                    });
                   }}
                   className="h-11 rounded-xl border-white/10 bg-white/[0.035]"
                 />
@@ -817,8 +998,11 @@ export function SimpleFormFunnelEditor({
               <Input
                 value={product.ctaUrl}
                 onChange={event => {
-                  const products = config.inventory.products.map((item, itemIndex) =>
-                    itemIndex === index ? { ...item, ctaUrl: event.target.value } : item,
+                  const products = config.inventory.products.map(
+                    (item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, ctaUrl: event.target.value }
+                        : item
                   );
                   patchConfig({ inventory: { ...config.inventory, products } });
                 }}
@@ -827,14 +1011,22 @@ export function SimpleFormFunnelEditor({
             </Field>
             <ImageSourcePicker
               label="Product / Template Image"
-              source={record.imageSources.products[index] ?? { mode: "template" }}
-              previewUrl={SIMPLE_FORM_TEMPLATE_PRODUCTS[index]?.imageUrl ?? product.imageUrl}
+              source={
+                record.imageSources.products[index] ?? { mode: "template" }
+              }
+              previewUrl={
+                SIMPLE_FORM_TEMPLATE_PRODUCTS[index]?.imageUrl ??
+                product.imageUrl
+              }
               assets={assets}
               onChange={source => {
-                const products = record.imageSources.products.map((item, itemIndex) =>
-                  itemIndex === index ? source : item,
+                const products = record.imageSources.products.map(
+                  (item, itemIndex) => (itemIndex === index ? source : item)
                 );
-                setRecord({ ...record, imageSources: { ...record.imageSources, products } });
+                setRecord({
+                  ...record,
+                  imageSources: { ...record.imageSources, products },
+                });
               }}
             />
           </div>
@@ -849,7 +1041,10 @@ export function SimpleFormFunnelEditor({
               patchConfig({
                 contact: {
                   ...config.contact,
-                  consent: { ...config.contact.consent, version: event.target.value },
+                  consent: {
+                    ...config.contact.consent,
+                    version: event.target.value,
+                  },
                 },
               })
             }
@@ -863,7 +1058,10 @@ export function SimpleFormFunnelEditor({
               patchConfig({
                 contact: {
                   ...config.contact,
-                  consent: { ...config.contact.consent, text: event.target.value },
+                  consent: {
+                    ...config.contact.consent,
+                    text: event.target.value,
+                  },
                 },
               })
             }
@@ -876,7 +1074,9 @@ export function SimpleFormFunnelEditor({
         <Field label="GA4 Measurement ID" hint="Optional. Example: G-ABC1234">
           <Input
             value={config.ga4MeasurementId ?? ""}
-            onChange={event => patchConfig({ ga4MeasurementId: event.target.value || undefined })}
+            onChange={event =>
+              patchConfig({ ga4MeasurementId: event.target.value || undefined })
+            }
             className="h-12 rounded-xl border-white/10 bg-white/[0.035] font-mono"
           />
         </Field>
@@ -884,7 +1084,9 @@ export function SimpleFormFunnelEditor({
           <p className="font-extrabold">Google enhanced conversions</p>
           <Switch
             checked={config.googleEnhancedConversions}
-            onCheckedChange={googleEnhancedConversions => patchConfig({ googleEnhancedConversions })}
+            onCheckedChange={googleEnhancedConversions =>
+              patchConfig({ googleEnhancedConversions })
+            }
           />
         </div>
         {guides
@@ -895,7 +1097,12 @@ export function SimpleFormFunnelEditor({
               guide={guide}
               present={Boolean(query.data?.secretStatus[guide.runtimeKey])}
               value={secretDrafts[guide.runtimeKey] ?? ""}
-              onChange={value => setSecretDrafts(current => ({ ...current, [guide.runtimeKey]: value }))}
+              onChange={value =>
+                setSecretDrafts(current => ({
+                  ...current,
+                  [guide.runtimeKey]: value,
+                }))
+              }
             />
           ))}
       </Section>

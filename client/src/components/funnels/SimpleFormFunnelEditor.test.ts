@@ -32,19 +32,19 @@ describe("Simple Form publish controls", () => {
     expect(
       shouldAutoAdvancePublish({
         status: "pending",
-        step: "configure_cloudflare",
+        step: "ensure_d1_database",
       })
     ).toBe(true);
     expect(
       shouldAutoAdvancePublish({
         status: "running",
-        step: "configure_cloudflare",
+        step: "ensure_d1_database",
       })
     ).toBe(true);
     expect(
       shouldAutoAdvancePublish({
         status: "failed",
-        step: "configure_cloudflare",
+        step: "ensure_d1_database",
       })
     ).toBe(false);
     expect(shouldAutoAdvancePublish(null)).toBe(false);

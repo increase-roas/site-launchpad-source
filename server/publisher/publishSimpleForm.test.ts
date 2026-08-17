@@ -52,12 +52,17 @@ class MemoryPublishStore implements SimpleFormPublishStore {
       repositoryFullName: null,
       repositoryUrl: null,
       defaultBranch: null,
+      kvNamespaceId: null,
+      d1DatabaseId: null,
+      primaryQueueId: null,
+      deadLetterQueueId: null,
       commitSha: null,
       liveUrl: null,
       dispatchRequestedAt: null,
       workflowRunId: null,
       workflowStatus: null,
       workflowCheckedAt: null,
+      runtimeSecretsPatchedAt: null,
       leaseToken: null,
       leaseUntil: null,
       lastError: null,
@@ -174,18 +179,27 @@ function externalMocks(): SimpleFormPublishExternal {
         "https://github.com/launchpad-sites/simple-form-northland-11",
       defaultBranch: "main",
     }),
-    commitSource: vi.fn().mockResolvedValue({ commitSha: "abc123" }),
-    ensureCloudflare: vi.fn().mockResolvedValue({
-      liveUrl: "https://simple-form-northland-11.workers.dev",
+    ensureKvNamespace: vi.fn().mockResolvedValue({
+      kvNamespaceId: "kv-201",
     }),
-    dispatchWorkflow: vi.fn().mockResolvedValue(undefined),
-    findWorkflowRun: vi.fn().mockResolvedValue({
+    ensureD1Database: vi.fn().mockResolvedValue({
+      d1DatabaseId: "d1-301",
+    }),
+    ensureQueues: vi.fn().mockResolvedValue({
+      primaryQueueId: "queue-401",
+      deadLetterQueueId: "queue-402",
+    }),
+    commitSource: vi.fn().mockResolvedValue({ commitSha: "abc123" }),
+    dispatchWorkflow: vi.fn().mockResolvedValue({
       workflowRunId: "run-501",
       status: "queued",
     }),
     getWorkflowRun: vi.fn().mockResolvedValue({
       status: "completed",
       conclusion: "success",
+    }),
+    patchRuntimeSecrets: vi.fn().mockResolvedValue(undefined),
+    getWorkersDevStatus: vi.fn().mockResolvedValue({
       liveUrl: "https://simple-form-northland-11.workers.dev",
     }),
   };
@@ -207,6 +221,7 @@ function dependencies(
     createLeaseToken: () => "lease-1",
     leaseDurationMs: 30_000,
     externalTimeoutMs: options.externalTimeoutMs ?? 100,
+    repositoryGenerationTimeoutMs: options.externalTimeoutMs ?? 100,
   };
 }
 
@@ -236,7 +251,7 @@ describe("Simple Form publish state machine", () => {
     expect(first.externalFunnelId).toBe("simple-form-funnel-11");
     expect(first.repositoryName).toBe("simple-form-northland-spas-11");
     expect(first.workerName).toBe("simple-form-northland-spas-11");
-    expect(first.progress).toEqual({ completed: 0, total: 6 });
+    expect(first.progress).toEqual({ completed: 0, total: 9 });
   });
 
   it("performs exactly one external step per advance and persists each result", async () => {
@@ -246,11 +261,14 @@ describe("Simple Form publish state machine", () => {
     await started(store, deps);
 
     const expectedSteps = [
+      "ensure_kv_namespace",
+      "ensure_d1_database",
+      "ensure_queues",
       "commit_source",
-      "configure_cloudflare",
       "dispatch_workflow",
-      "locate_workflow",
       "monitor_workflow",
+      "patch_runtime_secrets",
+      "get_live_url",
       "published",
     ] as const;
     for (const expectedStep of expectedSteps) {
@@ -272,18 +290,30 @@ describe("Simple Form publish state machine", () => {
 
     expect(store.job).toMatchObject({
       repositoryId: "repo-101",
+      kvNamespaceId: "kv-201",
+      d1DatabaseId: "d1-301",
+      primaryQueueId: "queue-401",
+      deadLetterQueueId: "queue-402",
       commitSha: "abc123",
       dispatchRequestedAt: FIRST_NOW,
       workflowRunId: "run-501",
       status: "published",
       step: "published",
     });
-    expect(external.ensureCloudflare).toHaveBeenCalledWith(
+    expect(external.patchRuntimeSecrets).toHaveBeenCalledWith(
       expect.objectContaining({
         runtimeSecrets: expect.objectContaining({
           META_CAPI_ACCESS_TOKEN: "server-only-meta-token",
           CRM_CALLBACK_SECRET: "server-only-callback-secret",
         }),
+      })
+    );
+    expect(external.commitSource).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kvNamespaceId: "kv-201",
+        d1DatabaseId: "d1-301",
+        primaryQueueName: "simple-form-northland-spas-11-retries",
+        deadLetterQueueName: "simple-form-northland-spas-11-dead",
       })
     );
   });
@@ -300,7 +330,9 @@ describe("Simple Form publish state machine", () => {
     ]);
 
     expect(external.ensureRepository).toHaveBeenCalledTimes(1);
-    expect(statuses.some(status => status.step === "commit_source")).toBe(true);
+    expect(statuses.some(status => status.step === "ensure_kv_namespace")).toBe(
+      true
+    );
   });
 
   it("reclaims an expired lease but not an active lease", async () => {
@@ -348,7 +380,7 @@ describe("Simple Form publish state machine", () => {
       { clientId: 5, funnelId: 11 },
       deps
     );
-    expect(resumed.step).toBe("commit_source");
+    expect(resumed.step).toBe("ensure_kv_namespace");
     expect(external.ensureRepository).toHaveBeenCalledTimes(2);
   });
 
@@ -362,36 +394,38 @@ describe("Simple Form publish state machine", () => {
     await advanceSimpleFormPublish({ clientId: 5, funnelId: 11 }, deps);
 
     expect(external.ensureRepository).toHaveBeenCalledTimes(1);
-    expect(external.commitSource).toHaveBeenCalledTimes(1);
+    expect(external.ensureKvNamespace).toHaveBeenCalledTimes(1);
+    expect(external.commitSource).not.toHaveBeenCalled();
     expect(store.job?.repositoryId).toBe("repo-101");
-    expect(store.job?.commitSha).toBe("abc123");
+    expect(store.job?.kvNamespaceId).toBe("kv-201");
   });
 
   it("accepts only the MVP workers.dev live URL", async () => {
     const store = new MemoryPublishStore();
     const external = externalMocks();
-    vi.mocked(external.ensureCloudflare).mockResolvedValueOnce({
+    vi.mocked(external.getWorkersDevStatus).mockResolvedValueOnce({
       liveUrl: "https://custom.example.com",
     });
     const deps = dependencies(store, external);
     await started(store, deps);
-    await advanceSimpleFormPublish({ clientId: 5, funnelId: 11 }, deps);
-    await advanceSimpleFormPublish({ clientId: 5, funnelId: 11 }, deps);
+    for (let index = 0; index < 8; index += 1) {
+      await advanceSimpleFormPublish({ clientId: 5, funnelId: 11 }, deps);
+    }
 
     const status = await advanceSimpleFormPublish(
       { clientId: 5, funnelId: 11 },
-      deps,
+      deps
     );
 
     expect(status).toMatchObject({
       status: "failed",
-      step: "configure_cloudflare",
-      error: "Cloudflare configuration failed. Retry to resume.",
+      step: "get_live_url",
+      error: "workers.dev status lookup failed. Retry to resume.",
     });
     expect(status.liveUrl).toBeNull();
   });
 
-  it("recovers an uncertain dispatch by locating its run before redispatching", async () => {
+  it("persists the run id returned directly by a retried dispatch", async () => {
     const store = new MemoryPublishStore();
     const external = externalMocks();
     vi.mocked(external.dispatchWorkflow).mockImplementationOnce(
@@ -399,9 +433,9 @@ describe("Simple Form publish state machine", () => {
     );
     const deps = dependencies(store, external, { externalTimeoutMs: 5 });
     await started(store, deps);
-    await advanceSimpleFormPublish({ clientId: 5, funnelId: 11 }, deps);
-    await advanceSimpleFormPublish({ clientId: 5, funnelId: 11 }, deps);
-    await advanceSimpleFormPublish({ clientId: 5, funnelId: 11 }, deps);
+    for (let index = 0; index < 5; index += 1) {
+      await advanceSimpleFormPublish({ clientId: 5, funnelId: 11 }, deps);
+    }
 
     const failed = await advanceSimpleFormPublish(
       { clientId: 5, funnelId: 11 },
@@ -410,13 +444,13 @@ describe("Simple Form publish state machine", () => {
     expect(failed.step).toBe("dispatch_workflow");
     expect(store.job?.dispatchRequestedAt).toEqual(FIRST_NOW);
 
-    const recovered = await advanceSimpleFormPublish(
+    const retried = await advanceSimpleFormPublish(
       { clientId: 5, funnelId: 11 },
       deps
     );
-    expect(recovered.step).toBe("monitor_workflow");
-    expect(external.dispatchWorkflow).toHaveBeenCalledTimes(1);
-    expect(external.findWorkflowRun).toHaveBeenCalledTimes(1);
+    expect(retried.step).toBe("monitor_workflow");
+    expect(retried.workflowRunId).toBe("run-501");
+    expect(external.dispatchWorkflow).toHaveBeenCalledTimes(2);
   });
 
   it("never exposes runtime secrets or lease tokens in browser status", async () => {

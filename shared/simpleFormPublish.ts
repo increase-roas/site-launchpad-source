@@ -1,10 +1,13 @@
 export const funnelPublishStepValues = [
   "create_repository",
+  "ensure_kv_namespace",
+  "ensure_d1_database",
+  "ensure_queues",
   "commit_source",
-  "configure_cloudflare",
   "dispatch_workflow",
-  "locate_workflow",
   "monitor_workflow",
+  "patch_runtime_secrets",
+  "get_live_url",
   "published",
 ] as const;
 export type FunnelPublishStep = (typeof funnelPublishStepValues)[number];

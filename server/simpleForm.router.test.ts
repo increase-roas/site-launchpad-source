@@ -101,7 +101,10 @@ describe("simple form template procedures", () => {
         inventory: "5 Inventory Slots",
       },
     ]);
-    mocks.createSimpleFormFromTemplate.mockResolvedValue({ alreadyExists: false, funnelId: 11 });
+    mocks.createSimpleFormFromTemplate.mockResolvedValue({
+      alreadyExists: false,
+      funnelId: 11,
+    });
     mocks.getSimpleFormDetail.mockResolvedValue(detail);
     mocks.saveSimpleFormConfig.mockResolvedValue(detail);
     mocks.saveSimpleFormSecrets.mockResolvedValue(detail);
@@ -119,7 +122,7 @@ describe("simple form template procedures", () => {
       id: "publish-11",
       status: "pending",
       step: "create_repository",
-      progress: { completed: 0, total: 6 },
+      progress: { completed: 0, total: 9 },
       error: null,
       repositoryUrl: null,
       liveUrl: null,
@@ -127,10 +130,11 @@ describe("simple form template procedures", () => {
     publishMocks.advancePublish.mockResolvedValue({
       id: "publish-11",
       status: "pending",
-      step: "commit_source",
-      progress: { completed: 1, total: 6 },
+      step: "ensure_kv_namespace",
+      progress: { completed: 1, total: 9 },
       error: null,
-      repositoryUrl: "https://github.com/launchpad-sites/simple-form-northland-11",
+      repositoryUrl:
+        "https://github.com/launchpad-sites/simple-form-northland-11",
       liveUrl: null,
     });
     publishMocks.publishStatus.mockResolvedValue(null);
@@ -145,10 +149,19 @@ describe("simple form template procedures", () => {
 
   it("creates from template and returns alreadyExists on a second create", async () => {
     const caller = simpleFormRouter.createCaller(context());
-    const created = await caller.createFromTemplate({ clientId: 5, templateKey: "simple-form" });
+    const created = await caller.createFromTemplate({
+      clientId: 5,
+      templateKey: "simple-form",
+    });
     expect(created).toEqual({ alreadyExists: false, funnelId: 11 });
-    mocks.createSimpleFormFromTemplate.mockResolvedValue({ alreadyExists: true, funnelId: 11 });
-    const duplicate = await caller.createFromTemplate({ clientId: 5, templateKey: "simple-form" });
+    mocks.createSimpleFormFromTemplate.mockResolvedValue({
+      alreadyExists: true,
+      funnelId: 11,
+    });
+    const duplicate = await caller.createFromTemplate({
+      clientId: 5,
+      templateKey: "simple-form",
+    });
     expect(duplicate.alreadyExists).toBe(true);
     expect(duplicate.funnelId).toBe(11);
   });
@@ -159,7 +172,11 @@ describe("simple form template procedures", () => {
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain("generated-secret");
     expect(result.secretStatus.CRM_CALLBACK_SECRET).toBe(true);
-    expect(result.secretGuides.some(guide => guide.runtimeKey === "META_CAPI_ACCESS_TOKEN")).toBe(true);
+    expect(
+      result.secretGuides.some(
+        guide => guide.runtimeKey === "META_CAPI_ACCESS_TOKEN"
+      )
+    ).toBe(true);
   });
 
   it("keeps publish handoff unpublished and secret-free", async () => {

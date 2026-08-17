@@ -18,6 +18,12 @@ describe("dashboard publishing migration", () => {
     expect(sql).toContain('"leaseUntil" timestamp with time zone');
     expect(sql).toContain('"dispatchRequestedAt" timestamp with time zone');
     expect(sql).toContain('"workflowRunId" varchar(120)');
+    expect(sql).toContain('"kvNamespaceId" varchar(120)');
+    expect(sql).toContain('"d1DatabaseId" varchar(120)');
+    expect(sql).toContain('"primaryQueueId" varchar(120)');
+    expect(sql).toContain('"deadLetterQueueId" varchar(120)');
+    expect(sql).toContain('"runtimeSecretsPatchedAt" timestamp with time zone');
+    expect(sql).not.toContain("'locate_workflow'");
     expect(sql).toContain(
       'FOREIGN KEY ("funnelId") REFERENCES "public"."funnels"("id") ON DELETE cascade'
     );

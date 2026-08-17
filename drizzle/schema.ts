@@ -35,8 +35,12 @@ export const users = pgTable("users", {
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: userRoleEnum("role").default("user").notNull(),
-  createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
+    .defaultNow()
+    .notNull(),
   lastSignedIn: timestamp("lastSignedIn", { withTimezone: true, mode: "date" })
     .defaultNow()
     .notNull(),
@@ -85,7 +89,10 @@ export const schemaTypeValues = [
 ] as const;
 export type SchemaTypeValue = (typeof schemaTypeValues)[number];
 
-export const clientSchemaTypeEnum = pgEnum("client_schema_type", schemaTypeValues);
+export const clientSchemaTypeEnum = pgEnum(
+  "client_schema_type",
+  schemaTypeValues
+);
 export const clientThemeEnum = pgEnum("client_theme", themeValues);
 export const clientStatusEnum = pgEnum("client_status", clientStatusValues);
 
@@ -118,7 +125,9 @@ export const clients = pgTable(
     businessHours: jsonb("businessHours").$type<BusinessHour[]>().notNull(),
     facebookUrl: varchar("facebookUrl", { length: 500 }),
     googleMapsUrl: varchar("googleMapsUrl", { length: 1000 }),
-    productCategories: jsonb("productCategories").$type<ProductCategory[]>().notNull(),
+    productCategories: jsonb("productCategories")
+      .$type<ProductCategory[]>()
+      .notNull(),
     primaryOffer: text("primaryOffer"),
     financingPromise: text("financingPromise"),
     deliveryPromise: text("deliveryPromise"),
@@ -135,7 +144,7 @@ export const clients = pgTable(
     uniqueIndex("clients_short_name_unique").on(table.shortName),
     index("clients_status_idx").on(table.status),
     index("clients_updated_at_idx").on(table.updatedAt),
-  ],
+  ]
 ).enableRLS();
 
 export type Client = typeof clients.$inferSelect;
@@ -161,7 +170,9 @@ export const clientSecretSetups = pgTable(
       .defaultNow()
       .notNull(),
   },
-  table => [uniqueIndex("client_secret_setups_client_unique").on(table.clientId)],
+  table => [
+    uniqueIndex("client_secret_setups_client_unique").on(table.clientId),
+  ]
 ).enableRLS();
 
 export type ClientSecretSetup = typeof clientSecretSetups.$inferSelect;
@@ -214,15 +225,21 @@ export const clientAssets = pgTable(
       .notNull(),
   },
   table => [
-    uniqueIndex("client_assets_client_slot_unique").on(table.clientId, table.slot),
+    uniqueIndex("client_assets_client_slot_unique").on(
+      table.clientId,
+      table.slot
+    ),
     index("client_assets_client_idx").on(table.clientId),
-  ],
+  ]
 ).enableRLS();
 
 export type ClientAsset = typeof clientAssets.$inferSelect;
 export type InsertClientAsset = typeof clientAssets.$inferInsert;
 
-export const assetUploadKindEnum = pgEnum("asset_upload_kind", ["client", "astro"]);
+export const assetUploadKindEnum = pgEnum("asset_upload_kind", [
+  "client",
+  "astro",
+]);
 export const assetUploadStatusEnum = pgEnum("asset_upload_status", [
   "pending",
   "completed",
@@ -245,7 +262,10 @@ export const assetUploadSessions = pgTable(
       .notNull()
       .unique("asset_upload_sessions_temp_key_unique"),
     status: assetUploadStatusEnum("status").default("pending").notNull(),
-    expiresAt: timestamp("expiresAt", { withTimezone: true, mode: "date" }).notNull(),
+    expiresAt: timestamp("expiresAt", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
     completedAt: timestamp("completedAt", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
       .defaultNow()
@@ -258,7 +278,7 @@ export const assetUploadSessions = pgTable(
     index("asset_upload_sessions_client_idx").on(table.clientId),
     index("asset_upload_sessions_status_idx").on(table.status),
     index("asset_upload_sessions_expires_at_idx").on(table.expiresAt),
-  ],
+  ]
 ).enableRLS();
 
 export type AssetUploadSession = typeof assetUploadSessions.$inferSelect;
@@ -274,8 +294,12 @@ export const astroClientConfigs = pgTable(
     socialLinks: jsonb("socialLinks").$type<Record<string, string>>().notNull(),
     fonts: jsonb("fonts").$type<Record<string, string>>().notNull(),
     borderRadii: jsonb("borderRadii").$type<Record<string, number>>().notNull(),
-    navigationItems: jsonb("navigationItems").$type<Array<Record<string, unknown>>>().notNull(),
-    categories: jsonb("categories").$type<Record<string, Record<string, unknown>>>().notNull(),
+    navigationItems: jsonb("navigationItems")
+      .$type<Array<Record<string, unknown>>>()
+      .notNull(),
+    categories: jsonb("categories")
+      .$type<Record<string, Record<string, unknown>>>()
+      .notNull(),
     financing: jsonb("financing").$type<Record<string, unknown>>().notNull(),
     homepageSections: jsonb("homepageSections")
       .$type<Array<Record<string, unknown>>>()
@@ -292,7 +316,9 @@ export const astroClientConfigs = pgTable(
       .defaultNow()
       .notNull(),
   },
-  table => [uniqueIndex("astro_client_configs_client_unique").on(table.clientId)],
+  table => [
+    uniqueIndex("astro_client_configs_client_unique").on(table.clientId),
+  ]
 ).enableRLS();
 
 export type AstroClientConfig = typeof astroClientConfigs.$inferSelect;
@@ -314,8 +340,12 @@ export const wranglerSecretSetups = pgTable(
     metaValueShowedEncrypted: text("metaValueShowedEncrypted"),
     stageWebhookSecretEncrypted: text("stageWebhookSecretEncrypted"),
     googleSheetsIdEncrypted: text("googleSheetsIdEncrypted"),
-    googleServiceAccountEmailEncrypted: text("googleServiceAccountEmailEncrypted"),
-    googleServiceAccountPrivateKeyEncrypted: text("googleServiceAccountPrivateKeyEncrypted"),
+    googleServiceAccountEmailEncrypted: text(
+      "googleServiceAccountEmailEncrypted"
+    ),
+    googleServiceAccountPrivateKeyEncrypted: text(
+      "googleServiceAccountPrivateKeyEncrypted"
+    ),
     alertWebhookUrlEncrypted: text("alertWebhookUrlEncrypted"),
     adminPasswordEncrypted: text("adminPasswordEncrypted"),
     adminSessionSecretEncrypted: text("adminSessionSecretEncrypted"),
@@ -326,11 +356,14 @@ export const wranglerSecretSetups = pgTable(
       .defaultNow()
       .notNull(),
   },
-  table => [uniqueIndex("wrangler_secret_setups_client_unique").on(table.clientId)],
+  table => [
+    uniqueIndex("wrangler_secret_setups_client_unique").on(table.clientId),
+  ]
 ).enableRLS();
 
 export type WranglerSecretSetup = typeof wranglerSecretSetups.$inferSelect;
-export type InsertWranglerSecretSetup = typeof wranglerSecretSetups.$inferInsert;
+export type InsertWranglerSecretSetup =
+  typeof wranglerSecretSetups.$inferInsert;
 
 export const sitePageTypeValues = [
   "homepage",
@@ -341,11 +374,19 @@ export const sitePageTypeValues = [
 ] as const;
 export type SitePageType = (typeof sitePageTypeValues)[number];
 
-export const workspaceStatusValues = ["draft", "ready", "live", "issue"] as const;
+export const workspaceStatusValues = [
+  "draft",
+  "ready",
+  "live",
+  "issue",
+] as const;
 export type WorkspaceStatus = (typeof workspaceStatusValues)[number];
 
 export const sitePageTypeEnum = pgEnum("site_page_type", sitePageTypeValues);
-export const workspaceStatusEnum = pgEnum("workspace_status", workspaceStatusValues);
+export const workspaceStatusEnum = pgEnum(
+  "workspace_status",
+  workspaceStatusValues
+);
 
 export const sitePages = pgTable(
   "sitePages",
@@ -368,9 +409,12 @@ export const sitePages = pgTable(
       .notNull(),
   },
   table => [
-    uniqueIndex("site_pages_client_type_unique").on(table.clientId, table.pageType),
+    uniqueIndex("site_pages_client_type_unique").on(
+      table.clientId,
+      table.pageType
+    ),
     index("site_pages_client_idx").on(table.clientId),
-  ],
+  ]
 ).enableRLS();
 
 export type SitePage = typeof sitePages.$inferSelect;
@@ -379,13 +423,18 @@ export type InsertSitePage = typeof sitePages.$inferInsert;
 export const funnelShapeValues = ["A", "B", "C"] as const;
 export type FunnelShape = (typeof funnelShapeValues)[number];
 
-export const funnelDeploymentStatusValues = ["draft", "ready", "deployed"] as const;
-export type FunnelDeploymentStatus = (typeof funnelDeploymentStatusValues)[number];
+export const funnelDeploymentStatusValues = [
+  "draft",
+  "ready",
+  "deployed",
+] as const;
+export type FunnelDeploymentStatus =
+  (typeof funnelDeploymentStatusValues)[number];
 
 export const funnelShapeEnum = pgEnum("funnel_shape", funnelShapeValues);
 export const funnelDeploymentStatusEnum = pgEnum(
   "funnel_deployment_status",
-  funnelDeploymentStatusValues,
+  funnelDeploymentStatusValues
 );
 
 export const funnels = pgTable(
@@ -416,9 +465,12 @@ export const funnels = pgTable(
   },
   table => [
     uniqueIndex("funnels_client_slug_unique").on(table.clientId, table.slug),
-    uniqueIndex("funnels_client_template_unique").on(table.clientId, table.templateKey),
+    uniqueIndex("funnels_client_template_unique").on(
+      table.clientId,
+      table.templateKey
+    ),
     index("funnels_client_idx").on(table.clientId),
-  ],
+  ]
 ).enableRLS();
 
 export type Funnel = typeof funnels.$inferSelect;
@@ -444,7 +496,7 @@ export const funnelConfigs = pgTable(
       .defaultNow()
       .notNull(),
   },
-  table => [uniqueIndex("funnel_configs_funnel_unique").on(table.funnelId)],
+  table => [uniqueIndex("funnel_configs_funnel_unique").on(table.funnelId)]
 ).enableRLS();
 
 export type FunnelConfig = typeof funnelConfigs.$inferSelect;
@@ -453,7 +505,10 @@ export type InsertFunnelConfig = typeof funnelConfigs.$inferInsert;
 export const surveyQuestionTypeValues = ["radio", "checkbox", "text"] as const;
 export type SurveyQuestionType = (typeof surveyQuestionTypeValues)[number];
 
-export const surveyQuestionTypeEnum = pgEnum("survey_question_type", surveyQuestionTypeValues);
+export const surveyQuestionTypeEnum = pgEnum(
+  "survey_question_type",
+  surveyQuestionTypeValues
+);
 
 export const funnelSurveyQuestions = pgTable(
   "funnelSurveyQuestions",
@@ -474,18 +529,31 @@ export const funnelSurveyQuestions = pgTable(
       .notNull(),
   },
   table => [
-    uniqueIndex("funnel_survey_questions_position_unique").on(table.funnelId, table.position),
+    uniqueIndex("funnel_survey_questions_position_unique").on(
+      table.funnelId,
+      table.position
+    ),
     index("funnel_survey_questions_funnel_idx").on(table.funnelId),
-  ],
+  ]
 ).enableRLS();
 
 export type FunnelSurveyQuestion = typeof funnelSurveyQuestions.$inferSelect;
-export type InsertFunnelSurveyQuestion = typeof funnelSurveyQuestions.$inferInsert;
+export type InsertFunnelSurveyQuestion =
+  typeof funnelSurveyQuestions.$inferInsert;
 
-export const funnelStepTypeValues = ["zip", "survey", "contact", "book", "thankYou"] as const;
+export const funnelStepTypeValues = [
+  "zip",
+  "survey",
+  "contact",
+  "book",
+  "thankYou",
+] as const;
 export type FunnelStepType = (typeof funnelStepTypeValues)[number];
 
-export const funnelStepTypeEnum = pgEnum("funnel_step_type", funnelStepTypeValues);
+export const funnelStepTypeEnum = pgEnum(
+  "funnel_step_type",
+  funnelStepTypeValues
+);
 
 export const funnelSteps = pgTable(
   "funnelSteps",
@@ -508,9 +576,12 @@ export const funnelSteps = pgTable(
       .notNull(),
   },
   table => [
-    uniqueIndex("funnel_steps_funnel_position_unique").on(table.funnelId, table.position),
+    uniqueIndex("funnel_steps_funnel_position_unique").on(
+      table.funnelId,
+      table.position
+    ),
     index("funnel_steps_funnel_idx").on(table.funnelId),
-  ],
+  ]
 ).enableRLS();
 
 export type FunnelStep = typeof funnelSteps.$inferSelect;
@@ -529,8 +600,10 @@ export const funnelSimpleFormConfigs = pgTable("funnelSimpleFormConfigs", {
     .notNull(),
 }).enableRLS();
 
-export type FunnelSimpleFormConfig = typeof funnelSimpleFormConfigs.$inferSelect;
-export type InsertFunnelSimpleFormConfig = typeof funnelSimpleFormConfigs.$inferInsert;
+export type FunnelSimpleFormConfig =
+  typeof funnelSimpleFormConfigs.$inferSelect;
+export type InsertFunnelSimpleFormConfig =
+  typeof funnelSimpleFormConfigs.$inferInsert;
 
 export const funnelRuntimeSecrets = pgTable("funnelRuntimeSecrets", {
   funnelId: integer("funnelId")
@@ -540,7 +613,9 @@ export const funnelRuntimeSecrets = pgTable("funnelRuntimeSecrets", {
   metaTestEventCodeEncrypted: text("metaTestEventCodeEncrypted"),
   ghlWebhookUrlEncrypted: text("ghlWebhookUrlEncrypted"),
   crmCallbackSecretEncrypted: text("crmCallbackSecretEncrypted"),
-  submissionAlertWebhookUrlEncrypted: text("submissionAlertWebhookUrlEncrypted"),
+  submissionAlertWebhookUrlEncrypted: text(
+    "submissionAlertWebhookUrlEncrypted"
+  ),
   createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
     .defaultNow()
     .notNull(),
@@ -550,15 +625,16 @@ export const funnelRuntimeSecrets = pgTable("funnelRuntimeSecrets", {
 }).enableRLS();
 
 export type FunnelRuntimeSecret = typeof funnelRuntimeSecrets.$inferSelect;
-export type InsertFunnelRuntimeSecret = typeof funnelRuntimeSecrets.$inferInsert;
+export type InsertFunnelRuntimeSecret =
+  typeof funnelRuntimeSecrets.$inferInsert;
 
 export const funnelPublishStepEnum = pgEnum(
   "funnel_publish_step",
-  funnelPublishStepValues,
+  funnelPublishStepValues
 );
 export const funnelPublishStatusEnum = pgEnum(
   "funnel_publish_status",
-  funnelPublishStatusValues,
+  funnelPublishStatusValues
 );
 
 export const funnelPublishes = pgTable(
@@ -581,6 +657,10 @@ export const funnelPublishes = pgTable(
     repositoryFullName: varchar("repositoryFullName", { length: 240 }),
     repositoryUrl: varchar("repositoryUrl", { length: 1000 }),
     defaultBranch: varchar("defaultBranch", { length: 120 }),
+    kvNamespaceId: varchar("kvNamespaceId", { length: 120 }),
+    d1DatabaseId: varchar("d1DatabaseId", { length: 120 }),
+    primaryQueueId: varchar("primaryQueueId", { length: 120 }),
+    deadLetterQueueId: varchar("deadLetterQueueId", { length: 120 }),
     commitSha: varchar("commitSha", { length: 120 }),
     liveUrl: varchar("liveUrl", { length: 1000 }),
     dispatchRequestedAt: timestamp("dispatchRequestedAt", {
@@ -590,6 +670,10 @@ export const funnelPublishes = pgTable(
     workflowRunId: varchar("workflowRunId", { length: 120 }),
     workflowStatus: varchar("workflowStatus", { length: 80 }),
     workflowCheckedAt: timestamp("workflowCheckedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    runtimeSecretsPatchedAt: timestamp("runtimeSecretsPatchedAt", {
       withTimezone: true,
       mode: "date",
     }),
@@ -611,11 +695,11 @@ export const funnelPublishes = pgTable(
   table => [
     uniqueIndex("funnel_publishes_funnel_unique").on(table.funnelId),
     uniqueIndex("funnel_publishes_external_funnel_unique").on(
-      table.externalFunnelId,
+      table.externalFunnelId
     ),
     index("funnel_publishes_status_idx").on(table.status),
     index("funnel_publishes_lease_until_idx").on(table.leaseUntil),
-  ],
+  ]
 ).enableRLS();
 
 export type FunnelPublish = typeof funnelPublishes.$inferSelect;
@@ -636,7 +720,7 @@ export type HomepageSectionType = (typeof homepageSectionTypeValues)[number];
 
 export const homepageSectionTypeEnum = pgEnum(
   "homepage_section_type",
-  homepageSectionTypeValues,
+  homepageSectionTypeValues
 );
 
 export const homepageSections = pgTable(
@@ -657,10 +741,16 @@ export const homepageSections = pgTable(
       .notNull(),
   },
   table => [
-    uniqueIndex("homepage_sections_client_type_unique").on(table.clientId, table.sectionType),
-    uniqueIndex("homepage_sections_client_position_unique").on(table.clientId, table.position),
+    uniqueIndex("homepage_sections_client_type_unique").on(
+      table.clientId,
+      table.sectionType
+    ),
+    uniqueIndex("homepage_sections_client_position_unique").on(
+      table.clientId,
+      table.position
+    ),
     index("homepage_sections_client_idx").on(table.clientId),
-  ],
+  ]
 ).enableRLS();
 
 export type HomepageSection = typeof homepageSections.$inferSelect;

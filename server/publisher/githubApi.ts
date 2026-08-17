@@ -53,6 +53,18 @@ export type WorkflowDispatchResponse = {
   workflow_run_id: number;
 };
 
+export type WorkflowRun = {
+  id: number;
+  status: "queued" | "in_progress" | "completed";
+  conclusion:
+    | "success"
+    | "failure"
+    | "cancelled"
+    | "timed_out"
+    | "action_required"
+    | null;
+};
+
 export type GitHubApiClient = {
   generatePublicRepository(
     input: GeneratePublicRepositoryInput
@@ -63,6 +75,11 @@ export type GitHubApiClient = {
   dispatchWorkflow(
     input: DispatchWorkflowInput
   ): Promise<WorkflowDispatchResponse>;
+  getWorkflowRun(input: {
+    owner: string;
+    repository: string;
+    workflowRunId: number;
+  }): Promise<WorkflowRun>;
 };
 
 export class GitHubApiError extends Error {
@@ -217,6 +234,35 @@ function parseWorkflowDispatch(value: unknown): WorkflowDispatchResponse {
   };
 }
 
+function parseWorkflowRun(value: unknown): WorkflowRun {
+  const operation = "workflow run lookup";
+  const record = requireRecord(value, operation);
+  const status = requireString(record, "status", operation);
+  if (
+    status !== "queued" &&
+    status !== "in_progress" &&
+    status !== "completed"
+  ) {
+    throw new GitHubApiError(`${operation} response validation`);
+  }
+  const conclusion = record.conclusion;
+  if (
+    conclusion !== null &&
+    conclusion !== "success" &&
+    conclusion !== "failure" &&
+    conclusion !== "cancelled" &&
+    conclusion !== "timed_out" &&
+    conclusion !== "action_required"
+  ) {
+    throw new GitHubApiError(`${operation} response validation`);
+  }
+  return {
+    id: requirePositiveInteger(record, "id", operation),
+    status,
+    conclusion,
+  };
+}
+
 export function createGitHubApiClient(options: {
   token: string;
   fetchFn?: FetchFunction;
@@ -334,6 +380,14 @@ export function createGitHubApiClient(options: {
         }
       );
       return parseWorkflowDispatch(response);
+    },
+    async getWorkflowRun(input) {
+      const response = await request(
+        "workflow run lookup",
+        `/repos/${encoded(input.owner)}/${encoded(input.repository)}/actions/runs/${input.workflowRunId}`,
+        { method: "GET" }
+      );
+      return parseWorkflowRun(response);
     },
   };
 }

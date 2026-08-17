@@ -1,5 +1,5 @@
 {
-  "id": "9b48f509-5d95-4b00-a1c4-6d206d9bcd3f",
+  "id": "a27a2d5d-5139-4e3a-910e-6a49ad280f65",
   "prevId": "6f3bfc7d-9235-48a4-a379-d913570d3faa",
   "version": "7",
   "dialect": "postgresql",
@@ -145,12 +145,8 @@
           "name": "assetUploadSessions_clientId_clients_id_fk",
           "tableFrom": "assetUploadSessions",
           "tableTo": "clients",
-          "columnsFrom": [
-            "clientId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clientId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -160,9 +156,7 @@
         "asset_upload_sessions_temp_key_unique": {
           "name": "asset_upload_sessions_temp_key_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "tempKey"
-          ]
+          "columns": ["tempKey"]
         }
       },
       "policies": {},
@@ -282,12 +276,8 @@
           "name": "astroClientConfigs_clientId_clients_id_fk",
           "tableFrom": "astroClientConfigs",
           "tableTo": "clients",
-          "columnsFrom": [
-            "clientId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clientId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -427,12 +417,8 @@
           "name": "clientAssets_clientId_clients_id_fk",
           "tableFrom": "clientAssets",
           "tableTo": "clients",
-          "columnsFrom": [
-            "clientId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clientId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -532,12 +518,8 @@
           "name": "clientSecretSetups_clientId_clients_id_fk",
           "tableFrom": "clientSecretSetups",
           "tableTo": "clients",
-          "columnsFrom": [
-            "clientId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clientId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -896,12 +878,8 @@
           "name": "funnelConfigs_funnelId_funnels_id_fk",
           "tableFrom": "funnelConfigs",
           "tableTo": "funnels",
-          "columnsFrom": [
-            "funnelId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["funnelId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -999,6 +977,30 @@
           "primaryKey": false,
           "notNull": false
         },
+        "kvNamespaceId": {
+          "name": "kvNamespaceId",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "d1DatabaseId": {
+          "name": "d1DatabaseId",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "primaryQueueId": {
+          "name": "primaryQueueId",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deadLetterQueueId": {
+          "name": "deadLetterQueueId",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
         "commitSha": {
           "name": "commitSha",
           "type": "varchar(120)",
@@ -1031,6 +1033,12 @@
         },
         "workflowCheckedAt": {
           "name": "workflowCheckedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "runtimeSecretsPatchedAt": {
+          "name": "runtimeSecretsPatchedAt",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
@@ -1148,12 +1156,8 @@
           "name": "funnelPublishes_clientId_clients_id_fk",
           "tableFrom": "funnelPublishes",
           "tableTo": "clients",
-          "columnsFrom": [
-            "clientId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clientId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1161,12 +1165,8 @@
           "name": "funnelPublishes_funnelId_funnels_id_fk",
           "tableFrom": "funnelPublishes",
           "tableTo": "funnels",
-          "columnsFrom": [
-            "funnelId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["funnelId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1238,12 +1238,8 @@
           "name": "funnelRuntimeSecrets_funnelId_funnels_id_fk",
           "tableFrom": "funnelRuntimeSecrets",
           "tableTo": "funnels",
-          "columnsFrom": [
-            "funnelId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["funnelId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1291,12 +1287,8 @@
           "name": "funnelSimpleFormConfigs_funnelId_funnels_id_fk",
           "tableFrom": "funnelSimpleFormConfigs",
           "tableTo": "funnels",
-          "columnsFrom": [
-            "funnelId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["funnelId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1418,12 +1410,8 @@
           "name": "funnelSteps_funnelId_funnels_id_fk",
           "tableFrom": "funnelSteps",
           "tableTo": "funnels",
-          "columnsFrom": [
-            "funnelId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["funnelId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1533,12 +1521,8 @@
           "name": "funnelSurveyQuestions_funnelId_funnels_id_fk",
           "tableFrom": "funnelSurveyQuestions",
           "tableTo": "funnels",
-          "columnsFrom": [
-            "funnelId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["funnelId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1709,12 +1693,8 @@
           "name": "funnels_clientId_clients_id_fk",
           "tableFrom": "funnels",
           "tableTo": "clients",
-          "columnsFrom": [
-            "clientId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clientId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1840,12 +1820,8 @@
           "name": "homepageSections_clientId_clients_id_fk",
           "tableFrom": "homepageSections",
           "tableTo": "clients",
-          "columnsFrom": [
-            "clientId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clientId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1970,12 +1946,8 @@
           "name": "sitePages_clientId_clients_id_fk",
           "tableFrom": "sitePages",
           "tableTo": "clients",
-          "columnsFrom": [
-            "clientId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clientId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2057,9 +2029,7 @@
         "users_authUserId_unique": {
           "name": "users_authUserId_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "authUserId"
-          ]
+          "columns": ["authUserId"]
         }
       },
       "policies": {},
@@ -2203,12 +2173,8 @@
           "name": "wranglerSecretSetups_clientId_clients_id_fk",
           "tableFrom": "wranglerSecretSetups",
           "tableTo": "clients",
-          "columnsFrom": [
-            "clientId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clientId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2247,100 +2213,63 @@
     "public.asset_upload_kind": {
       "name": "asset_upload_kind",
       "schema": "public",
-      "values": [
-        "client",
-        "astro"
-      ]
+      "values": ["client", "astro"]
     },
     "public.asset_upload_status": {
       "name": "asset_upload_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "completed",
-        "failed"
-      ]
+      "values": ["pending", "completed", "failed"]
     },
     "public.client_schema_type": {
       "name": "client_schema_type",
       "schema": "public",
-      "values": [
-        "HomeAndConstructionBusiness",
-        "Store",
-        "LocalBusiness"
-      ]
+      "values": ["HomeAndConstructionBusiness", "Store", "LocalBusiness"]
     },
     "public.client_status": {
       "name": "client_status",
       "schema": "public",
-      "values": [
-        "draft",
-        "ready",
-        "live",
-        "issue"
-      ]
+      "values": ["draft", "ready", "live", "issue"]
     },
     "public.client_theme": {
       "name": "client_theme",
       "schema": "public",
-      "values": [
-        "aqua",
-        "luxury",
-        "natural",
-        "mono"
-      ]
+      "values": ["aqua", "luxury", "natural", "mono"]
     },
     "public.funnel_deployment_status": {
       "name": "funnel_deployment_status",
       "schema": "public",
-      "values": [
-        "draft",
-        "ready",
-        "deployed"
-      ]
+      "values": ["draft", "ready", "deployed"]
     },
     "public.funnel_publish_status": {
       "name": "funnel_publish_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "running",
-        "failed",
-        "published"
-      ]
+      "values": ["pending", "running", "failed", "published"]
     },
     "public.funnel_publish_step": {
       "name": "funnel_publish_step",
       "schema": "public",
       "values": [
         "create_repository",
+        "ensure_kv_namespace",
+        "ensure_d1_database",
+        "ensure_queues",
         "commit_source",
-        "configure_cloudflare",
         "dispatch_workflow",
-        "locate_workflow",
         "monitor_workflow",
+        "patch_runtime_secrets",
+        "get_live_url",
         "published"
       ]
     },
     "public.funnel_shape": {
       "name": "funnel_shape",
       "schema": "public",
-      "values": [
-        "A",
-        "B",
-        "C"
-      ]
+      "values": ["A", "B", "C"]
     },
     "public.funnel_step_type": {
       "name": "funnel_step_type",
       "schema": "public",
-      "values": [
-        "zip",
-        "survey",
-        "contact",
-        "book",
-        "thankYou"
-      ]
+      "values": ["zip", "survey", "contact", "book", "thankYou"]
     },
     "public.homepage_section_type": {
       "name": "homepage_section_type",
@@ -2360,40 +2289,22 @@
     "public.site_page_type": {
       "name": "site_page_type",
       "schema": "public",
-      "values": [
-        "homepage",
-        "inventory",
-        "categories",
-        "visitUs",
-        "financing"
-      ]
+      "values": ["homepage", "inventory", "categories", "visitUs", "financing"]
     },
     "public.survey_question_type": {
       "name": "survey_question_type",
       "schema": "public",
-      "values": [
-        "radio",
-        "checkbox",
-        "text"
-      ]
+      "values": ["radio", "checkbox", "text"]
     },
     "public.user_role": {
       "name": "user_role",
       "schema": "public",
-      "values": [
-        "user",
-        "admin"
-      ]
+      "values": ["user", "admin"]
     },
     "public.workspace_status": {
       "name": "workspace_status",
       "schema": "public",
-      "values": [
-        "draft",
-        "ready",
-        "live",
-        "issue"
-      ]
+      "values": ["draft", "ready", "live", "issue"]
     }
   },
   "schemas": {},
