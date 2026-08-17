@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { ASSET_SLOT_VALUES } from "./client";
-import { SIMPLE_FORM_MANIFEST } from "./simpleFormContract";
+import {
+  SIMPLE_FORM_MANIFEST,
+  SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT,
+  simpleFormOfflineConversionContractSchema,
+} from "./simpleFormContract";
 
 const e164 = /^\+[1-9]\d{7,14}$/;
 const zip5 = /^\d{5}$/;
@@ -436,7 +440,15 @@ export type SimpleFormSecretPresence = Record<
 >;
 
 export type SimpleFormReadinessSection = {
-  key: "client" | "offer" | "serviceArea" | "meta" | "ghl" | "inventory" | "productionSecrets";
+  key:
+    | "client"
+    | "offer"
+    | "serviceArea"
+    | "meta"
+    | "ghl"
+    | "inventory"
+    | "offlineConversion"
+    | "productionSecrets";
   label: string;
   ready: boolean;
   missing: string[];
@@ -457,10 +469,18 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
+export function isSimpleFormOfflineConversionContractReady(
+  manifestContract: unknown,
+): boolean {
+  return simpleFormOfflineConversionContractSchema.safeParse(manifestContract)
+    .success;
+}
+
 export function buildSimpleFormReadiness(
   record: SimpleFormStoredRecord,
   secrets: SimpleFormSecretPresence,
   privateValues: SimpleFormPrivateRuntimeValues = {},
+  manifestContract: unknown = SIMPLE_FORM_MANIFEST.offlineConversionContract,
 ): SimpleFormReadiness {
   const { config } = record;
   const clientMissing: string[] = [];
@@ -509,10 +529,23 @@ export function buildSimpleFormReadiness(
     inventoryMissing.push("Inventory page URL");
   }
 
+  const offlineConversionMissing = isSimpleFormOfflineConversionContractReady(
+    manifestContract,
+  )
+    ? []
+    : ["Canonical offline conversion contract"];
+
   const secretMissing: string[] = [];
-  if (!secrets.META_CAPI_ACCESS_TOKEN) secretMissing.push("Meta CAPI Access Token");
-  if (!secrets.GHL_WEBHOOK_URL) secretMissing.push("GHL Webhook URL");
-  if (!secrets.CRM_CALLBACK_SECRET) secretMissing.push("CRM Callback Secret");
+  const requiredSecretLabels = {
+    CRM_CALLBACK_SECRET: "CRM Callback Secret",
+    META_CAPI_ACCESS_TOKEN: "Meta CAPI Access Token",
+    GHL_WEBHOOK_URL: "GHL Webhook URL",
+  } as const;
+  for (const runtimeKey of SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT.requiredRuntimeSecrets) {
+    if (!secrets[runtimeKey]) {
+      secretMissing.push(requiredSecretLabels[runtimeKey]);
+    }
+  }
   if (secrets.META_TEST_EVENT_CODE) secretMissing.push("Remove Meta Test Event Code before production");
 
   const canonicalResult = simpleFormCanonicalShapeAConfigSchema.safeParse({
@@ -549,6 +582,12 @@ export function buildSimpleFormReadiness(
     { key: "meta", label: "Meta", ready: metaMissing.length === 0, missing: metaMissing },
     { key: "ghl", label: "GHL", ready: ghlMissing.length === 0, missing: ghlMissing },
     { key: "inventory", label: "Inventory", ready: inventoryMissing.length === 0, missing: inventoryMissing },
+    {
+      key: "offlineConversion",
+      label: "Offline Conversion",
+      ready: offlineConversionMissing.length === 0,
+      missing: offlineConversionMissing,
+    },
     {
       key: "productionSecrets",
       label: "Production Secrets",

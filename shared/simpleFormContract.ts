@@ -3,6 +3,64 @@ import simpleFormManifestJson from "../server/templates/simple-form/launchpad.te
 
 export const SIMPLE_FORM_TEMPLATE_KEY = "simple-form" as const;
 
+export const simpleFormOfflineConversionContractSchema = z.strictObject({
+  version: z.literal(1),
+  joinKey: z.literal("leadUuid"),
+  callback: z.strictObject({
+    method: z.literal("POST"),
+    route: z.literal("/api/funnel/{slug}/conversion"),
+    authentication: z.literal("Bearer CRM_CALLBACK_SECRET"),
+  }),
+  stageMappings: z.tuple([
+    z.strictObject({
+      pipelineStage: z.literal("Hot Pursuit"),
+      callbackStage: z.literal("qualified"),
+      metaEvent: z.literal("QualifiedLead"),
+    }),
+    z.strictObject({
+      pipelineStage: z.literal("Appointment Set"),
+      callbackStage: z.literal("appointment"),
+      metaEvent: z.literal("Schedule"),
+    }),
+    z.strictObject({
+      pipelineStage: z.literal("Showed"),
+      callbackStage: z.literal("show"),
+      metaEvent: z.literal("Showed"),
+    }),
+    z.strictObject({
+      pipelineStage: z.literal("Sold"),
+      callbackStage: z.literal("sale"),
+      metaEvent: z.literal("Purchase"),
+    }),
+  ]),
+  requiredRuntimeSecrets: z.tuple([
+    z.literal("CRM_CALLBACK_SECRET"),
+    z.literal("META_CAPI_ACCESS_TOKEN"),
+    z.literal("GHL_WEBHOOK_URL"),
+  ]),
+  deduplication: z.strictObject({
+    idempotencyKey: z.literal("downstream_conversions.external_id"),
+    eventId: z.literal("downstream_conversions.event_id"),
+  }),
+  originalAttribution: z.strictObject({
+    reuse: z.literal(true),
+    fields: z.tuple([
+      z.literal("first_url"),
+      z.literal("original_query_string"),
+      z.literal("fbc"),
+      z.literal("fbp"),
+      z.literal("ip_address"),
+      z.literal("user_agent"),
+    ]),
+  }),
+  purchase: z.strictObject({
+    requiresExplicitPositiveValue: z.literal(true),
+  }),
+});
+export type SimpleFormOfflineConversionContract = z.infer<
+  typeof simpleFormOfflineConversionContractSchema
+>;
+
 export const simpleFormManifestSchema = z.object({
   schemaVersion: z.literal(1),
   contractVersion: z.literal(1),
@@ -13,11 +71,14 @@ export const simpleFormManifestSchema = z.object({
   type: z.literal("paid-funnel"),
   shape: z.literal("A"),
   active: z.literal(true),
+  offlineConversionContract: simpleFormOfflineConversionContractSchema,
 });
 
 export const SIMPLE_FORM_MANIFEST = simpleFormManifestSchema.parse(
   simpleFormManifestJson,
 );
+export const SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT =
+  SIMPLE_FORM_MANIFEST.offlineConversionContract;
 
 export const SIMPLE_FORM_RUNTIME_SECRET_KEYS = [
   "META_CAPI_ACCESS_TOKEN",
@@ -93,7 +154,8 @@ export const SIMPLE_FORM_SECRET_GUIDES: SimpleFormSecretGuide[] = [
     runtimeKey: "CRM_CALLBACK_SECRET",
     friendlyName: "CRM Callback Secret",
     requirement: "generated",
-    requiredFor: "Bearer auth on POST /api/funnel/{slug}/conversion for appointment, show, and sale",
+    requiredFor:
+      "Bearer auth on POST /api/funnel/{slug}/conversion for qualified, appointment, show, and sale",
     whereToFind:
       "Launchpad generates this per funnel. Use Reveal secret to copy the currently stored value into the GHL callback workflow, and keep it private.",
     docsUrl: "https://developers.cloudflare.com/workers/configuration/secrets/",

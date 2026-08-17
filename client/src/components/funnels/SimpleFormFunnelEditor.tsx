@@ -12,7 +12,10 @@ import {
   type SimpleFormOperatorConfig,
   type SimpleFormStoredRecord,
 } from "@shared/simpleFormConfig";
-import type { SimpleFormSecretGuide } from "@shared/simpleFormContract";
+import {
+  SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT,
+  type SimpleFormSecretGuide,
+} from "@shared/simpleFormContract";
 import type {
   FunnelPublishStatus,
   FunnelPublishStep,
@@ -270,6 +273,23 @@ export function publishProgressPercent(progress: {
     100,
     Math.max(0, Math.round((progress.completed / progress.total) * 100))
   );
+}
+
+export function offlineConversionOperatorGuidance(): {
+  allowedCallbackStages: string[];
+  stageMappings: string[];
+} {
+  return {
+    allowedCallbackStages:
+      SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT.stageMappings.map(
+        mapping => mapping.callbackStage,
+      ),
+    stageMappings:
+      SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT.stageMappings.map(
+        mapping =>
+          `${mapping.pipelineStage} → ${mapping.callbackStage} → Meta ${mapping.metaEvent}`,
+      ),
+  };
 }
 
 function publishStepLabel(step: FunnelPublishStep): string {
@@ -1052,6 +1072,22 @@ export function SimpleFormFunnelEditor({
       </Section>
 
       <Section title="GHL">
+        <div className="space-y-2 rounded-xl border border-white/8 bg-white/[0.025] p-4">
+          <p className="text-sm font-extrabold">
+            Offline conversion callback stages
+          </p>
+          <p className="text-sm font-medium text-muted-foreground">
+            Allowed callback stages:{" "}
+            {offlineConversionOperatorGuidance().allowedCallbackStages.join(
+              "/",
+            )}
+          </p>
+          <ul className="list-disc space-y-1 pl-5 text-sm font-medium text-muted-foreground">
+            {offlineConversionOperatorGuidance().stageMappings.map(mapping => (
+              <li key={mapping}>{mapping}</li>
+            ))}
+          </ul>
+        </div>
         {guides
           .filter(
             guide =>

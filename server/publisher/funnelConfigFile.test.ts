@@ -55,11 +55,17 @@ describe("funnel.config.ts renderer", () => {
     const config = {
       ...validatedConfiguration(),
       GHL_WEBHOOK_URL: "opaque-value-that-must-not-render",
+      META_CAPI_ACCESS_TOKEN: "meta-value-that-must-not-render",
+      CRM_CALLBACK_SECRET: "crm-value-that-must-not-render",
     };
 
     const rendered = renderFunnelConfigTs(config);
 
     expect(rendered).not.toContain("GHL_WEBHOOK_URL");
     expect(rendered).not.toContain("opaque-value-that-must-not-render");
+    expect(rendered).not.toContain("META_CAPI_ACCESS_TOKEN");
+    expect(rendered).not.toContain("meta-value-that-must-not-render");
+    expect(rendered).not.toContain("CRM_CALLBACK_SECRET");
+    expect(rendered).not.toContain("crm-value-that-must-not-render");
   });
 });

@@ -1,5 +1,6 @@
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath } from "node:url";
 
 const comparedFields = [
@@ -83,6 +84,22 @@ if (drift.length > 0) {
       `Vendored: ${vendoredManifestPath}`,
       `Canonical: ${canonical.source}`,
       ...drift.map(item => `- ${item}`),
+    ].join("\n")
+  );
+}
+
+if (
+  !isDeepStrictEqual(
+    vendoredManifest.offlineConversionContract,
+    canonical.manifest.offlineConversionContract
+  )
+) {
+  throw new Error(
+    [
+      "Simple Form offline conversion contract drift detected.",
+      `Vendored: ${vendoredManifestPath}`,
+      `Canonical: ${canonical.source}`,
+      `- offlineConversionContract: vendored=${JSON.stringify(vendoredManifest.offlineConversionContract)} canonical=${JSON.stringify(canonical.manifest.offlineConversionContract)}`,
     ].join("\n")
   );
 }

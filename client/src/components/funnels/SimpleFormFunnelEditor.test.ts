@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createPublishAdvanceController,
   effectivePublishStatus,
+  offlineConversionOperatorGuidance,
   publishActionLabel,
   publishActionForState,
   publishAdvanceDelayMs,
@@ -290,5 +291,22 @@ describe("Simple Form publish controls", () => {
     expect(publishProgressPercent({ completed: 3, total: 6 })).toBe(50);
     expect(publishProgressPercent({ completed: 8, total: 6 })).toBe(100);
     expect(publishProgressPercent({ completed: 1, total: 0 })).toBe(0);
+  });
+
+  it("shows canonical callback stages and Meta mappings to operators", () => {
+    expect(offlineConversionOperatorGuidance()).toEqual({
+      allowedCallbackStages: [
+        "qualified",
+        "appointment",
+        "show",
+        "sale",
+      ],
+      stageMappings: [
+        "Hot Pursuit → qualified → Meta QualifiedLead",
+        "Appointment Set → appointment → Meta Schedule",
+        "Showed → show → Meta Showed",
+        "Sold → sale → Meta Purchase",
+      ],
+    });
   });
 });

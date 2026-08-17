@@ -10,6 +10,7 @@ import {
   simpleFormFunnelSlug,
   type SimpleFormStoredRecord,
 } from "./simpleFormConfig";
+import { SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT } from "./simpleFormContract";
 
 const missingSecrets = {
   META_CAPI_ACCESS_TOKEN: false,
@@ -112,6 +113,67 @@ describe("Simple Form readiness", () => {
     });
 
     expect(readiness.configurationReady).toBe(true);
+  });
+
+  it.each([
+    ["CRM_CALLBACK_SECRET", "CRM Callback Secret"],
+    ["META_CAPI_ACCESS_TOKEN", "Meta CAPI Access Token"],
+    ["GHL_WEBHOOK_URL", "GHL Webhook URL"],
+  ] as const)(
+    "requires offline conversion runtime secret %s",
+    (runtimeKey, missingLabel) => {
+      const readiness = buildSimpleFormReadiness(
+        buildReadyRecord(),
+        { ...readySecrets, [runtimeKey]: false },
+        {
+          GHL_WEBHOOK_URL: "https://services.leadconnectorhq.com/hooks/example",
+        },
+      );
+
+      expect(readiness.configurationReady).toBe(false);
+      expect(
+        readiness.sections.find(
+          section => section.key === "productionSecrets",
+        )?.missing,
+      ).toContain(missingLabel);
+    },
+  );
+
+  it("blocks readiness when the offline conversion contract is missing", () => {
+    const readiness = buildSimpleFormReadiness(
+      buildReadyRecord(),
+      readySecrets,
+      {
+        GHL_WEBHOOK_URL: "https://services.leadconnectorhq.com/hooks/example",
+      },
+      null,
+    );
+
+    expect(readiness.configurationReady).toBe(false);
+    expect(
+      readiness.sections.find(section => section.key === "offlineConversion")
+        ?.missing,
+    ).toContain("Canonical offline conversion contract");
+  });
+
+  it("blocks readiness when the offline conversion contract drifts", () => {
+    const readiness = buildSimpleFormReadiness(
+      buildReadyRecord(),
+      readySecrets,
+      {
+        GHL_WEBHOOK_URL: "https://services.leadconnectorhq.com/hooks/example",
+      },
+      {
+        ...SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT,
+        joinKey: "leadId",
+      },
+    );
+
+    expect(readiness.configurationReady).toBe(false);
+    expect(
+      readiness.sections.find(section => section.key === "offlineConversion")
+        ?.missing,
+    ).toContain("Canonical offline conversion contract");
   });
 
   it.each([

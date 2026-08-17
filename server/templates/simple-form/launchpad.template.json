@@ -7,5 +7,59 @@
   "defaultBranch": "main",
   "type": "paid-funnel",
   "shape": "A",
-  "active": true
+  "active": true,
+  "offlineConversionContract": {
+    "version": 1,
+    "joinKey": "leadUuid",
+    "callback": {
+      "method": "POST",
+      "route": "/api/funnel/{slug}/conversion",
+      "authentication": "Bearer CRM_CALLBACK_SECRET"
+    },
+    "stageMappings": [
+      {
+        "pipelineStage": "Hot Pursuit",
+        "callbackStage": "qualified",
+        "metaEvent": "QualifiedLead"
+      },
+      {
+        "pipelineStage": "Appointment Set",
+        "callbackStage": "appointment",
+        "metaEvent": "Schedule"
+      },
+      {
+        "pipelineStage": "Showed",
+        "callbackStage": "show",
+        "metaEvent": "Showed"
+      },
+      {
+        "pipelineStage": "Sold",
+        "callbackStage": "sale",
+        "metaEvent": "Purchase"
+      }
+    ],
+    "requiredRuntimeSecrets": [
+      "CRM_CALLBACK_SECRET",
+      "META_CAPI_ACCESS_TOKEN",
+      "GHL_WEBHOOK_URL"
+    ],
+    "deduplication": {
+      "idempotencyKey": "downstream_conversions.external_id",
+      "eventId": "downstream_conversions.event_id"
+    },
+    "originalAttribution": {
+      "reuse": true,
+      "fields": [
+        "first_url",
+        "original_query_string",
+        "fbc",
+        "fbp",
+        "ip_address",
+        "user_agent"
+      ]
+    },
+    "purchase": {
+      "requiresExplicitPositiveValue": true
+    }
+  }
 }

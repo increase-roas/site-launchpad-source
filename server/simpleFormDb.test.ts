@@ -290,7 +290,9 @@ describe("Simple Form private candidate validation", () => {
     expect(handoff.configurationReady).toBe(true);
     expect(handoff.validatedConfiguration).not.toHaveProperty("ghlWebhookUrl");
     expect(handoff.secretsPresent.GHL_WEBHOOK_URL).toBe(true);
+    expect(JSON.stringify(handoff)).not.toContain("meta-token");
     expect(JSON.stringify(handoff)).not.toContain(ghlWebhookUrl);
+    expect(JSON.stringify(handoff)).not.toContain("crm-secret");
     expect(JSON.stringify(handoff)).not.toContain("[PRESENT]");
   });
 });
