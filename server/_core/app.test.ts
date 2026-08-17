@@ -4,15 +4,6 @@ import { Server as NetServer } from "node:net";
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const viteEvaluation = vi.hoisted(() => ({ evaluated: false }));
-
-vi.mock("./vite", () => {
-  viteEvaluation.evaluated = true;
-  return {
-    setupVite: vi.fn(),
-  };
-});
-
 const PRODUCTION_ENV = {
   VITE_SUPABASE_URL: "https://project-ref.supabase.co",
   VITE_SUPABASE_PUBLISHABLE_KEY: "publishable-test-key",
@@ -116,27 +107,37 @@ describe("createApp", () => {
     expect(response.body).toEqual({ error: "Not Found" });
   });
 
-  it("does not evaluate development Vite in production", async () => {
+  it("does not set up the development server in production", async () => {
     setProductionEnv();
     const { createApp } = await import("./app");
+    const setupDevelopmentServer = vi.fn();
 
-    await createApp({ mode: "production" });
+    await createApp({ mode: "production", setupDevelopmentServer });
 
-    expect(viteEvaluation.evaluated).toBe(false);
+    expect(setupDevelopmentServer).not.toHaveBeenCalled();
   });
 
   it("keeps local development on Vite and requires a development server", async () => {
     setProductionEnv();
     const { createApp } = await import("./app");
+    const setupDevelopmentServer = vi.fn();
 
-    await expect(createApp({ mode: "development" })).rejects.toThrow(
+    await expect(
+      createApp({ mode: "development", setupDevelopmentServer }),
+    ).rejects.toThrow(
       "A developmentServer is required in development mode.",
     );
 
     const developmentServer = createServer();
-    await createApp({ mode: "development", developmentServer });
-    const { setupVite } = await import("./vite");
-    expect(setupVite).toHaveBeenCalledWith(expect.anything(), developmentServer);
+    await createApp({
+      mode: "development",
+      developmentServer,
+      setupDevelopmentServer,
+    });
+    expect(setupDevelopmentServer).toHaveBeenCalledWith(
+      expect.anything(),
+      developmentServer,
+    );
   });
 
   it("reports only missing production environment variable names", async () => {

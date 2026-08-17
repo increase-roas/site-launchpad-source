@@ -10,9 +10,15 @@ import {
 } from "./env";
 import { serveStatic } from "./static";
 
+export type DevelopmentServerSetup = (
+  app: Express,
+  server: Server,
+) => Promise<void>;
+
 export type CreateAppOptions = {
   mode?: RuntimeMode;
   developmentServer?: Server;
+  setupDevelopmentServer?: DevelopmentServerSetup;
   serveClientAssets?: boolean;
   clientAssetDirectory?: string;
 };
@@ -64,8 +70,12 @@ export async function createApp(
         "A developmentServer is required in development mode.",
       );
     }
-    const { setupVite } = await import("./vite");
-    await setupVite(app, options.developmentServer);
+    if (!options.setupDevelopmentServer) {
+      throw new Error(
+        "A setupDevelopmentServer is required in development mode.",
+      );
+    }
+    await options.setupDevelopmentServer(app, options.developmentServer);
   } else if (mode === "production" && options.serveClientAssets !== false) {
     serveStatic(app, options.clientAssetDirectory);
   }

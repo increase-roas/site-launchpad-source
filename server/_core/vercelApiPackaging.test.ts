@@ -1,5 +1,14 @@
-import { copyFile, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { build } from "esbuild";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -7,6 +16,13 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "../..");
 const PACKAGE_SCRIPT = path.join(REPO_ROOT, "scripts/package-vercel-api.mjs");
 const HEALTH_INPUT = encodeURIComponent(JSON.stringify({ json: { timestamp: 0 } }));
 const HEALTH_PATH = `/api/trpc/system.health?input=${HEALTH_INPUT}`;
+const FORBIDDEN_PRODUCTION_RUNTIME_DEPENDENCIES = [
+  "vite",
+  "vite.config",
+  "@tailwindcss/vite",
+  "lightningcss",
+  "@tailwindcss/oxide",
+] as const;
 
 const DUMMY_PRODUCTION_ENV = {
   NODE_ENV: "production",
@@ -98,7 +114,9 @@ function runNode(
 
 async function packageProductionApiLayout(outDir: string): Promise<{
   catchAllPath: string;
+  handlerBundlePath: string;
   indexPath: string;
+  serverBundlePath: string;
 }> {
   await writeFile(
     path.join(outDir, "package.json"),
@@ -113,6 +131,7 @@ async function packageProductionApiLayout(outDir: string): Promise<{
   await mkdir(path.join(outDir, "dist"), { recursive: true });
 
   const outfile = path.join(outDir, "dist/vercel-api-handler.js");
+  const serverBundlePath = path.join(outDir, "dist/index.js");
   const packed = await runNode([PACKAGE_SCRIPT], REPO_ROOT, {
     VERCEL_API_HANDLER_OUTFILE: outfile,
   });
@@ -121,6 +140,16 @@ async function packageProductionApiLayout(outDir: string): Promise<{
       `Production API packager failed (${packed.code}): ${packed.stderr || packed.stdout}`,
     );
   }
+  await build({
+    absWorkingDir: REPO_ROOT,
+    entryPoints: [path.join(REPO_ROOT, "server/_core/index.ts")],
+    bundle: true,
+    format: "esm",
+    platform: "node",
+    packages: "external",
+    outfile: serverBundlePath,
+    logLevel: "silent",
+  });
 
   await copyFile(path.join(REPO_ROOT, "api/index.js"), path.join(outDir, "api/index.js"));
   await copyFile(
@@ -130,7 +159,9 @@ async function packageProductionApiLayout(outDir: string): Promise<{
 
   return {
     catchAllPath: path.join(outDir, "api/[...path].js"),
+    handlerBundlePath: outfile,
     indexPath: path.join(outDir, "api/index.js"),
+    serverBundlePath,
   };
 }
 
@@ -196,7 +227,18 @@ async function probeEmittedHandler(
 describe("emitted Vercel API function packaging", () => {
   it("invokes the production API handler artifacts for index and catch-all routes", async () => {
     const outDir = await createTempDirectory("site-launchpad-vercel-api-");
-    const { catchAllPath, indexPath } = await packageProductionApiLayout(outDir);
+    const { catchAllPath, handlerBundlePath, indexPath, serverBundlePath } =
+      await packageProductionApiLayout(outDir);
+
+    for (const bundlePath of [serverBundlePath, handlerBundlePath]) {
+      const bundle = await readFile(bundlePath, "utf8");
+      for (const dependency of FORBIDDEN_PRODUCTION_RUNTIME_DEPENDENCIES) {
+        expect(
+          bundle,
+          `${path.basename(bundlePath)} contains ${dependency}`,
+        ).not.toContain(dependency);
+      }
+    }
 
     const missing = await probeEmittedHandler(
       catchAllPath,
