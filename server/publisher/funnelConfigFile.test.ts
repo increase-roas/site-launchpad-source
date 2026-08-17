@@ -4,10 +4,7 @@ import {
   buildSimpleFormValidatedConfiguration,
   type SimpleFormValidatedConfiguration,
 } from "../../shared/simpleFormConfig";
-import {
-  SAFE_GHL_WEBHOOK_PLACEHOLDER,
-  renderFunnelConfigTs,
-} from "./funnelConfigFile";
+import { renderFunnelConfigTs } from "./funnelConfigFile";
 
 function validatedConfiguration(): SimpleFormValidatedConfiguration {
   const operatorConfig = buildSimpleFormOperatorDefaults({
@@ -31,7 +28,7 @@ function validatedConfiguration(): SimpleFormValidatedConfiguration {
 }
 
 describe("funnel.config.ts renderer", () => {
-  it("renders deterministic TypeScript with only the schema-required safe placeholder", () => {
+  it("renders deterministic TypeScript containing only public configuration", () => {
     const config = validatedConfiguration();
 
     const first = renderFunnelConfigTs(config);
@@ -42,13 +39,23 @@ describe("funnel.config.ts renderer", () => {
       'import { defineFunnelConfig } from "./src/lib/config-schema";'
     );
     expect(first).toContain('"slug": "northland-simple-form"');
-    expect(first).toContain(
-      `"ghlWebhookUrl": "${SAFE_GHL_WEBHOOK_PLACEHOLDER}"`
-    );
+    expect(first).not.toContain("ghlWebhookUrl");
     expect(first).not.toContain("validation-placeholder");
     expect(first).toMatch(
       /export default defineFunnelConfig\(\{[\s\S]+\}\);\n$/
     );
+  });
+
+  it("renders exactly the five configured products", () => {
+    const config = validatedConfiguration();
+    const rendered = renderFunnelConfigTs(config);
+
+    expect(config.inventory.products).toHaveLength(5);
+    for (const product of config.inventory.products) {
+      expect(rendered).toContain(JSON.stringify(product.id));
+      expect(rendered).toContain(JSON.stringify(product.name));
+      expect(rendered).toContain(JSON.stringify(product.ctaUrl));
+    }
   });
 
   it("strips unexpected secret-shaped properties before rendering", () => {

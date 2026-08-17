@@ -4,8 +4,6 @@ import type { SimpleFormOperatorConfig } from "../../shared/simpleFormConfig";
 import {
   SIMPLE_FORM_CLOUDFLARE_INFRA,
   SIMPLE_FORM_MANIFEST,
-  SIMPLE_FORM_RUNTIME_SECRET_KEYS,
-  type SimpleFormRuntimeSecretKey,
 } from "../../shared/simpleFormContract";
 import {
   simpleFormPublishProgress,
@@ -27,6 +25,7 @@ import {
 import {
   getCloudflarePublisherEnvironment,
   getGitHubPublisherEnvironment,
+  getGooglePublisherEnvironment,
 } from "./publisherEnv";
 import { simpleFormPublishStore } from "./publishDb";
 import {
@@ -34,13 +33,14 @@ import {
   reconcilePublicTemplateRepository,
 } from "./repositoryReconciliation";
 import { renderWranglerToml } from "./wranglerConfig";
+import {
+  buildPublisherWorkerSecrets,
+  type PublisherWorkerSecretValues,
+} from "./workerSecrets";
 
 export type FunnelPublishJob = FunnelPublish;
 
-export type SimpleFormRuntimeSecrets = Record<
-  SimpleFormRuntimeSecretKey,
-  string | null
->;
+export type SimpleFormRuntimeSecrets = PublisherWorkerSecretValues;
 
 export type SimpleFormPublishMaterial = {
   config: SimpleFormOperatorConfig;
@@ -499,18 +499,29 @@ function suffixedResourceName(base: string, suffix: string): string {
   return `${prefix}${suffix}`;
 }
 
-function cloudflareResourceNames(job: FunnelPublishJob): {
+export function publisherCloudflareResourceNames(
+  resourceName: string,
+  funnelId: number
+): {
   kvNamespaceTitle: string;
   d1DatabaseName: string;
   primaryQueueName: string;
   deadLetterQueueName: string;
 } {
+  const funnelSuffix = `-${funnelId}`;
+  const clientResourceName = resourceName.endsWith(funnelSuffix)
+    ? resourceName.slice(0, -funnelSuffix.length)
+    : resourceName;
   return {
-    kvNamespaceTitle: suffixedResourceName(job.resourceName, "-sessions"),
-    d1DatabaseName: suffixedResourceName(job.resourceName, "-db"),
-    primaryQueueName: suffixedResourceName(job.resourceName, "-retries"),
-    deadLetterQueueName: suffixedResourceName(job.resourceName, "-dead"),
+    kvNamespaceTitle: suffixedResourceName(resourceName, "-sessions"),
+    d1DatabaseName: suffixedResourceName(clientResourceName, "-db"),
+    primaryQueueName: suffixedResourceName(resourceName, "-retries"),
+    deadLetterQueueName: suffixedResourceName(resourceName, "-dead"),
   };
+}
+
+function cloudflareResourceNames(job: FunnelPublishJob) {
+  return publisherCloudflareResourceNames(job.resourceName, job.funnelId);
 }
 
 async function runKvNamespaceStep(
@@ -1167,10 +1178,10 @@ function createRuntimeExternal(): SimpleFormPublishExternal {
       });
     },
     async patchRuntimeSecrets(input) {
-      const secrets = SIMPLE_FORM_RUNTIME_SECRET_KEYS.flatMap(name => {
-        const value = input.runtimeSecrets[name];
-        return value ? [{ name, value }] : [];
-      });
+      const secrets = buildPublisherWorkerSecrets(
+        input.runtimeSecrets,
+        getGooglePublisherEnvironment()
+      );
       await cloudflare.patchWorkerSecrets({
         scriptName: input.workerName,
         secrets,
@@ -1202,7 +1213,14 @@ function runtimeDependencies(): SimpleFormPublishDependencies {
   return {
     store: simpleFormPublishStore,
     external: configuredExternal ?? createRuntimeExternal(),
-    loadMaterial: getSimpleFormPublishMaterial,
+    loadMaterial: async input => {
+      const material = await getSimpleFormPublishMaterial(input);
+      return {
+        config: material.config,
+        runtimeSecrets:
+          material.runtimeSecrets as unknown as PublisherWorkerSecretValues,
+      };
+    },
     now: () => new Date(),
     createLeaseToken: randomUUID,
     leaseDurationMs: 30_000,

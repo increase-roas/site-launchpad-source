@@ -220,15 +220,18 @@ describe("Cloudflare publisher client", () => {
           value: "opaque-meta-credential",
         },
         {
-          name: "GHL_WEBHOOK_URL",
-          value: "https://example.invalid/runtime-hook",
+          name: "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
+          value: "opaque-google-private-key",
         },
       ],
       signal: activeSignal(),
     });
 
     expect(result).toEqual({
-      updatedSecretNames: ["META_CAPI_ACCESS_TOKEN", "GHL_WEBHOOK_URL"],
+      updatedSecretNames: [
+        "META_CAPI_ACCESS_TOKEN",
+        "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
+      ],
     });
     expect(requests).toHaveLength(1);
     expect(requests[0]).toMatchObject({
@@ -245,8 +248,8 @@ describe("Cloudflare publisher client", () => {
           type: "secret_text",
           text: expect.any(String),
         },
-        GHL_WEBHOOK_URL: {
-          name: "GHL_WEBHOOK_URL",
+        GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: {
+          name: "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
           type: "secret_text",
           text: expect.any(String),
         },

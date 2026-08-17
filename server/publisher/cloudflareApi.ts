@@ -3,7 +3,7 @@ import {
   fetchAwaitingCancellation,
   type FetchFunction,
 } from "../../shared/requestTimeout";
-import type { SimpleFormRuntimeSecretKey } from "../../shared/simpleFormContract";
+import type { PublisherWorkerSecretKey } from "./workerSecrets";
 
 export const CLOUDFLARE_REQUEST_TIMEOUT_MS = 10_000;
 
@@ -31,7 +31,7 @@ export type ProvisionedQueues = {
 };
 
 export type WorkerSecretInput = {
-  name: SimpleFormRuntimeSecretKey;
+  name: PublisherWorkerSecretKey;
   value: string;
 };
 
@@ -59,7 +59,7 @@ export type CloudflareApiClient = {
     scriptName: string;
     secrets: readonly WorkerSecretInput[];
     signal: AbortSignal;
-  }): Promise<{ updatedSecretNames: SimpleFormRuntimeSecretKey[] }>;
+  }): Promise<{ updatedSecretNames: PublisherWorkerSecretKey[] }>;
   getWorkersDevStatus(input: {
     scriptName: string;
     signal: AbortSignal;

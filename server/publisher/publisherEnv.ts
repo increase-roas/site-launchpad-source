@@ -8,11 +8,18 @@ export type CloudflarePublisherEnvironment = {
   accountId: string;
 };
 
+export type GooglePublisherEnvironment = {
+  serviceAccountEmail: string;
+  serviceAccountPrivateKey: string;
+};
+
 export const PUBLISHER_ENVIRONMENT_NAMES = {
   githubToken: "PUBLISHER_GITHUB_TOKEN",
   githubOwner: "PUBLISHER_GITHUB_OWNER",
   cloudflareApiToken: "PUBLISHER_CLOUDFLARE_API_TOKEN",
   cloudflareAccountId: "PUBLISHER_CLOUDFLARE_ACCOUNT_ID",
+  googleServiceAccountEmail: "GOOGLE_SERVICE_ACCOUNT_EMAIL",
+  googleServiceAccountPrivateKey: "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
 } as const;
 
 type PublisherEnvironmentName =
@@ -68,4 +75,19 @@ export function getCloudflarePublisherEnvironment(
     );
   }
   return { apiToken, accountId };
+}
+
+export function getGooglePublisherEnvironment(
+  environment: NodeJS.ProcessEnv = process.env
+): GooglePublisherEnvironment {
+  return {
+    serviceAccountEmail: requirePublisherValue(
+      environment,
+      PUBLISHER_ENVIRONMENT_NAMES.googleServiceAccountEmail
+    ),
+    serviceAccountPrivateKey: requirePublisherValue(
+      environment,
+      PUBLISHER_ENVIRONMENT_NAMES.googleServiceAccountPrivateKey
+    ),
+  };
 }

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildSimpleFormStoredRecord } from "../../shared/simpleFormConfig";
 import {
   advanceSimpleFormPublish,
+  publisherCloudflareResourceNames,
   startSimpleFormPublish,
   toSimpleFormPublishStatus,
   type FunnelPublishJob,
@@ -28,11 +29,15 @@ function readyMaterial() {
   return {
     config: record.config,
     runtimeSecrets: {
+      GHL_API_KEY: "server-only-ghl-key",
+      GHL_LOCATION_ID: "location-123",
+      GOOGLE_SHEETS_ID: "sheet-123",
+      GOOGLE_SERVICE_ACCOUNT_EMAIL: null,
+      GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: null,
+      META_PIXEL_ID: "123456789012345",
       META_CAPI_ACCESS_TOKEN: "server-only-meta-token",
-      META_TEST_EVENT_CODE: null,
-      GHL_WEBHOOK_URL: "https://services.leadconnectorhq.com/hooks/example",
-      CRM_CALLBACK_SECRET: "server-only-callback-secret",
-      SUBMISSION_ALERT_WEBHOOK_URL: null,
+      STAGE_WEBHOOK_SECRET: "server-only-stage-secret",
+      ALERT_WEBHOOK_URL: null,
     },
   };
 }
@@ -371,8 +376,9 @@ describe("Simple Form publish state machine", () => {
     expect(external.patchRuntimeSecrets).toHaveBeenCalledWith(
       expect.objectContaining({
         runtimeSecrets: expect.objectContaining({
+          GHL_API_KEY: "server-only-ghl-key",
           META_CAPI_ACCESS_TOKEN: "server-only-meta-token",
-          CRM_CALLBACK_SECRET: "server-only-callback-secret",
+          STAGE_WEBHOOK_SECRET: "server-only-stage-secret",
         }),
       })
     );
@@ -397,6 +403,17 @@ describe("Simple Form publish state machine", () => {
         publishJobId: "publish-11",
       })
     );
+  });
+
+  it("shares one client D1 database while preserving per-funnel resources", () => {
+    const first = publisherCloudflareResourceNames("northland-client-11", 11);
+    const second = publisherCloudflareResourceNames("northland-client-12", 12);
+
+    expect(first.d1DatabaseName).toBe("northland-client-db");
+    expect(second.d1DatabaseName).toBe(first.d1DatabaseName);
+    expect(second.kvNamespaceTitle).not.toBe(first.kvNamespaceTitle);
+    expect(second.primaryQueueName).not.toBe(first.primaryQueueName);
+    expect(second.deadLetterQueueName).not.toBe(first.deadLetterQueueName);
   });
 
   it("allows only one concurrent advance to hold the lease", async () => {

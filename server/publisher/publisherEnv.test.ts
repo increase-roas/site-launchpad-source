@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getCloudflarePublisherEnvironment,
   getGitHubPublisherEnvironment,
+  getGooglePublisherEnvironment,
 } from "./publisherEnv";
 
 describe("publisher environment", () => {
@@ -12,6 +13,9 @@ describe("publisher environment", () => {
     expect(() => getCloudflarePublisherEnvironment({})).toThrow(
       "Missing required publisher environment variable: PUBLISHER_CLOUDFLARE_API_TOKEN."
     );
+    expect(() => getGooglePublisherEnvironment({})).toThrow(
+      "Missing required publisher environment variable: GOOGLE_SERVICE_ACCOUNT_EMAIL."
+    );
   });
 
   it("reads GitHub and Cloudflare settings only from the supplied environment", () => {
@@ -20,6 +24,8 @@ describe("publisher environment", () => {
       PUBLISHER_GITHUB_OWNER: "customer-repositories",
       PUBLISHER_CLOUDFLARE_API_TOKEN: "opaque-cloudflare-credential",
       PUBLISHER_CLOUDFLARE_ACCOUNT_ID: "0123456789abcdef0123456789abcdef",
+      GOOGLE_SERVICE_ACCOUNT_EMAIL: "publisher@example.iam.gserviceaccount.com",
+      GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: "opaque-google-private-key",
     };
 
     expect(getGitHubPublisherEnvironment(environment)).toEqual({
@@ -29,6 +35,10 @@ describe("publisher environment", () => {
     expect(getCloudflarePublisherEnvironment(environment)).toEqual({
       apiToken: "opaque-cloudflare-credential",
       accountId: "0123456789abcdef0123456789abcdef",
+    });
+    expect(getGooglePublisherEnvironment(environment)).toEqual({
+      serviceAccountEmail: "publisher@example.iam.gserviceaccount.com",
+      serviceAccountPrivateKey: "opaque-google-private-key",
     });
   });
 
