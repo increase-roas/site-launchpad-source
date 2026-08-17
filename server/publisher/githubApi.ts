@@ -1,6 +1,6 @@
 import {
   RequestTimeoutError,
-  fetchWithTimeout,
+  fetchAwaitingCancellation,
   type FetchFunction,
 } from "../../shared/requestTimeout";
 
@@ -14,6 +14,7 @@ export type GeneratePublicRepositoryInput = {
   owner: string;
   repository: string;
   description?: string;
+  signal: AbortSignal;
 };
 
 export type GeneratedRepository = {
@@ -22,6 +23,14 @@ export type GeneratedRepository = {
   fullName: string;
   htmlUrl: string;
   defaultBranch: string;
+};
+
+export type Repository = GeneratedRepository & {
+  ownerLogin: string;
+  private: boolean;
+  visibility: "public" | "private" | "internal";
+  templateOwnerLogin: string | null;
+  templateRepositoryName: string | null;
 };
 
 export type CommitPublisherFilesInput = {
@@ -33,6 +42,7 @@ export type CommitPublisherFilesInput = {
     wranglerToml: string;
     funnelConfigTs: string;
   };
+  signal: AbortSignal;
 };
 
 export type PublisherCommitResult = {
@@ -46,11 +56,9 @@ export type DispatchWorkflowInput = {
   repository: string;
   workflow: string;
   ref: string;
-  inputs?: Readonly<Record<string, string>>;
-};
-
-export type WorkflowDispatchResponse = {
-  workflow_run_id: number;
+  publishJobId: string;
+  sourceSha: string;
+  signal: AbortSignal;
 };
 
 export type WorkflowRun = {
@@ -63,9 +71,16 @@ export type WorkflowRun = {
     | "timed_out"
     | "action_required"
     | null;
+  headSha: string;
+  displayTitle: string;
 };
 
 export type GitHubApiClient = {
+  getRepository(input: {
+    owner: string;
+    repository: string;
+    signal: AbortSignal;
+  }): Promise<Repository | null>;
   generatePublicRepository(
     input: GeneratePublicRepositoryInput
   ): Promise<GeneratedRepository>;
@@ -74,12 +89,21 @@ export type GitHubApiClient = {
   ): Promise<PublisherCommitResult>;
   dispatchWorkflow(
     input: DispatchWorkflowInput
-  ): Promise<WorkflowDispatchResponse>;
+  ): Promise<void>;
   getWorkflowRun(input: {
     owner: string;
     repository: string;
     workflowRunId: number;
+    signal: AbortSignal;
   }): Promise<WorkflowRun>;
+  findWorkflowRun(input: {
+    owner: string;
+    repository: string;
+    workflow: string;
+    publishJobId: string;
+    sourceSha: string;
+    signal: AbortSignal;
+  }): Promise<WorkflowRun | null>;
 };
 
 export class GitHubApiError extends Error {
@@ -102,8 +126,13 @@ type GitHubRequest = (
   operation: string,
   path: string,
   init: RequestInit,
-  timeoutMs?: number
-) => Promise<unknown>;
+  signal: AbortSignal,
+  options?: {
+    timeoutMs?: number;
+    allowNotFound?: boolean;
+    expectNoContent?: boolean;
+  }
+) => Promise<unknown | null>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -126,6 +155,18 @@ function requireString(
 ): string {
   const value = record[field];
   if (typeof value !== "string" || !value) {
+    throw new GitHubApiError(`${operation} response validation`);
+  }
+  return value;
+}
+
+function requireBoolean(
+  record: Record<string, unknown>,
+  field: string,
+  operation: string
+): boolean {
+  const value = record[field];
+  if (typeof value !== "boolean") {
     throw new GitHubApiError(`${operation} response validation`);
   }
   return value;
@@ -155,11 +196,13 @@ function createRequest(options: {
     operation,
     path,
     init,
-    timeoutMs = DEFAULT_PUBLISHER_REQUEST_TIMEOUT_MS
+    signal,
+    requestOptions = {}
   ) => {
+    signal.throwIfAborted();
     let response: Response;
     try {
-      response = await fetchWithTimeout(
+      response = await fetchAwaitingCancellation(
         options.fetchFn,
         `https://api.github.com${path}`,
         {
@@ -171,22 +214,68 @@ function createRequest(options: {
             "X-GitHub-Api-Version": GITHUB_API_VERSION,
             ...(init.headers ?? {}),
           },
+          signal,
         },
-        timeoutMs
+        requestOptions.timeoutMs ?? DEFAULT_PUBLISHER_REQUEST_TIMEOUT_MS
       );
     } catch (error) {
       if (error instanceof RequestTimeoutError) throw error;
+      signal.throwIfAborted();
       throw new GitHubApiError(operation);
     }
+    signal.throwIfAborted();
     if (!response.ok) {
+      if (requestOptions.allowNotFound && response.status === 404) {
+        return null;
+      }
       throw new GitHubApiError(operation, response.status);
     }
+    if (requestOptions.expectNoContent) return null;
     try {
       const body: unknown = await response.json();
+      signal.throwIfAborted();
       return body;
     } catch {
+      signal.throwIfAborted();
       throw new GitHubApiError(`${operation} response validation`);
     }
+  };
+}
+
+function parseRepository(value: unknown): Repository {
+  const operation = "repository lookup";
+  const record = requireRecord(value, operation);
+  const owner = requireRecord(record.owner, operation);
+  const visibility = requireString(record, "visibility", operation);
+  if (
+    visibility !== "public" &&
+    visibility !== "private" &&
+    visibility !== "internal"
+  ) {
+    throw new GitHubApiError(`${operation} response validation`);
+  }
+
+  const templateRepository = record.template_repository;
+  let templateOwnerLogin: string | null = null;
+  let templateRepositoryName: string | null = null;
+  if (templateRepository !== undefined && templateRepository !== null) {
+    const template = requireRecord(templateRepository, operation);
+    const templateOwner = requireRecord(template.owner, operation);
+    templateOwnerLogin = requireString(templateOwner, "login", operation);
+    templateRepositoryName = requireString(template, "name", operation);
+  }
+
+  return {
+    id: requirePositiveInteger(record, "id", operation),
+    ownerLogin: requireString(owner, "login", operation),
+    name: requireString(record, "name", operation),
+    fullName: requireString(record, "full_name", operation),
+    private: requireBoolean(record, "private", operation),
+    visibility,
+    templateOwnerLogin,
+    templateRepositoryName,
+    htmlUrl: requireString(record, "html_url", operation),
+    defaultBranch: requireString(record, "default_branch", operation),
   };
 }
 
@@ -222,18 +311,6 @@ function parseSha(value: unknown, operation: string): string {
   return requireString(requireRecord(value, operation), "sha", operation);
 }
 
-function parseWorkflowDispatch(value: unknown): WorkflowDispatchResponse {
-  const operation = "workflow dispatch";
-  const record = requireRecord(value, operation);
-  return {
-    workflow_run_id: requirePositiveInteger(
-      record,
-      "workflow_run_id",
-      operation
-    ),
-  };
-}
-
 function parseWorkflowRun(value: unknown): WorkflowRun {
   const operation = "workflow run lookup";
   const record = requireRecord(value, operation);
@@ -260,7 +337,25 @@ function parseWorkflowRun(value: unknown): WorkflowRun {
     id: requirePositiveInteger(record, "id", operation),
     status,
     conclusion,
+    headSha: requireString(record, "head_sha", operation),
+    displayTitle: requireString(record, "display_title", operation),
   };
+}
+
+function parseWorkflowRuns(value: unknown): WorkflowRun[] {
+  const operation = "workflow run reconciliation";
+  const record = requireRecord(value, operation);
+  if (!Array.isArray(record.workflow_runs)) {
+    throw new GitHubApiError(`${operation} response validation`);
+  }
+  return record.workflow_runs.map(parseWorkflowRun);
+}
+
+export function expectedWorkflowDisplayTitle(
+  publishJobId: string,
+  sourceSha: string
+): string {
+  return `Deploy ${publishJobId} ${sourceSha}`;
 }
 
 export function createGitHubApiClient(options: {
@@ -273,6 +368,16 @@ export function createGitHubApiClient(options: {
   });
 
   return {
+    async getRepository(input) {
+      const response = await request(
+        "repository lookup",
+        `/repos/${encoded(input.owner)}/${encoded(input.repository)}`,
+        { method: "GET" },
+        input.signal,
+        { allowNotFound: true }
+      );
+      return response === null ? null : parseRepository(response);
+    },
     async generatePublicRepository(input) {
       const response = await request(
         "repository generation",
@@ -289,7 +394,8 @@ export function createGitHubApiClient(options: {
             include_all_branches: false,
           }),
         },
-        REPOSITORY_GENERATION_TIMEOUT_MS
+        input.signal,
+        { timeoutMs: REPOSITORY_GENERATION_TIMEOUT_MS }
       );
       return parseGeneratedRepository(response);
     },
@@ -299,13 +405,15 @@ export function createGitHubApiClient(options: {
       const refResponse = await request(
         "branch lookup",
         `${repositoryPath}/git/ref/heads/${branch}`,
-        { method: "GET" }
+        { method: "GET" },
+        input.signal
       );
       const parentCommitSha = parseObjectSha(refResponse, "branch lookup");
       const commitResponse = await request(
         "commit lookup",
         `${repositoryPath}/git/commits/${encoded(parentCommitSha)}`,
-        { method: "GET" }
+        { method: "GET" },
+        input.signal
       );
       const baseTreeSha = parseCommitTreeSha(commitResponse);
       const treeResponse = await request(
@@ -330,7 +438,8 @@ export function createGitHubApiClient(options: {
               },
             ],
           }),
-        }
+        },
+        input.signal
       );
       const treeSha = parseSha(treeResponse, "tree creation");
       const newCommitResponse = await request(
@@ -343,7 +452,8 @@ export function createGitHubApiClient(options: {
             tree: treeSha,
             parents: [parentCommitSha],
           }),
-        }
+        },
+        input.signal
       );
       const commitSha = parseSha(newCommitResponse, "commit creation");
       const updateResponse = await request(
@@ -355,7 +465,8 @@ export function createGitHubApiClient(options: {
             sha: commitSha,
             force: false,
           }),
-        }
+        },
+        input.signal
       );
       const updatedSha = parseObjectSha(updateResponse, "branch update");
       if (updatedSha !== commitSha) {
@@ -368,26 +479,48 @@ export function createGitHubApiClient(options: {
       };
     },
     async dispatchWorkflow(input) {
-      const response = await request(
+      await request(
         "workflow dispatch",
         `/repos/${encoded(input.owner)}/${encoded(input.repository)}/actions/workflows/${encoded(input.workflow)}/dispatches`,
         {
           method: "POST",
           body: JSON.stringify({
             ref: input.ref,
-            ...(input.inputs === undefined ? {} : { inputs: input.inputs }),
+            inputs: {
+              publish_job_id: input.publishJobId,
+              source_sha: input.sourceSha,
+            },
           }),
-        }
+        },
+        input.signal,
+        { expectNoContent: true }
       );
-      return parseWorkflowDispatch(response);
     },
     async getWorkflowRun(input) {
       const response = await request(
         "workflow run lookup",
         `/repos/${encoded(input.owner)}/${encoded(input.repository)}/actions/runs/${input.workflowRunId}`,
-        { method: "GET" }
+        { method: "GET" },
+        input.signal
       );
       return parseWorkflowRun(response);
+    },
+    async findWorkflowRun(input) {
+      const response = await request(
+        "workflow run reconciliation",
+        `/repos/${encoded(input.owner)}/${encoded(input.repository)}/actions/workflows/${encoded(input.workflow)}/runs?event=workflow_dispatch&per_page=50&page=1`,
+        { method: "GET" },
+        input.signal
+      );
+      const expectedDisplayTitle = expectedWorkflowDisplayTitle(
+        input.publishJobId,
+        input.sourceSha
+      );
+      return (
+        parseWorkflowRuns(response).find(
+          run => run.displayTitle === expectedDisplayTitle
+        ) ?? null
+      );
     },
   };
 }

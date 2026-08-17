@@ -12,6 +12,35 @@ export class RequestTimeoutError extends Error {
   }
 }
 
+export async function fetchAwaitingCancellation(
+  fetchFn: FetchFunction,
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const timeoutController = new AbortController();
+  const timeoutError = new RequestTimeoutError(timeoutMs);
+  const timeout = setTimeout(() => {
+    timeoutController.abort(timeoutError);
+  }, timeoutMs);
+  const signal = init.signal
+    ? AbortSignal.any([init.signal, timeoutController.signal])
+    : timeoutController.signal;
+
+  try {
+    signal.throwIfAborted();
+    const response = await fetchFn(input, { ...init, signal });
+    signal.throwIfAborted();
+    return response;
+  } catch (error) {
+    if (timeoutController.signal.aborted) throw timeoutError;
+    if (init.signal?.aborted) throw init.signal.reason ?? error;
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function fetchWithTimeout(
   fetchFn: FetchFunction,
   input: RequestInfo | URL,

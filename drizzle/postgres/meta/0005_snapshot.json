@@ -1,0 +1,2448 @@
+{
+  "id": "a7de25b2-fe83-4eb0-8c5b-1a30a3fa97f6",
+  "prevId": "a27a2d5d-5139-4e3a-910e-6a49ad280f65",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.assetUploadSessions": {
+      "name": "assetUploadSessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "clientId": {
+          "name": "clientId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "assetKind": {
+          "name": "assetKind",
+          "type": "asset_upload_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slot": {
+          "name": "slot",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "originalFilename": {
+          "name": "originalFilename",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "declaredMimeType": {
+          "name": "declaredMimeType",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "declaredSizeBytes": {
+          "name": "declaredSizeBytes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tempKey": {
+          "name": "tempKey",
+          "type": "varchar(800)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "asset_upload_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "expiresAt": {
+          "name": "expiresAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "completedAt": {
+          "name": "completedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "asset_upload_sessions_client_idx": {
+          "name": "asset_upload_sessions_client_idx",
+          "columns": [
+            {
+              "expression": "clientId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "asset_upload_sessions_status_idx": {
+          "name": "asset_upload_sessions_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "asset_upload_sessions_expires_at_idx": {
+          "name": "asset_upload_sessions_expires_at_idx",
+          "columns": [
+            {
+              "expression": "expiresAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "assetUploadSessions_clientId_clients_id_fk": {
+          "name": "assetUploadSessions_clientId_clients_id_fk",
+          "tableFrom": "assetUploadSessions",
+          "tableTo": "clients",
+          "columnsFrom": [
+            "clientId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "asset_upload_sessions_temp_key_unique": {
+          "name": "asset_upload_sessions_temp_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "tempKey"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.astroClientConfigs": {
+      "name": "astroClientConfigs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "clientId": {
+          "name": "clientId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "socialLinks": {
+          "name": "socialLinks",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fonts": {
+          "name": "fonts",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "borderRadii": {
+          "name": "borderRadii",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "navigationItems": {
+          "name": "navigationItems",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "categories": {
+          "name": "categories",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "financing": {
+          "name": "financing",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "homepageSections": {
+          "name": "homepageSections",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "integrations": {
+          "name": "integrations",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "generatedConfigEncrypted": {
+          "name": "generatedConfigEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "generatedAt": {
+          "name": "generatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "astro_client_configs_client_unique": {
+          "name": "astro_client_configs_client_unique",
+          "columns": [
+            {
+              "expression": "clientId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "astroClientConfigs_clientId_clients_id_fk": {
+          "name": "astroClientConfigs_clientId_clients_id_fk",
+          "tableFrom": "astroClientConfigs",
+          "tableTo": "clients",
+          "columnsFrom": [
+            "clientId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.clientAssets": {
+      "name": "clientAssets",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "clientId": {
+          "name": "clientId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slot": {
+          "name": "slot",
+          "type": "asset_slot",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "storageKey": {
+          "name": "storageKey",
+          "type": "varchar(800)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "storageUrl": {
+          "name": "storageUrl",
+          "type": "varchar(1000)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "filename": {
+          "name": "filename",
+          "type": "varchar(240)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "originalFilename": {
+          "name": "originalFilename",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mimeType": {
+          "name": "mimeType",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "byteSize": {
+          "name": "byteSize",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "width": {
+          "name": "width",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "height": {
+          "name": "height",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "client_assets_client_slot_unique": {
+          "name": "client_assets_client_slot_unique",
+          "columns": [
+            {
+              "expression": "clientId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "slot",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "client_assets_client_idx": {
+          "name": "client_assets_client_idx",
+          "columns": [
+            {
+              "expression": "clientId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "clientAssets_clientId_clients_id_fk": {
+          "name": "clientAssets_clientId_clients_id_fk",
+          "tableFrom": "clientAssets",
+          "tableTo": "clients",
+          "columnsFrom": [
+            "clientId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.clientSecretSetups": {
+      "name": "clientSecretSetups",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "clientId": {
+          "name": "clientId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "metaPixelIdEncrypted": {
+          "name": "metaPixelIdEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ga4MeasurementIdEncrypted": {
+          "name": "ga4MeasurementIdEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "clarityIdEncrypted": {
+          "name": "clarityIdEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ghlApiKeyEncrypted": {
+          "name": "ghlApiKeyEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ghlWebhookUrlEncrypted": {
+          "name": "ghlWebhookUrlEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cloudflareProjectNameEncrypted": {
+          "name": "cloudflareProjectNameEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "client_secret_setups_client_unique": {
+          "name": "client_secret_setups_client_unique",
+          "columns": [
+            {
+              "expression": "clientId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "clientSecretSetups_clientId_clients_id_fk": {
+          "name": "clientSecretSetups_clientId_clients_id_fk",
+          "tableFrom": "clientSecretSetups",
+          "tableTo": "clients",
+          "columnsFrom": [
+            "clientId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.clients": {
+      "name": "clients",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "businessName": {
+          "name": "businessName",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "shortName": {
+          "name": "shortName",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phone": {
+          "name": "phone",
+          "type": "varchar(24)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "smsPhone": {
+          "name": "smsPhone",
+          "type": "varchar(24)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phoneDisplayOverride": {
+          "name": "phoneDisplayOverride",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(320)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "streetAddress": {
+          "name": "streetAddress",
+          "type": "varchar(240)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "street2": {
+          "name": "street2",
+          "type": "varchar(240)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "city": {
+          "name": "city",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state": {
+          "name": "state",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "postalCode": {
+          "name": "postalCode",
+          "type": "varchar(24)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "country": {
+          "name": "country",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'US'"
+        },
+        "latitude": {
+          "name": "latitude",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "longitude": {
+          "name": "longitude",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "googlePlaceId": {
+          "name": "googlePlaceId",
+          "type": "varchar(300)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "websiteUrl": {
+          "name": "websiteUrl",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "schemaType": {
+          "name": "schemaType",
+          "type": "client_schema_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'HomeAndConstructionBusiness'"
+        },
+        "foundedYear": {
+          "name": "foundedYear",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tagline": {
+          "name": "tagline",
+          "type": "varchar(240)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "theme": {
+          "name": "theme",
+          "type": "client_theme",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "businessHours": {
+          "name": "businessHours",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "facebookUrl": {
+          "name": "facebookUrl",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "googleMapsUrl": {
+          "name": "googleMapsUrl",
+          "type": "varchar(1000)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "productCategories": {
+          "name": "productCategories",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "primaryOffer": {
+          "name": "primaryOffer",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "financingPromise": {
+          "name": "financingPromise",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deliveryPromise": {
+          "name": "deliveryPromise",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "client_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "readyAt": {
+          "name": "readyAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "clients_short_name_unique": {
+          "name": "clients_short_name_unique",
+          "columns": [
+            {
+              "expression": "shortName",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "clients_status_idx": {
+          "name": "clients_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "clients_updated_at_idx": {
+          "name": "clients_updated_at_idx",
+          "columns": [
+            {
+              "expression": "updatedAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.funnelConfigs": {
+      "name": "funnelConfigs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "funnelId": {
+          "name": "funnelId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "serviceArea": {
+          "name": "serviceArea",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "offerHeadline": {
+          "name": "offerHeadline",
+          "type": "varchar(300)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "offerSubheadline": {
+          "name": "offerSubheadline",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "thankYouMessage": {
+          "name": "thankYouMessage",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "generatedConfigEncrypted": {
+          "name": "generatedConfigEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "generatedAt": {
+          "name": "generatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "funnel_configs_funnel_unique": {
+          "name": "funnel_configs_funnel_unique",
+          "columns": [
+            {
+              "expression": "funnelId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "funnelConfigs_funnelId_funnels_id_fk": {
+          "name": "funnelConfigs_funnelId_funnels_id_fk",
+          "tableFrom": "funnelConfigs",
+          "tableTo": "funnels",
+          "columnsFrom": [
+            "funnelId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.funnelPublishes": {
+      "name": "funnelPublishes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "clientId": {
+          "name": "clientId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "funnelId": {
+          "name": "funnelId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "externalFunnelId": {
+          "name": "externalFunnelId",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resourceName": {
+          "name": "resourceName",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "repositoryName": {
+          "name": "repositoryName",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "workerName": {
+          "name": "workerName",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "step": {
+          "name": "step",
+          "type": "funnel_publish_step",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'create_repository'"
+        },
+        "status": {
+          "name": "status",
+          "type": "funnel_publish_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "repositoryId": {
+          "name": "repositoryId",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "repositoryFullName": {
+          "name": "repositoryFullName",
+          "type": "varchar(240)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "repositoryUrl": {
+          "name": "repositoryUrl",
+          "type": "varchar(1000)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "defaultBranch": {
+          "name": "defaultBranch",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "repositoryCreateRequestedAt": {
+          "name": "repositoryCreateRequestedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kvNamespaceId": {
+          "name": "kvNamespaceId",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "d1DatabaseId": {
+          "name": "d1DatabaseId",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "primaryQueueId": {
+          "name": "primaryQueueId",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deadLetterQueueId": {
+          "name": "deadLetterQueueId",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "commitSha": {
+          "name": "commitSha",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "liveUrl": {
+          "name": "liveUrl",
+          "type": "varchar(1000)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dispatchRequestedAt": {
+          "name": "dispatchRequestedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "workflowRunId": {
+          "name": "workflowRunId",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "workflowStatus": {
+          "name": "workflowStatus",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "workflowCheckedAt": {
+          "name": "workflowCheckedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "runtimeSecretsPatchedAt": {
+          "name": "runtimeSecretsPatchedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "leaseToken": {
+          "name": "leaseToken",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "leaseUntil": {
+          "name": "leaseUntil",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lastError": {
+          "name": "lastError",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attemptCount": {
+          "name": "attemptCount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "completedAt": {
+          "name": "completedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "funnel_publishes_funnel_unique": {
+          "name": "funnel_publishes_funnel_unique",
+          "columns": [
+            {
+              "expression": "funnelId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "funnel_publishes_external_funnel_unique": {
+          "name": "funnel_publishes_external_funnel_unique",
+          "columns": [
+            {
+              "expression": "externalFunnelId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "funnel_publishes_status_idx": {
+          "name": "funnel_publishes_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "funnel_publishes_lease_until_idx": {
+          "name": "funnel_publishes_lease_until_idx",
+          "columns": [
+            {
+              "expression": "leaseUntil",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "funnelPublishes_clientId_clients_id_fk": {
+          "name": "funnelPublishes_clientId_clients_id_fk",
+          "tableFrom": "funnelPublishes",
+          "tableTo": "clients",
+          "columnsFrom": [
+            "clientId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "funnelPublishes_funnelId_funnels_id_fk": {
+          "name": "funnelPublishes_funnelId_funnels_id_fk",
+          "tableFrom": "funnelPublishes",
+          "tableTo": "funnels",
+          "columnsFrom": [
+            "funnelId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.funnelRuntimeSecrets": {
+      "name": "funnelRuntimeSecrets",
+      "schema": "",
+      "columns": {
+        "funnelId": {
+          "name": "funnelId",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "metaCapiAccessTokenEncrypted": {
+          "name": "metaCapiAccessTokenEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metaTestEventCodeEncrypted": {
+          "name": "metaTestEventCodeEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ghlWebhookUrlEncrypted": {
+          "name": "ghlWebhookUrlEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "crmCallbackSecretEncrypted": {
+          "name": "crmCallbackSecretEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "submissionAlertWebhookUrlEncrypted": {
+          "name": "submissionAlertWebhookUrlEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "funnelRuntimeSecrets_funnelId_funnels_id_fk": {
+          "name": "funnelRuntimeSecrets_funnelId_funnels_id_fk",
+          "tableFrom": "funnelRuntimeSecrets",
+          "tableTo": "funnels",
+          "columnsFrom": [
+            "funnelId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.funnelSimpleFormConfigs": {
+      "name": "funnelSimpleFormConfigs",
+      "schema": "",
+      "columns": {
+        "funnelId": {
+          "name": "funnelId",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "configJson": {
+          "name": "configJson",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "funnelSimpleFormConfigs_funnelId_funnels_id_fk": {
+          "name": "funnelSimpleFormConfigs_funnelId_funnels_id_fk",
+          "tableFrom": "funnelSimpleFormConfigs",
+          "tableTo": "funnels",
+          "columnsFrom": [
+            "funnelId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.funnelSteps": {
+      "name": "funnelSteps",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "funnelId": {
+          "name": "funnelId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stepType": {
+          "name": "stepType",
+          "type": "funnel_step_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "path": {
+          "name": "path",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "capturedFields": {
+          "name": "capturedFields",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "trackingActions": {
+          "name": "trackingActions",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "funnel_steps_funnel_position_unique": {
+          "name": "funnel_steps_funnel_position_unique",
+          "columns": [
+            {
+              "expression": "funnelId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "position",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "funnel_steps_funnel_idx": {
+          "name": "funnel_steps_funnel_idx",
+          "columns": [
+            {
+              "expression": "funnelId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "funnelSteps_funnelId_funnels_id_fk": {
+          "name": "funnelSteps_funnelId_funnels_id_fk",
+          "tableFrom": "funnelSteps",
+          "tableTo": "funnels",
+          "columnsFrom": [
+            "funnelId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.funnelSurveyQuestions": {
+      "name": "funnelSurveyQuestions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "funnelId": {
+          "name": "funnelId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "questionText": {
+          "name": "questionText",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "questionType": {
+          "name": "questionType",
+          "type": "survey_question_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "options": {
+          "name": "options",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "funnel_survey_questions_position_unique": {
+          "name": "funnel_survey_questions_position_unique",
+          "columns": [
+            {
+              "expression": "funnelId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "position",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "funnel_survey_questions_funnel_idx": {
+          "name": "funnel_survey_questions_funnel_idx",
+          "columns": [
+            {
+              "expression": "funnelId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "funnelSurveyQuestions_funnelId_funnels_id_fk": {
+          "name": "funnelSurveyQuestions_funnelId_funnels_id_fk",
+          "tableFrom": "funnelSurveyQuestions",
+          "tableTo": "funnels",
+          "columnsFrom": [
+            "funnelId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.funnels": {
+      "name": "funnels",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "clientId": {
+          "name": "clientId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "varchar(240)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "templateKey": {
+          "name": "templateKey",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "templateRepo": {
+          "name": "templateRepo",
+          "type": "varchar(240)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "contractVersion": {
+          "name": "contractVersion",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "shape": {
+          "name": "shape",
+          "type": "funnel_shape",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "workspace_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "deploymentStatus": {
+          "name": "deploymentStatus",
+          "type": "funnel_deployment_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "readyAt": {
+          "name": "readyAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deployedAt": {
+          "name": "deployedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "funnels_client_slug_unique": {
+          "name": "funnels_client_slug_unique",
+          "columns": [
+            {
+              "expression": "clientId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "funnels_client_template_unique": {
+          "name": "funnels_client_template_unique",
+          "columns": [
+            {
+              "expression": "clientId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "templateKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "funnels_client_idx": {
+          "name": "funnels_client_idx",
+          "columns": [
+            {
+              "expression": "clientId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "funnels_clientId_clients_id_fk": {
+          "name": "funnels_clientId_clients_id_fk",
+          "tableFrom": "funnels",
+          "tableTo": "clients",
+          "columnsFrom": [
+            "clientId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.homepageSections": {
+      "name": "homepageSections",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "clientId": {
+          "name": "clientId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sectionType": {
+          "name": "sectionType",
+          "type": "homepage_section_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "homepage_sections_client_type_unique": {
+          "name": "homepage_sections_client_type_unique",
+          "columns": [
+            {
+              "expression": "clientId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sectionType",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "homepage_sections_client_position_unique": {
+          "name": "homepage_sections_client_position_unique",
+          "columns": [
+            {
+              "expression": "clientId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "position",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "homepage_sections_client_idx": {
+          "name": "homepage_sections_client_idx",
+          "columns": [
+            {
+              "expression": "clientId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "homepageSections_clientId_clients_id_fk": {
+          "name": "homepageSections_clientId_clients_id_fk",
+          "tableFrom": "homepageSections",
+          "tableTo": "clients",
+          "columnsFrom": [
+            "clientId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.sitePages": {
+      "name": "sitePages",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "clientId": {
+          "name": "clientId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pageType": {
+          "name": "pageType",
+          "type": "site_page_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "varchar(240)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "workspace_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "site_pages_client_type_unique": {
+          "name": "site_pages_client_type_unique",
+          "columns": [
+            {
+              "expression": "clientId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "pageType",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "site_pages_client_idx": {
+          "name": "site_pages_client_idx",
+          "columns": [
+            {
+              "expression": "clientId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "sitePages_clientId_clients_id_fk": {
+          "name": "sitePages_clientId_clients_id_fk",
+          "tableFrom": "sitePages",
+          "tableTo": "clients",
+          "columnsFrom": [
+            "clientId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "authUserId": {
+          "name": "authUserId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(320)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "loginMethod": {
+          "name": "loginMethod",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "role": {
+          "name": "role",
+          "type": "user_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'user'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "lastSignedIn": {
+          "name": "lastSignedIn",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "users_authUserId_unique": {
+          "name": "users_authUserId_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "authUserId"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.wranglerSecretSetups": {
+      "name": "wranglerSecretSetups",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "clientId": {
+          "name": "clientId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ghlApiKeyEncrypted": {
+          "name": "ghlApiKeyEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ghlLocationIdEncrypted": {
+          "name": "ghlLocationIdEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metaPixelIdEncrypted": {
+          "name": "metaPixelIdEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metaCapiAccessTokenEncrypted": {
+          "name": "metaCapiAccessTokenEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metaValueQualifiedEncrypted": {
+          "name": "metaValueQualifiedEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metaValueScheduleEncrypted": {
+          "name": "metaValueScheduleEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metaValueShowedEncrypted": {
+          "name": "metaValueShowedEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stageWebhookSecretEncrypted": {
+          "name": "stageWebhookSecretEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "googleSheetsIdEncrypted": {
+          "name": "googleSheetsIdEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "googleServiceAccountEmailEncrypted": {
+          "name": "googleServiceAccountEmailEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "googleServiceAccountPrivateKeyEncrypted": {
+          "name": "googleServiceAccountPrivateKeyEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alertWebhookUrlEncrypted": {
+          "name": "alertWebhookUrlEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "adminPasswordEncrypted": {
+          "name": "adminPasswordEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "adminSessionSecretEncrypted": {
+          "name": "adminSessionSecretEncrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "wrangler_secret_setups_client_unique": {
+          "name": "wrangler_secret_setups_client_unique",
+          "columns": [
+            {
+              "expression": "clientId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "wranglerSecretSetups_clientId_clients_id_fk": {
+          "name": "wranglerSecretSetups_clientId_clients_id_fk",
+          "tableFrom": "wranglerSecretSetups",
+          "tableTo": "clients",
+          "columnsFrom": [
+            "clientId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    }
+  },
+  "enums": {
+    "public.asset_slot": {
+      "name": "asset_slot",
+      "schema": "public",
+      "values": [
+        "logo",
+        "hero",
+        "hotTubs",
+        "swimSpas",
+        "showroom",
+        "product",
+        "delivery",
+        "navLogo",
+        "footerLogo",
+        "inventoryLogo",
+        "favicon",
+        "ogImage",
+        "categoryHotTubs",
+        "categorySwimSpas",
+        "categorySaunas",
+        "categoryColdPlunge",
+        "categoryMassageChairs"
+      ]
+    },
+    "public.asset_upload_kind": {
+      "name": "asset_upload_kind",
+      "schema": "public",
+      "values": [
+        "client",
+        "astro"
+      ]
+    },
+    "public.asset_upload_status": {
+      "name": "asset_upload_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "completed",
+        "failed"
+      ]
+    },
+    "public.client_schema_type": {
+      "name": "client_schema_type",
+      "schema": "public",
+      "values": [
+        "HomeAndConstructionBusiness",
+        "Store",
+        "LocalBusiness"
+      ]
+    },
+    "public.client_status": {
+      "name": "client_status",
+      "schema": "public",
+      "values": [
+        "draft",
+        "ready",
+        "live",
+        "issue"
+      ]
+    },
+    "public.client_theme": {
+      "name": "client_theme",
+      "schema": "public",
+      "values": [
+        "aqua",
+        "luxury",
+        "natural",
+        "mono"
+      ]
+    },
+    "public.funnel_deployment_status": {
+      "name": "funnel_deployment_status",
+      "schema": "public",
+      "values": [
+        "draft",
+        "ready",
+        "deployed"
+      ]
+    },
+    "public.funnel_publish_status": {
+      "name": "funnel_publish_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "running",
+        "failed",
+        "published"
+      ]
+    },
+    "public.funnel_publish_step": {
+      "name": "funnel_publish_step",
+      "schema": "public",
+      "values": [
+        "create_repository",
+        "ensure_kv_namespace",
+        "ensure_d1_database",
+        "ensure_queues",
+        "commit_source",
+        "dispatch_workflow",
+        "monitor_workflow",
+        "patch_runtime_secrets",
+        "get_live_url",
+        "published"
+      ]
+    },
+    "public.funnel_shape": {
+      "name": "funnel_shape",
+      "schema": "public",
+      "values": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    "public.funnel_step_type": {
+      "name": "funnel_step_type",
+      "schema": "public",
+      "values": [
+        "zip",
+        "survey",
+        "contact",
+        "book",
+        "thankYou"
+      ]
+    },
+    "public.homepage_section_type": {
+      "name": "homepage_section_type",
+      "schema": "public",
+      "values": [
+        "hero",
+        "categories",
+        "visitShowroom",
+        "deliveryInstall",
+        "testimonials",
+        "financing",
+        "faq",
+        "contact",
+        "map"
+      ]
+    },
+    "public.site_page_type": {
+      "name": "site_page_type",
+      "schema": "public",
+      "values": [
+        "homepage",
+        "inventory",
+        "categories",
+        "visitUs",
+        "financing"
+      ]
+    },
+    "public.survey_question_type": {
+      "name": "survey_question_type",
+      "schema": "public",
+      "values": [
+        "radio",
+        "checkbox",
+        "text"
+      ]
+    },
+    "public.user_role": {
+      "name": "user_role",
+      "schema": "public",
+      "values": [
+        "user",
+        "admin"
+      ]
+    },
+    "public.workspace_status": {
+      "name": "workspace_status",
+      "schema": "public",
+      "values": [
+        "draft",
+        "ready",
+        "live",
+        "issue"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

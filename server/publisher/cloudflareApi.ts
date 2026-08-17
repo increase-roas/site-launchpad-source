@@ -1,6 +1,6 @@
 import {
   RequestTimeoutError,
-  fetchWithTimeout,
+  fetchAwaitingCancellation,
   type FetchFunction,
 } from "../../shared/requestTimeout";
 import type { SimpleFormRuntimeSecretKey } from "../../shared/simpleFormContract";
@@ -42,17 +42,28 @@ export type WorkersDevStatus = {
 };
 
 export type CloudflareApiClient = {
-  ensureKvNamespace(title: string): Promise<ProvisionedKvNamespace>;
-  ensureD1Database(name: string): Promise<ProvisionedD1Database>;
+  ensureKvNamespace(
+    title: string,
+    signal: AbortSignal
+  ): Promise<ProvisionedKvNamespace>;
+  ensureD1Database(
+    name: string,
+    signal: AbortSignal
+  ): Promise<ProvisionedD1Database>;
   ensureQueues(input: {
     primary: string;
     deadLetter: string;
+    signal: AbortSignal;
   }): Promise<ProvisionedQueues>;
   patchWorkerSecrets(input: {
     scriptName: string;
     secrets: readonly WorkerSecretInput[];
+    signal: AbortSignal;
   }): Promise<{ updatedSecretNames: SimpleFormRuntimeSecretKey[] }>;
-  getWorkersDevStatus(input: { scriptName: string }): Promise<WorkersDevStatus>;
+  getWorkersDevStatus(input: {
+    scriptName: string;
+    signal: AbortSignal;
+  }): Promise<WorkersDevStatus>;
 };
 
 export class CloudflareApiError extends Error {
@@ -213,9 +224,10 @@ function createRequest(options: {
   fetchFn: FetchFunction;
 }): CloudflareRequest {
   return async (operation, path, init) => {
+    init.signal?.throwIfAborted();
     let response: Response;
     try {
-      response = await fetchWithTimeout(
+      response = await fetchAwaitingCancellation(
         options.fetchFn,
         `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(options.accountId)}${path}`,
         {
@@ -230,6 +242,7 @@ function createRequest(options: {
       );
     } catch (error) {
       if (error instanceof RequestTimeoutError) throw error;
+      if (init.signal?.aborted) throw init.signal.reason ?? error;
       throw new CloudflareApiError(operation);
     }
     if (!response.ok) {
@@ -249,16 +262,18 @@ async function listPaginated<T>(
   request: CloudflareRequest,
   operation: string,
   path: string,
-  parseItem: (value: unknown, operationName: string) => T
+  parseItem: (value: unknown, operationName: string) => T,
+  signal: AbortSignal
 ): Promise<T[]> {
   const items: T[] = [];
   let page = 1;
   while (true) {
+    signal.throwIfAborted();
     const separator = path.includes("?") ? "&" : "?";
     const envelope = await request(
       operation,
       `${path}${separator}page=${page}&per_page=100`,
-      { method: "GET" }
+      { method: "GET", signal }
     );
     if (!Array.isArray(envelope.result)) {
       throw new CloudflareApiError(`${operation} response validation`);
@@ -307,23 +322,26 @@ export function createCloudflareApiClient(options: {
   });
 
   return {
-    async ensureKvNamespace(title) {
+    async ensureKvNamespace(title, signal) {
       const operation = "KV namespace listing";
       const namespaces = await listPaginated(
         request,
         operation,
         "/storage/kv/namespaces",
-        parseKvNamespace
+        parseKvNamespace,
+        signal
       );
       const existing = namespaces.find(namespace => namespace.title === title);
       if (existing) return provisionedKv(existing, false);
 
+      signal.throwIfAborted();
       const envelope = await request(
         "KV namespace creation",
         "/storage/kv/namespaces",
         {
           method: "POST",
           body: JSON.stringify({ title }),
+          signal,
         }
       );
       return provisionedKv(
@@ -334,20 +352,23 @@ export function createCloudflareApiClient(options: {
         true
       );
     },
-    async ensureD1Database(name) {
+    async ensureD1Database(name, signal) {
       const operation = "D1 database listing";
       const databases = await listPaginated(
         request,
         operation,
         "/d1/database",
-        parseD1Database
+        parseD1Database,
+        signal
       );
       const existing = databases.find(database => database.name === name);
       if (existing) return provisionedD1(existing, false);
 
+      signal.throwIfAborted();
       const envelope = await request("D1 database creation", "/d1/database", {
         method: "POST",
         body: JSON.stringify({ name }),
+        signal,
       });
       return provisionedD1(
         parseD1Database(
@@ -366,14 +387,17 @@ export function createCloudflareApiClient(options: {
         request,
         operation,
         "/queues",
-        parseQueue
+        parseQueue,
+        input.signal
       );
       const ensureQueue = async (name: string): Promise<ProvisionedQueue> => {
+        input.signal.throwIfAborted();
         const existing = queues.find(queue => queue.name === name);
         if (existing) return provisionedQueue(existing, false);
         const envelope = await request("Queue creation", "/queues", {
           method: "POST",
           body: JSON.stringify({ queue_name: name }),
+          signal: input.signal,
         });
         return provisionedQueue(
           parseQueue(
@@ -424,6 +448,7 @@ export function createCloudflareApiClient(options: {
             "Content-Type": "application/merge-patch+json",
           },
           body: JSON.stringify({ secrets }),
+          signal: input.signal,
         }
       );
       return { updatedSecretNames: names };
@@ -437,7 +462,7 @@ export function createCloudflareApiClient(options: {
       const statusEnvelope = await request(
         "workers.dev status lookup",
         `/workers/scripts/${encodeURIComponent(input.scriptName)}/subdomain`,
-        { method: "GET" }
+        { method: "GET", signal: input.signal }
       );
       const status = parseResultRecord(
         statusEnvelope,
@@ -458,10 +483,11 @@ export function createCloudflareApiClient(options: {
           url: null,
         };
       }
+      input.signal.throwIfAborted();
       const subdomainEnvelope = await request(
         "workers.dev subdomain lookup",
         "/workers/subdomain",
-        { method: "GET" }
+        { method: "GET", signal: input.signal }
       );
       const subdomain = requireString(
         parseResultRecord(subdomainEnvelope, "workers.dev subdomain lookup"),

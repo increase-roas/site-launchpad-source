@@ -20,12 +20,19 @@ import {
 } from "../simpleFormDb";
 import { createCloudflareApiClient } from "./cloudflareApi";
 import { renderFunnelConfigTs } from "./funnelConfigFile";
-import { createGitHubApiClient } from "./githubApi";
+import {
+  createGitHubApiClient,
+  expectedWorkflowDisplayTitle,
+} from "./githubApi";
 import {
   getCloudflarePublisherEnvironment,
   getGitHubPublisherEnvironment,
 } from "./publisherEnv";
 import { simpleFormPublishStore } from "./publishDb";
+import {
+  PublisherManualAttentionError,
+  reconcilePublicTemplateRepository,
+} from "./repositoryReconciliation";
 import { renderWranglerToml } from "./wranglerConfig";
 
 export type FunnelPublishJob = FunnelPublish;
@@ -84,6 +91,17 @@ export interface SimpleFormPublishStore {
     leaseUntil: Date;
     now: Date;
   }): Promise<FunnelPublishJob | null>;
+  renewLease(input: {
+    jobId: string;
+    leaseToken: string;
+    leaseUntil: Date;
+    now: Date;
+  }): Promise<boolean>;
+  markRepositoryCreateRequested(input: {
+    jobId: string;
+    leaseToken: string;
+    requestedAt: Date;
+  }): Promise<FunnelPublishJob | null>;
   markDispatchRequested(input: {
     jobId: string;
     leaseToken: string;
@@ -111,6 +129,9 @@ export interface SimpleFormPublishExternal {
     externalFunnelId: string;
     repositoryName: string;
     visibility: "public";
+    allowCreate: boolean;
+    markCreateRequested: () => Promise<void>;
+    signal: AbortSignal;
   }): Promise<{
     repositoryId: string;
     repositoryFullName: string;
@@ -119,9 +140,17 @@ export interface SimpleFormPublishExternal {
   }>;
   ensureKvNamespace(input: {
     title: string;
+    signal: AbortSignal;
   }): Promise<{ kvNamespaceId: string }>;
-  ensureD1Database(input: { name: string }): Promise<{ d1DatabaseId: string }>;
-  ensureQueues(input: { primary: string; deadLetter: string }): Promise<{
+  ensureD1Database(input: {
+    name: string;
+    signal: AbortSignal;
+  }): Promise<{ d1DatabaseId: string }>;
+  ensureQueues(input: {
+    primary: string;
+    deadLetter: string;
+    signal: AbortSignal;
+  }): Promise<{
     primaryQueueId: string;
     deadLetterQueueId: string;
   }>;
@@ -137,18 +166,38 @@ export interface SimpleFormPublishExternal {
     primaryQueueName: string;
     deadLetterQueueName: string;
     idempotencyKey: string;
+    signal: AbortSignal;
   }): Promise<{ commitSha: string }>;
   dispatchWorkflow(input: {
-    externalFunnelId: string;
     repositoryFullName: string;
     defaultBranch: string;
     commitSha: string;
-    workerName: string;
-    idempotencyKey: string;
-  }): Promise<{ workflowRunId: string; status: "queued" }>;
+    publishJobId: string;
+    signal: AbortSignal;
+  }): Promise<void>;
+  findWorkflowRun(input: {
+    repositoryFullName: string;
+    workflow: string;
+    publishJobId: string;
+    sourceSha: string;
+    signal: AbortSignal;
+  }): Promise<{
+    workflowRunId: string;
+    status: "queued" | "in_progress" | "completed";
+    conclusion:
+      | "success"
+      | "failure"
+      | "cancelled"
+      | "timed_out"
+      | "action_required"
+      | null;
+    headSha: string;
+    displayTitle: string;
+  } | null>;
   getWorkflowRun(input: {
     repositoryFullName: string;
     workflowRunId: string;
+    signal: AbortSignal;
   }): Promise<{
     status: "queued" | "in_progress" | "completed";
     conclusion:
@@ -158,14 +207,18 @@ export interface SimpleFormPublishExternal {
       | "timed_out"
       | "action_required"
       | null;
+    headSha: string;
+    displayTitle: string;
     liveUrl?: string;
   }>;
   patchRuntimeSecrets(input: {
     workerName: string;
     runtimeSecrets: SimpleFormRuntimeSecrets;
+    signal: AbortSignal;
   }): Promise<void>;
   getWorkersDevStatus(input: {
     workerName: string;
+    signal: AbortSignal;
   }): Promise<{ liveUrl: string }>;
 }
 
@@ -192,6 +245,8 @@ type StartPublishInput = PublishOwnerInput & {
   clientShortName: string;
 };
 
+const WORKFLOW_DISPATCH_RECONCILIATION_WINDOW_MS = 60_000;
+
 class PublishExternalTimeoutError extends Error {
   constructor(message: string) {
     super(message);
@@ -199,9 +254,86 @@ class PublishExternalTimeoutError extends Error {
   }
 }
 
+class PublishLeaseLostError extends Error {
+  constructor() {
+    super("Publish lease ownership was lost.");
+    this.name = "PublishLeaseLostError";
+  }
+}
+
+type PublishLeaseHeartbeat = {
+  failure: unknown;
+  stopAfterSettlement(): Promise<void>;
+};
+
+function startPublishLeaseHeartbeat(
+  claimed: FunnelPublishJob,
+  leaseToken: string,
+  deps: SimpleFormPublishDependencies,
+  controller: AbortController
+): PublishLeaseHeartbeat {
+  const heartbeatIntervalMs = Math.max(
+    1,
+    Math.floor(deps.leaseDurationMs / 3)
+  );
+  let stopped = false;
+  let failure: unknown;
+  let pendingRenewal: Promise<void> | null = null;
+
+  const loseLease = (error: unknown): void => {
+    if (failure !== undefined) return;
+    failure = error;
+    controller.abort(error);
+  };
+  const scheduleRenewal = (): void => {
+    if (stopped || pendingRenewal) return;
+    pendingRenewal = (async () => {
+      const now = deps.now();
+      try {
+        const renewed = await deps.store.renewLease({
+          jobId: claimed.id,
+          leaseToken,
+          leaseUntil: new Date(now.getTime() + deps.leaseDurationMs),
+          now,
+        });
+        if (!renewed) loseLease(new PublishLeaseLostError());
+      } catch (error) {
+        loseLease(error);
+      }
+    })().finally(() => {
+      pendingRenewal = null;
+    });
+  };
+  const heartbeat = setInterval(scheduleRenewal, heartbeatIntervalMs);
+
+  return {
+    get failure() {
+      return failure;
+    },
+    async stopAfterSettlement() {
+      clearInterval(heartbeat);
+      stopped = true;
+      if (pendingRenewal) await pendingRenewal;
+    },
+  };
+}
+
 function requirePersisted(value: string | null, message: string): string {
   if (!value) throw new Error(message);
   return value;
+}
+
+function assertExactWorkflowDisplayTitle(
+  displayTitle: string,
+  publishJobId: string,
+  sourceSha: string,
+  mismatchMessage: string
+): void {
+  if (
+    displayTitle !== expectedWorkflowDisplayTitle(publishJobId, sourceSha)
+  ) {
+    throw new PublisherManualAttentionError(mismatchMessage);
+  }
 }
 
 function requireWorkersDevUrl(value: string): string {
@@ -218,23 +350,51 @@ function requireWorkersDevUrl(value: string): string {
 async function boundedExternalCall<T>(
   label: string,
   timeoutMs: number,
-  operation: () => Promise<T>
+  claimed: FunnelPublishJob,
+  leaseToken: string,
+  deps: SimpleFormPublishDependencies,
+  operation: (signal: AbortSignal) => Promise<T>
 ): Promise<T> {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<never>((_resolve, reject) => {
-    timeout = setTimeout(() => {
-      reject(new PublishExternalTimeoutError(`${label} timed out.`));
-    }, timeoutMs);
-  });
+  const controller = new AbortController();
+  const timeoutError = new PublishExternalTimeoutError(`${label} timed out.`);
+  const leaseHeartbeat = startPublishLeaseHeartbeat(
+    claimed,
+    leaseToken,
+    deps,
+    controller
+  );
+  const timeout = setTimeout(() => {
+    controller.abort(timeoutError);
+  }, timeoutMs);
+  let outcome:
+    | { ok: true; value: T }
+    | {
+        ok: false;
+        error: unknown;
+      };
   try {
-    return await Promise.race([Promise.resolve().then(operation), deadline]);
+    controller.signal.throwIfAborted();
+    outcome = { ok: true, value: await operation(controller.signal) };
+  } catch (error) {
+    outcome = { ok: false, error };
   } finally {
-    if (timeout) clearTimeout(timeout);
+    clearTimeout(timeout);
+    await leaseHeartbeat.stopAfterSettlement();
   }
+  if (leaseHeartbeat.failure !== undefined) throw leaseHeartbeat.failure;
+  if (!outcome.ok) {
+    if (controller.signal.aborted) {
+      throw controller.signal.reason ?? timeoutError;
+    }
+    throw outcome.error;
+  }
+  controller.signal.throwIfAborted();
+  return outcome.value;
 }
 
 function externalFailureMessage(error: unknown, label: string): string {
   if (error instanceof PublishExternalTimeoutError) return error.message;
+  if (error instanceof PublisherManualAttentionError) return error.message;
   return `${label} failed. Retry to resume.`;
 }
 
@@ -297,11 +457,25 @@ async function runRepositoryStep(
   const result = await boundedExternalCall(
     "Repository creation",
     deps.repositoryGenerationTimeoutMs,
-    () =>
+    claimed,
+    leaseToken,
+    deps,
+    signal =>
       deps.external.ensureRepository({
         externalFunnelId: claimed.externalFunnelId,
         repositoryName: claimed.repositoryName,
         visibility: "public",
+        allowCreate: claimed.repositoryCreateRequestedAt === null,
+        markCreateRequested: async () => {
+          const requestedAt = deps.now();
+          const marked = await deps.store.markRepositoryCreateRequested({
+            jobId: claimed.id,
+            leaseToken,
+            requestedAt,
+          });
+          if (!marked) throw new PublishLeaseLostError();
+        },
+        signal,
       })
   );
   return completeStep(
@@ -348,9 +522,13 @@ async function runKvNamespaceStep(
   const result = await boundedExternalCall(
     "KV namespace configuration",
     deps.externalTimeoutMs,
-    () =>
+    claimed,
+    leaseToken,
+    deps,
+    signal =>
       deps.external.ensureKvNamespace({
         title: cloudflareResourceNames(claimed).kvNamespaceTitle,
+        signal,
       })
   );
   return completeStep(
@@ -374,9 +552,13 @@ async function runD1DatabaseStep(
   const result = await boundedExternalCall(
     "D1 database configuration",
     deps.externalTimeoutMs,
-    () =>
+    claimed,
+    leaseToken,
+    deps,
+    signal =>
       deps.external.ensureD1Database({
         name: cloudflareResourceNames(claimed).d1DatabaseName,
+        signal,
       })
   );
   return completeStep(
@@ -401,10 +583,14 @@ async function runQueuesStep(
   const result = await boundedExternalCall(
     "Queue configuration",
     deps.externalTimeoutMs,
-    () =>
+    claimed,
+    leaseToken,
+    deps,
+    signal =>
       deps.external.ensureQueues({
         primary: names.primaryQueueName,
         deadLetter: names.deadLetterQueueName,
+        signal,
       })
   );
   return completeStep(
@@ -430,7 +616,10 @@ async function runSourceStep(
   const result = await boundedExternalCall(
     "Source commit",
     deps.externalTimeoutMs,
-    () =>
+    claimed,
+    leaseToken,
+    deps,
+    signal =>
       deps.external.commitSource({
         externalFunnelId: claimed.externalFunnelId,
         repositoryFullName: requirePersisted(
@@ -455,6 +644,7 @@ async function runSourceStep(
         primaryQueueName: names.primaryQueueName,
         deadLetterQueueName: names.deadLetterQueueName,
         idempotencyKey: `${claimed.id}:source`,
+        signal,
       })
   );
   return completeStep(
@@ -475,6 +665,72 @@ async function runDispatchStep(
   leaseToken: string,
   deps: SimpleFormPublishDependencies
 ): Promise<SimpleFormPublishStatusView> {
+  const sourceSha = requirePersisted(
+    claimed.commitSha,
+    "Published source commit is missing."
+  );
+  if (claimed.dispatchRequestedAt) {
+    const reconciled = await boundedExternalCall(
+      "Workflow dispatch reconciliation",
+      deps.externalTimeoutMs,
+      claimed,
+      leaseToken,
+      deps,
+      signal =>
+        deps.external.findWorkflowRun({
+          repositoryFullName: requirePersisted(
+            claimed.repositoryFullName,
+            "Published repository is missing."
+          ),
+          workflow: "deploy.yml",
+          publishJobId: claimed.id,
+          sourceSha,
+          signal,
+        })
+    );
+    const checkedAt = deps.now();
+    if (!reconciled) {
+      if (
+        checkedAt.getTime() - claimed.dispatchRequestedAt.getTime() <=
+        WORKFLOW_DISPATCH_RECONCILIATION_WINDOW_MS
+      ) {
+        return completeStep(
+          input,
+          claimed,
+          leaseToken,
+          {
+            nextStep: "dispatch_workflow",
+            values: { workflowCheckedAt: checkedAt },
+          },
+          deps
+        );
+      }
+      throw new PublisherManualAttentionError(
+        "Workflow dispatch outcome cannot be correlated within the reconciliation window; manual attention is required and automatic redispatch is disabled."
+      );
+    }
+    assertExactWorkflowDisplayTitle(
+      reconciled.displayTitle,
+      claimed.id,
+      sourceSha,
+      "Workflow dispatch outcome cannot be correlated exactly; manual attention is required and automatic redispatch is disabled."
+    );
+    return completeStep(
+      input,
+      claimed,
+      leaseToken,
+      {
+        nextStep: "monitor_workflow",
+        values: {
+          workflowRunId: reconciled.workflowRunId,
+          workflowStatus: reconciled.status,
+          workflowCheckedAt: checkedAt,
+        },
+      },
+      deps
+    );
+  }
+
   const requestedAt = deps.now();
   const marked = await deps.store.markDispatchRequested({
     jobId: claimed.id,
@@ -483,12 +739,14 @@ async function runDispatchStep(
   });
   if (!marked) return currentStatus(input, deps.store);
 
-  const result = await boundedExternalCall(
+  await boundedExternalCall(
     "Workflow dispatch",
     deps.externalTimeoutMs,
-    () =>
+    marked,
+    leaseToken,
+    deps,
+    signal =>
       deps.external.dispatchWorkflow({
-        externalFunnelId: marked.externalFunnelId,
         repositoryFullName: requirePersisted(
           marked.repositoryFullName,
           "Published repository is missing."
@@ -497,12 +755,9 @@ async function runDispatchStep(
           marked.defaultBranch,
           "Published repository branch is missing."
         ),
-        commitSha: requirePersisted(
-          marked.commitSha,
-          "Published source commit is missing."
-        ),
-        workerName: marked.workerName,
-        idempotencyKey: `${marked.id}:${marked.attemptCount}`,
+        commitSha: sourceSha,
+        publishJobId: marked.id,
+        signal,
       })
   );
   return completeStep(
@@ -510,11 +765,9 @@ async function runDispatchStep(
     marked,
     leaseToken,
     {
-      nextStep: "monitor_workflow",
+      nextStep: "dispatch_workflow",
       values: {
         dispatchRequestedAt: requestedAt,
-        workflowRunId: result.workflowRunId,
-        workflowStatus: result.status,
       },
     },
     deps
@@ -531,7 +784,10 @@ async function runMonitorWorkflowStep(
   const result = await boundedExternalCall(
     "Workflow status check",
     deps.externalTimeoutMs,
-    () =>
+    claimed,
+    leaseToken,
+    deps,
+    signal =>
       deps.external.getWorkflowRun({
         repositoryFullName: requirePersisted(
           claimed.repositoryFullName,
@@ -541,7 +797,18 @@ async function runMonitorWorkflowStep(
           claimed.workflowRunId,
           "Workflow run ID is missing."
         ),
+        signal,
       })
+  );
+  const expectedSourceSha = requirePersisted(
+    claimed.commitSha,
+    "Published source commit is missing."
+  );
+  assertExactWorkflowDisplayTitle(
+    result.displayTitle,
+    claimed.id,
+    expectedSourceSha,
+    "Workflow run correlation or source does not match the publish job; manual attention is required."
   );
   if (result.status !== "completed") {
     return completeStep(
@@ -562,12 +829,10 @@ async function runMonitorWorkflowStep(
     const failed = await deps.store.fail({
       jobId: claimed.id,
       leaseToken,
-      message: "Deployment workflow failed. Retry to dispatch a new run.",
+      message:
+        "Deployment workflow failed; manual attention is required and automatic redispatch is disabled.",
       now: checkedAt,
-      resumeStep: "dispatch_workflow",
       values: {
-        dispatchRequestedAt: null,
-        workflowRunId: null,
         workflowStatus: result.conclusion ?? "failure",
         workflowCheckedAt: checkedAt,
       },
@@ -601,10 +866,14 @@ async function runPatchRuntimeSecretsStep(
   await boundedExternalCall(
     "Runtime secret configuration",
     deps.externalTimeoutMs,
-    () =>
+    claimed,
+    leaseToken,
+    deps,
+    signal =>
       deps.external.patchRuntimeSecrets({
         workerName: claimed.workerName,
         runtimeSecrets: material.runtimeSecrets,
+        signal,
       })
   );
   return completeStep(
@@ -628,9 +897,13 @@ async function runGetLiveUrlStep(
   const result = await boundedExternalCall(
     "workers.dev status lookup",
     deps.externalTimeoutMs,
-    () =>
+    claimed,
+    leaseToken,
+    deps,
+    signal =>
       deps.external.getWorkersDevStatus({
         workerName: claimed.workerName,
+        signal,
       })
   );
   return completeStep(
@@ -772,7 +1045,9 @@ function templateRepository(): { owner: string; repository: string } {
 function createRuntimeExternal(): SimpleFormPublishExternal {
   const githubEnvironment = getGitHubPublisherEnvironment();
   const cloudflareEnvironment = getCloudflarePublisherEnvironment();
-  const github = createGitHubApiClient({ token: githubEnvironment.token });
+  const github = createGitHubApiClient({
+    token: githubEnvironment.token,
+  });
   const cloudflare = createCloudflareApiClient({
     accountId: cloudflareEnvironment.accountId,
     apiToken: cloudflareEnvironment.apiToken,
@@ -781,12 +1056,16 @@ function createRuntimeExternal(): SimpleFormPublishExternal {
   return {
     async ensureRepository(input) {
       const template = templateRepository();
-      const repository = await github.generatePublicRepository({
-        templateOwner: template.owner,
-        templateRepository: template.repository,
+      const repository = await reconcilePublicTemplateRepository({
+        github,
         owner: githubEnvironment.owner,
         repository: input.repositoryName,
+        templateOwner: template.owner,
+        templateRepository: template.repository,
         description: `Generated Simple Form funnel ${input.externalFunnelId}`,
+        allowCreate: input.allowCreate,
+        markCreateRequested: input.markCreateRequested,
+        signal: input.signal,
       });
       return {
         repositoryId: String(repository.id),
@@ -796,11 +1075,17 @@ function createRuntimeExternal(): SimpleFormPublishExternal {
       };
     },
     async ensureKvNamespace(input) {
-      const namespace = await cloudflare.ensureKvNamespace(input.title);
+      const namespace = await cloudflare.ensureKvNamespace(
+        input.title,
+        input.signal
+      );
       return { kvNamespaceId: namespace.id };
     },
     async ensureD1Database(input) {
-      const database = await cloudflare.ensureD1Database(input.name);
+      const database = await cloudflare.ensureD1Database(
+        input.name,
+        input.signal
+      );
       return { d1DatabaseId: database.id };
     },
     async ensureQueues(input) {
@@ -832,21 +1117,41 @@ function createRuntimeExternal(): SimpleFormPublishExternal {
           }),
           funnelConfigTs: renderFunnelConfigTs(input.config),
         },
+        signal: input.signal,
       });
       return { commitSha: commit.commitSha };
     },
     async dispatchWorkflow(input) {
       const repository = splitRepositoryFullName(input.repositoryFullName);
-      const dispatched = await github.dispatchWorkflow({
+      await github.dispatchWorkflow({
         owner: repository.owner,
         repository: repository.repository,
         workflow: "deploy.yml",
         ref: input.defaultBranch,
+        publishJobId: input.publishJobId,
+        sourceSha: input.commitSha,
+        signal: input.signal,
       });
-      return {
-        workflowRunId: String(dispatched.workflow_run_id),
-        status: "queued",
-      };
+    },
+    async findWorkflowRun(input) {
+      const repository = splitRepositoryFullName(input.repositoryFullName);
+      const run = await github.findWorkflowRun({
+        owner: repository.owner,
+        repository: repository.repository,
+        workflow: input.workflow,
+        publishJobId: input.publishJobId,
+        sourceSha: input.sourceSha,
+        signal: input.signal,
+      });
+      return run
+        ? {
+            workflowRunId: String(run.id),
+            status: run.status,
+            conclusion: run.conclusion,
+            headSha: run.headSha,
+            displayTitle: run.displayTitle,
+          }
+        : null;
     },
     async getWorkflowRun(input) {
       const repository = splitRepositoryFullName(input.repositoryFullName);
@@ -858,6 +1163,7 @@ function createRuntimeExternal(): SimpleFormPublishExternal {
         owner: repository.owner,
         repository: repository.repository,
         workflowRunId,
+        signal: input.signal,
       });
     },
     async patchRuntimeSecrets(input) {
@@ -868,11 +1174,13 @@ function createRuntimeExternal(): SimpleFormPublishExternal {
       await cloudflare.patchWorkerSecrets({
         scriptName: input.workerName,
         secrets,
+        signal: input.signal,
       });
     },
     async getWorkersDevStatus(input) {
       const status = await cloudflare.getWorkersDevStatus({
         scriptName: input.workerName,
+        signal: input.signal,
       });
       if (!status.enabled || !status.url) {
         throw new Error("workers.dev is not enabled for the published Worker.");

@@ -28,7 +28,13 @@ import {
   Rocket,
   Save,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { toast } from "sonner";
 
 type PublishStateLike = {
@@ -36,12 +42,213 @@ type PublishStateLike = {
   step: FunnelPublishStep;
 };
 
+type VersionedPublishStateLike = PublishStateLike & {
+  updatedAt: Date;
+};
+
+export type PublishAdvanceControllerState = {
+  locked: boolean;
+  pausedAfterErrorVersion: number | null;
+};
+
+type PublishAdvanceController = {
+  cancelScheduled: () => void;
+  completeError: () => void;
+  completeRequest: () => void;
+  dispose: () => void;
+  getState: () => PublishAdvanceControllerState;
+  observeSuccessfulStatus: (publish: VersionedPublishStateLike) => void;
+  resetForStart: () => void;
+  retry: (
+    publish: VersionedPublishStateLike,
+    request: () => void
+  ) => boolean;
+  scheduleAutomatic: (
+    publish: VersionedPublishStateLike,
+    delay: number,
+    request: () => void
+  ) => void;
+};
+
+const initialPublishAdvanceControllerState: PublishAdvanceControllerState = {
+  locked: false,
+  pausedAfterErrorVersion: null,
+};
+
+function publishVersion(publish: VersionedPublishStateLike): number {
+  return publish.updatedAt.getTime();
+}
+
+export function isPublishPausedAfterError(
+  publish: VersionedPublishStateLike | null,
+  pausedAfterErrorVersion: number | null
+): boolean {
+  return Boolean(
+    publish &&
+      pausedAfterErrorVersion !== null &&
+      publishVersion(publish) <= pausedAfterErrorVersion
+  );
+}
+
+export function createPublishAdvanceController(
+  onStateChange: (state: PublishAdvanceControllerState) => void = () => {}
+): PublishAdvanceController {
+  let disposed = false;
+  let latestSuccessfulVersion: number | null = null;
+  let attemptedVersion: number | null = null;
+  let state = { ...initialPublishAdvanceControllerState };
+  let timeout: ReturnType<typeof globalThis.setTimeout> | null = null;
+
+  const notify = () => onStateChange({ ...state });
+  const cancelScheduled = () => {
+    if (timeout === null) return;
+    globalThis.clearTimeout(timeout);
+    timeout = null;
+  };
+  const requestAdvance = (
+    publish: VersionedPublishStateLike,
+    request: () => void
+  ): boolean => {
+    if (
+      disposed ||
+      state.locked ||
+      isPublishPausedAfterError(publish, state.pausedAfterErrorVersion)
+    ) {
+      return false;
+    }
+    state = { ...state, locked: true };
+    attemptedVersion = publishVersion(publish);
+    notify();
+    request();
+    return true;
+  };
+
+  return {
+    cancelScheduled,
+    completeError: () => {
+      if (
+        disposed ||
+        attemptedVersion === null ||
+        (latestSuccessfulVersion !== null &&
+          latestSuccessfulVersion > attemptedVersion)
+      ) {
+        return;
+      }
+      state = {
+        ...state,
+        pausedAfterErrorVersion: attemptedVersion,
+      };
+      notify();
+    },
+    completeRequest: () => {
+      if (disposed) return;
+      attemptedVersion = null;
+      if (!state.locked) return;
+      state = { ...state, locked: false };
+      notify();
+    },
+    dispose: () => {
+      disposed = true;
+      cancelScheduled();
+    },
+    getState: () => ({ ...state }),
+    observeSuccessfulStatus: publish => {
+      if (disposed) return;
+      const version = publishVersion(publish);
+      latestSuccessfulVersion = Math.max(
+        latestSuccessfulVersion ?? version,
+        version
+      );
+      if (
+        state.pausedAfterErrorVersion === null ||
+        version <= state.pausedAfterErrorVersion
+      ) {
+        return;
+      }
+      state = { ...state, pausedAfterErrorVersion: null };
+      notify();
+    },
+    resetForStart: () => {
+      if (disposed) return;
+      cancelScheduled();
+      if (state.pausedAfterErrorVersion === null) return;
+      state = { ...state, pausedAfterErrorVersion: null };
+      notify();
+    },
+    retry: (publish, request) => {
+      if (disposed || state.locked) return false;
+      cancelScheduled();
+      if (state.pausedAfterErrorVersion !== null) {
+        state = { ...state, pausedAfterErrorVersion: null };
+        notify();
+      }
+      return requestAdvance(publish, request);
+    },
+    scheduleAutomatic: (publish, delay, request) => {
+      cancelScheduled();
+      if (
+        disposed ||
+        !shouldAutoAdvancePublish(publish) ||
+        state.locked ||
+        isPublishPausedAfterError(publish, state.pausedAfterErrorVersion)
+      ) {
+        return;
+      }
+      timeout = globalThis.setTimeout(() => {
+        timeout = null;
+        requestAdvance(publish, request);
+      }, delay);
+    },
+  };
+}
+
+export function effectivePublishStatus<T extends VersionedPublishStateLike>(
+  ...candidates: Array<T | null | undefined>
+): T | null {
+  let effective: T | null = null;
+  for (const candidate of candidates) {
+    if (
+      candidate &&
+      (!effective || publishVersion(candidate) > publishVersion(effective))
+    ) {
+      effective = candidate;
+    }
+  }
+  return effective;
+}
+
+export function publishAdvanceDelayMs(
+  publish: Pick<
+    SimpleFormPublishStatusView,
+    "status" | "step" | "dispatchRequestedAt"
+  >
+): number {
+  if (publish.status === "running") return 3_000;
+  if (
+    publish.step === "monitor_workflow" ||
+    (publish.step === "dispatch_workflow" && publish.dispatchRequestedAt)
+  ) {
+    return 2_000;
+  }
+  return 0;
+}
+
 export function publishActionLabel(
   publish: PublishStateLike | null
 ): "Publish" | "Retry" | null {
   if (!publish) return "Publish";
   if (publish.status === "published") return null;
   return "Retry";
+}
+
+export function publishActionForState(
+  publish: VersionedPublishStateLike | null,
+  pausedAfterErrorVersion: number | null
+): "Publish" | "Retry" | null {
+  if (isPublishPausedAfterError(publish, pausedAfterErrorVersion)) {
+    return "Retry";
+  }
+  return shouldAutoAdvancePublish(publish) ? null : publishActionLabel(publish);
 }
 
 export function shouldAutoAdvancePublish(
@@ -290,8 +497,28 @@ export function SimpleFormFunnelEditor({
   const [zipText, setZipText] = useState("");
   const [secretDrafts, setSecretDrafts] = useState<Record<string, string>>({});
   const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
-  const [activePublish, setActivePublish] =
-    useState<SimpleFormPublishStatusView | null>(null);
+  const [activePublish, setActivePublish] = useState<{
+    clientId: number;
+    funnelId: number;
+    value: SimpleFormPublishStatusView;
+  } | null>(null);
+  const authoritativePublishRef = useRef<{
+    clientId: number;
+    funnelId: number;
+    value: SimpleFormPublishStatusView | null;
+  } | null>(null);
+  const [publishAdvanceControl, setPublishAdvanceControl] =
+    useState<PublishAdvanceControllerState>(
+      initialPublishAdvanceControllerState
+    );
+  const publishAdvanceControllerRef =
+    useRef<PublishAdvanceController | null>(null);
+  if (publishAdvanceControllerRef.current === null) {
+    publishAdvanceControllerRef.current = createPublishAdvanceController(
+      setPublishAdvanceControl
+    );
+  }
+  const publishAdvanceController = publishAdvanceControllerRef.current;
 
   useEffect(() => {
     if (!query.data) return;
@@ -300,6 +527,11 @@ export function SimpleFormFunnelEditor({
     setSecretDrafts({});
     setRevealedSecret(null);
   }, [query.data]);
+
+  useEffect(
+    () => () => publishAdvanceController.dispose(),
+    [publishAdvanceController]
+  );
 
   const saveMutation = trpc.simpleForm.save.useMutation({
     onSuccess: async view => {
@@ -323,49 +555,68 @@ export function SimpleFormFunnelEditor({
   });
   const startPublishMutation = trpc.simpleForm.startPublish.useMutation({
     onSuccess: async status => {
-      setActivePublish(status);
+      setActivePublish({ clientId, funnelId, value: status });
       await utils.simpleForm.publishStatus.invalidate({ clientId, funnelId });
     },
     onError: error => toast.error(error.message),
   });
   const advancePublishMutation = trpc.simpleForm.advancePublish.useMutation({
     onSuccess: async status => {
-      setActivePublish(status);
+      publishAdvanceController.observeSuccessfulStatus(status);
+      setActivePublish({ clientId, funnelId, value: status });
       await utils.simpleForm.publishStatus.invalidate({ clientId, funnelId });
     },
     onError: error => {
-      setActivePublish(null);
+      publishAdvanceController.completeError();
       toast.error(error.message);
     },
+    onSettled: () => {
+      publishAdvanceController.completeRequest();
+    },
   });
-  const requestPublishAdvance = advancePublishMutation.mutate;
   const publishAdvancePending = advancePublishMutation.isPending;
+  const mutatePublishAdvance = advancePublishMutation.mutate;
 
-  const publish = activePublish ?? publishQuery.data ?? null;
+  const localPublish =
+    activePublish?.clientId === clientId && activePublish.funnelId === funnelId
+      ? activePublish.value
+      : null;
+  const previousAuthoritativePublish =
+    authoritativePublishRef.current?.clientId === clientId &&
+    authoritativePublishRef.current.funnelId === funnelId
+      ? authoritativePublishRef.current.value
+      : null;
+  const publish = effectivePublishStatus(
+    localPublish,
+    previousAuthoritativePublish,
+    publishQuery.data
+  );
+  authoritativePublishRef.current = { clientId, funnelId, value: publish };
   useEffect(() => {
-    if (
-      !activePublish ||
-      !shouldAutoAdvancePublish(activePublish) ||
-      publishAdvancePending
-    ) {
+    if (!publishQuery.data) return;
+    publishAdvanceController.observeSuccessfulStatus(publishQuery.data);
+  }, [publishAdvanceController, publishQuery.data]);
+
+  useEffect(() => {
+    if (!publish || publishAdvancePending) {
+      publishAdvanceController.cancelScheduled();
       return;
     }
-    const delay =
-      activePublish.status === "running"
-        ? 3_000
-        : activePublish.step === "monitor_workflow"
-          ? 2_000
-          : 0;
-    const timeout = window.setTimeout(() => {
-      requestPublishAdvance({ clientId, funnelId });
-    }, delay);
-    return () => window.clearTimeout(timeout);
+    publishAdvanceController.scheduleAutomatic(
+      publish,
+      publishAdvanceDelayMs(publish),
+      () => {
+        mutatePublishAdvance({ clientId, funnelId });
+      }
+    );
+    return () => publishAdvanceController.cancelScheduled();
   }, [
-    activePublish,
     clientId,
     funnelId,
+    mutatePublishAdvance,
+    publish,
+    publishAdvanceController,
     publishAdvancePending,
-    requestPublishAdvance,
   ]);
 
   const config = record?.config;
@@ -380,11 +631,14 @@ export function SimpleFormFunnelEditor({
     () => query.data?.secretGuides ?? [],
     [query.data?.secretGuides]
   );
-  const publishAction =
-    activePublish && shouldAutoAdvancePublish(activePublish)
-      ? null
-      : publishActionLabel(publish);
-  const publishBusy = startPublishMutation.isPending || publishAdvancePending;
+  const publishAction = publishActionForState(
+    publish,
+    publishAdvanceControl.pausedAfterErrorVersion
+  );
+  const publishBusy =
+    startPublishMutation.isPending ||
+    publishAdvancePending ||
+    publishAdvanceControl.locked;
   const progress = publish?.progress ?? { completed: 0, total: 9 };
 
   if (query.isLoading || !record || !config) {
@@ -482,10 +736,14 @@ export function SimpleFormFunnelEditor({
                 }
                 onClick={() => {
                   if (publishAction === "Publish") {
+                    publishAdvanceController.resetForStart();
                     startPublishMutation.mutate({ clientId, funnelId });
                     return;
                   }
-                  requestPublishAdvance({ clientId, funnelId });
+                  if (!publish) return;
+                  publishAdvanceController.retry(publish, () => {
+                    mutatePublishAdvance({ clientId, funnelId });
+                  });
                 }}
                 className="h-11 gap-2 rounded-xl bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
               >
@@ -820,8 +1078,7 @@ export function SimpleFormFunnelEditor({
                       : "Not generated yet."}
                   </p>
                   <p className="text-sm font-medium text-muted-foreground">
-                    Revealing displays the currently stored secret. Keep it
-                    private.
+                    {"Revealing displays the currently stored secret. Keep it private."}
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <Button

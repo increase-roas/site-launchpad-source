@@ -657,6 +657,10 @@ export const funnelPublishes = pgTable(
     repositoryFullName: varchar("repositoryFullName", { length: 240 }),
     repositoryUrl: varchar("repositoryUrl", { length: 1000 }),
     defaultBranch: varchar("defaultBranch", { length: 120 }),
+    repositoryCreateRequestedAt: timestamp("repositoryCreateRequestedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
     kvNamespaceId: varchar("kvNamespaceId", { length: 120 }),
     d1DatabaseId: varchar("d1DatabaseId", { length: 120 }),
     primaryQueueId: varchar("primaryQueueId", { length: 120 }),

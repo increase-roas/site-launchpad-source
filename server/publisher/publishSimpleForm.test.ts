@@ -12,6 +12,10 @@ import {
 } from "./publishSimpleForm";
 
 const FIRST_NOW = new Date("2026-08-17T18:00:00.000Z");
+const PERSISTED_SOURCE_SHA =
+  "0123456789abcdef0123456789abcdef01234567";
+const EXPECTED_WORKFLOW_TITLE =
+  `Deploy publish-11 ${PERSISTED_SOURCE_SHA}`;
 
 function readyMaterial() {
   const record = buildSimpleFormStoredRecord({
@@ -35,6 +39,8 @@ function readyMaterial() {
 
 class MemoryPublishStore implements SimpleFormPublishStore {
   job: FunnelPublishJob | null = null;
+  renewalAttempts = 0;
+  completionAttempts = 0;
 
   async start(input: Parameters<SimpleFormPublishStore["start"]>[0]) {
     if (this.job) return this.job;
@@ -52,6 +58,7 @@ class MemoryPublishStore implements SimpleFormPublishStore {
       repositoryFullName: null,
       repositoryUrl: null,
       defaultBranch: null,
+      repositoryCreateRequestedAt: null,
       kvNamespaceId: null,
       d1DatabaseId: null,
       primaryQueueId: null,
@@ -103,6 +110,48 @@ class MemoryPublishStore implements SimpleFormPublishStore {
     return this.job;
   }
 
+  async renewLease(input: {
+    jobId: string;
+    leaseToken: string;
+    leaseUntil: Date;
+    now: Date;
+  }) {
+    this.renewalAttempts += 1;
+    const job = this.job;
+    if (!job || job.id !== input.jobId || job.leaseToken !== input.leaseToken) {
+      return false;
+    }
+    this.job = {
+      ...job,
+      leaseUntil: input.leaseUntil,
+      updatedAt: input.now,
+    };
+    return true;
+  }
+
+  async markRepositoryCreateRequested(
+    input: Parameters<
+      SimpleFormPublishStore["markRepositoryCreateRequested"]
+    >[0]
+  ) {
+    const job = this.job;
+    if (
+      !job ||
+      job.id !== input.jobId ||
+      job.leaseToken !== input.leaseToken ||
+      job.step !== "create_repository" ||
+      job.repositoryCreateRequestedAt !== null
+    ) {
+      return null;
+    }
+    this.job = {
+      ...job,
+      repositoryCreateRequestedAt: input.requestedAt,
+      updatedAt: input.requestedAt,
+    };
+    return this.job;
+  }
+
   async markDispatchRequested(
     input: Parameters<SimpleFormPublishStore["markDispatchRequested"]>[0]
   ) {
@@ -119,6 +168,7 @@ class MemoryPublishStore implements SimpleFormPublishStore {
   }
 
   async complete(input: Parameters<SimpleFormPublishStore["complete"]>[0]) {
+    this.completionAttempts += 1;
     const job = this.job;
     if (
       !job ||
@@ -139,6 +189,8 @@ class MemoryPublishStore implements SimpleFormPublishStore {
     }
     this.job = {
       ...job,
+      ...(input.resumeStep ? { step: input.resumeStep } : {}),
+      ...(input.values ?? {}),
       status: "failed",
       leaseToken: null,
       leaseUntil: null,
@@ -172,12 +224,15 @@ function applyCompletion(
 
 function externalMocks(): SimpleFormPublishExternal {
   return {
-    ensureRepository: vi.fn().mockResolvedValue({
-      repositoryId: "repo-101",
-      repositoryFullName: "launchpad-sites/simple-form-northland-11",
-      repositoryUrl:
-        "https://github.com/launchpad-sites/simple-form-northland-11",
-      defaultBranch: "main",
+    ensureRepository: vi.fn().mockImplementation(async input => {
+      if (input.allowCreate) await input.markCreateRequested();
+      return {
+        repositoryId: "repo-101",
+        repositoryFullName: "launchpad-sites/simple-form-northland-11",
+        repositoryUrl:
+          "https://github.com/launchpad-sites/simple-form-northland-11",
+        defaultBranch: "main",
+      };
     }),
     ensureKvNamespace: vi.fn().mockResolvedValue({
       kvNamespaceId: "kv-201",
@@ -189,14 +244,22 @@ function externalMocks(): SimpleFormPublishExternal {
       primaryQueueId: "queue-401",
       deadLetterQueueId: "queue-402",
     }),
-    commitSource: vi.fn().mockResolvedValue({ commitSha: "abc123" }),
-    dispatchWorkflow: vi.fn().mockResolvedValue({
+    commitSource: vi.fn().mockResolvedValue({
+      commitSha: PERSISTED_SOURCE_SHA,
+    }),
+    dispatchWorkflow: vi.fn().mockResolvedValue(undefined),
+    findWorkflowRun: vi.fn().mockResolvedValue({
       workflowRunId: "run-501",
       status: "queued",
+      conclusion: null,
+      headSha: "newer-default-branch-head",
+      displayTitle: EXPECTED_WORKFLOW_TITLE,
     }),
     getWorkflowRun: vi.fn().mockResolvedValue({
       status: "completed",
       conclusion: "success",
+      headSha: "newer-default-branch-head",
+      displayTitle: EXPECTED_WORKFLOW_TITLE,
     }),
     patchRuntimeSecrets: vi.fn().mockResolvedValue(undefined),
     getWorkersDevStatus: vi.fn().mockResolvedValue({
@@ -211,6 +274,8 @@ function dependencies(
   options: {
     now?: () => Date;
     externalTimeoutMs?: number;
+    repositoryGenerationTimeoutMs?: number;
+    leaseDurationMs?: number;
   } = {}
 ): SimpleFormPublishDependencies {
   return {
@@ -219,9 +284,10 @@ function dependencies(
     loadMaterial: vi.fn().mockResolvedValue(readyMaterial()),
     now: options.now ?? (() => FIRST_NOW),
     createLeaseToken: () => "lease-1",
-    leaseDurationMs: 30_000,
+    leaseDurationMs: options.leaseDurationMs ?? 30_000,
     externalTimeoutMs: options.externalTimeoutMs ?? 100,
-    repositoryGenerationTimeoutMs: options.externalTimeoutMs ?? 100,
+    repositoryGenerationTimeoutMs:
+      options.repositoryGenerationTimeoutMs ?? 100,
   };
 }
 
@@ -266,6 +332,7 @@ describe("Simple Form publish state machine", () => {
       "ensure_queues",
       "commit_source",
       "dispatch_workflow",
+      "dispatch_workflow",
       "monitor_workflow",
       "patch_runtime_secrets",
       "get_live_url",
@@ -290,11 +357,12 @@ describe("Simple Form publish state machine", () => {
 
     expect(store.job).toMatchObject({
       repositoryId: "repo-101",
+      repositoryCreateRequestedAt: FIRST_NOW,
       kvNamespaceId: "kv-201",
       d1DatabaseId: "d1-301",
       primaryQueueId: "queue-401",
       deadLetterQueueId: "queue-402",
-      commitSha: "abc123",
+      commitSha: PERSISTED_SOURCE_SHA,
       dispatchRequestedAt: FIRST_NOW,
       workflowRunId: "run-501",
       status: "published",
@@ -314,6 +382,19 @@ describe("Simple Form publish state machine", () => {
         d1DatabaseId: "d1-301",
         primaryQueueName: "simple-form-northland-spas-11-retries",
         deadLetterQueueName: "simple-form-northland-spas-11-dead",
+      })
+    );
+    expect(external.dispatchWorkflow).toHaveBeenCalledWith({
+      repositoryFullName: "launchpad-sites/simple-form-northland-11",
+      defaultBranch: "main",
+      commitSha: PERSISTED_SOURCE_SHA,
+      publishJobId: "publish-11",
+      signal: expect.any(AbortSignal),
+    });
+    expect(external.findWorkflowRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceSha: PERSISTED_SOURCE_SHA,
+        publishJobId: "publish-11",
       })
     );
   });
@@ -356,13 +437,52 @@ describe("Simple Form publish state machine", () => {
     expect(external.ensureRepository).toHaveBeenCalledTimes(1);
   });
 
-  it("times out a bounded call and resumes from the same persisted step", async () => {
+  it("derives repository create permission from durable intent, not attempts", async () => {
+    const store = new MemoryPublishStore();
+    const external = externalMocks();
+    const deps = dependencies(store, external);
+    await started(store, deps);
+    if (!store.job) throw new Error("Expected publish job.");
+    store.job = {
+      ...store.job,
+      repositoryCreateRequestedAt: FIRST_NOW,
+      attemptCount: 0,
+    };
+
+    await advanceSimpleFormPublish({ clientId: 5, funnelId: 11 }, deps);
+
+    expect(external.ensureRepository).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowCreate: false,
+        markCreateRequested: expect.any(Function),
+      })
+    );
+    expect(store.job).toMatchObject({
+      repositoryCreateRequestedAt: FIRST_NOW,
+      repositoryId: "repo-101",
+      step: "ensure_kv_namespace",
+    });
+  });
+
+  it("uses the repository generation deadline independently of other external calls", async () => {
     const store = new MemoryPublishStore();
     const external = externalMocks();
     vi.mocked(external.ensureRepository).mockImplementationOnce(
-      () => new Promise(() => undefined)
+      async input => {
+        await input.markCreateRequested();
+        return await new Promise((_resolve, reject) => {
+          input.signal.addEventListener(
+            "abort",
+            () => reject(input.signal.reason),
+            { once: true }
+          );
+        });
+      }
     );
-    const deps = dependencies(store, external, { externalTimeoutMs: 5 });
+    const deps = dependencies(store, external, {
+      externalTimeoutMs: 1_000,
+      repositoryGenerationTimeoutMs: 5,
+    });
     await started(store, deps);
 
     const failed = await advanceSimpleFormPublish(
@@ -382,6 +502,248 @@ describe("Simple Form publish state machine", () => {
     );
     expect(resumed.step).toBe("ensure_kv_namespace");
     expect(external.ensureRepository).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the lease until an aborted external operation settles", async () => {
+    const store = new MemoryPublishStore();
+    const external = externalMocks();
+    let observedAbort!: () => void;
+    const abortObserved = new Promise<void>(resolve => {
+      observedAbort = resolve;
+    });
+    let settleCancellation!: () => void;
+    const cancellationSettled = new Promise<void>(resolve => {
+      settleCancellation = resolve;
+    });
+    vi.mocked(external.ensureRepository).mockImplementationOnce(
+      async input => {
+        await input.markCreateRequested();
+        return await new Promise((_resolve, reject) => {
+          input.signal.addEventListener(
+            "abort",
+            () => {
+              observedAbort();
+              void cancellationSettled.then(() => reject(input.signal.reason));
+            },
+            { once: true }
+          );
+        });
+      }
+    );
+    const deps = dependencies(store, external, {
+      repositoryGenerationTimeoutMs: 5,
+    });
+    await started(store, deps);
+
+    const advancing = advanceSimpleFormPublish(
+      { clientId: 5, funnelId: 11 },
+      deps
+    );
+    const firstOutcome = await Promise.race([
+      abortObserved.then(() => "aborted" as const),
+      advancing.then(() => "released" as const),
+    ]);
+    expect(firstOutcome).toBe("aborted");
+    expect(store.job?.leaseToken).toBe("lease-1");
+
+    const overlapping = await advanceSimpleFormPublish(
+      { clientId: 5, funnelId: 11 },
+      deps
+    );
+    expect(overlapping.step).toBe("create_repository");
+    expect(external.ensureRepository).toHaveBeenCalledTimes(1);
+
+    let released = false;
+    void advancing.then(() => {
+      released = true;
+    });
+    await Promise.resolve();
+    expect(released).toBe(false);
+
+    settleCancellation();
+    const failed = await advancing;
+    expect(failed.error).toBe("Repository creation timed out.");
+    expect(store.job?.leaseToken).toBeNull();
+  });
+
+  it("uses a lease heartbeat until unresolved external work settles", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FIRST_NOW);
+    const store = new MemoryPublishStore();
+    const external = externalMocks();
+    let settleCancellation!: () => void;
+    const cancellationSettled = new Promise<void>(resolve => {
+      settleCancellation = resolve;
+    });
+    vi.mocked(external.ensureRepository).mockImplementationOnce(
+      async input => {
+        await input.markCreateRequested();
+        return await new Promise((_resolve, reject) => {
+          input.signal.addEventListener(
+            "abort",
+            () => {
+              void cancellationSettled.then(() => reject(input.signal.reason));
+            },
+            { once: true }
+          );
+        });
+      }
+    );
+    const deps = dependencies(store, external, {
+      now: () => new Date(Date.now()),
+      repositoryGenerationTimeoutMs: 5,
+      leaseDurationMs: 30,
+    });
+    await started(store, deps);
+
+    const advancing = advanceSimpleFormPublish(
+      { clientId: 5, funnelId: 11 },
+      deps
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(external.ensureRepository).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(31);
+    expect(store.job?.leaseUntil?.getTime()).toBeGreaterThan(Date.now());
+    const overlapping = await advanceSimpleFormPublish(
+      { clientId: 5, funnelId: 11 },
+      deps
+    );
+    expect(overlapping.step).toBe("create_repository");
+
+    settleCancellation();
+    const failed = await advancing;
+    expect(failed).toMatchObject({
+      status: "failed",
+      step: "create_repository",
+      error: "Repository creation timed out.",
+    });
+    expect(external.ensureRepository).toHaveBeenCalledTimes(1);
+
+    const renewalAttemptsAfterSettlement = store.renewalAttempts;
+    expect(renewalAttemptsAfterSettlement).toBeGreaterThan(0);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(store.renewalAttempts).toBe(renewalAttemptsAfterSettlement);
+  });
+
+  it("skips heartbeat ticks while a lease renewal is pending", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FIRST_NOW);
+    const store = new MemoryPublishStore();
+    const external = externalMocks();
+    let settleOperation!: (
+      result: Awaited<ReturnType<SimpleFormPublishExternal["ensureRepository"]>>
+    ) => void;
+    vi.mocked(external.ensureRepository).mockImplementationOnce(async input => {
+      await input.markCreateRequested();
+      return await new Promise(resolve => {
+        settleOperation = resolve;
+      });
+    });
+    let settleFirstRenewal!: (renewed: boolean) => void;
+    const renewLease = vi
+      .spyOn(store, "renewLease")
+      .mockImplementationOnce(
+        async () =>
+          await new Promise(resolve => {
+            settleFirstRenewal = resolve;
+          })
+      );
+    const deps = dependencies(store, external, {
+      now: () => new Date(Date.now()),
+      repositoryGenerationTimeoutMs: 1_000,
+      leaseDurationMs: 30,
+    });
+    await started(store, deps);
+
+    const advancing = advanceSimpleFormPublish(
+      { clientId: 5, funnelId: 11 },
+      deps
+    );
+    await vi.advanceTimersByTimeAsync(10);
+    expect(renewLease).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(90);
+    expect(renewLease).toHaveBeenCalledTimes(1);
+
+    settleFirstRenewal(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(renewLease).toHaveBeenCalledTimes(1);
+
+    settleOperation({
+      repositoryId: "repo-101",
+      repositoryFullName: "launchpad-sites/simple-form-northland-11",
+      repositoryUrl:
+        "https://github.com/launchpad-sites/simple-form-northland-11",
+      defaultBranch: "main",
+    });
+    await advancing;
+  });
+
+  it("aborts on token-guarded lease heartbeat loss without persisting success", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FIRST_NOW);
+    const store = new MemoryPublishStore();
+    const external = externalMocks();
+    let settleOperation!: (
+      result: Awaited<ReturnType<SimpleFormPublishExternal["ensureRepository"]>>
+    ) => void;
+    let operationAborted = false;
+    vi.mocked(external.ensureRepository).mockImplementationOnce(
+      async input => {
+        await input.markCreateRequested();
+        return await new Promise((resolve, reject) => {
+          settleOperation = resolve;
+          input.signal.addEventListener(
+            "abort",
+            () => {
+              operationAborted = true;
+              reject(input.signal.reason);
+            },
+            { once: true }
+          );
+        });
+      }
+    );
+    const deps = dependencies(store, external, {
+      now: () => new Date(Date.now()),
+      externalTimeoutMs: 1_000,
+      leaseDurationMs: 30,
+    });
+    await started(store, deps);
+
+    const advancing = advanceSimpleFormPublish(
+      { clientId: 5, funnelId: 11 },
+      deps
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    if (!store.job) throw new Error("Expected publish job.");
+    store.job = {
+      ...store.job,
+      leaseToken: "other-lease",
+      leaseUntil: new Date(Date.now() + 30),
+    };
+
+    await vi.advanceTimersByTimeAsync(11);
+    if (!operationAborted) {
+      settleOperation({
+        repositoryId: "repo-101",
+        repositoryFullName: "launchpad-sites/simple-form-northland-11",
+        repositoryUrl:
+          "https://github.com/launchpad-sites/simple-form-northland-11",
+        defaultBranch: "main",
+      });
+    }
+    await advancing;
+
+    expect(operationAborted).toBe(true);
+    expect(store.renewalAttempts).toBeGreaterThan(0);
+    expect(store.completionAttempts).toBe(0);
+    expect(store.job).toMatchObject({
+      step: "create_repository",
+      repositoryId: null,
+      leaseToken: "other-lease",
+    });
   });
 
   it("resumes after persisted repository state without creating a duplicate", async () => {
@@ -408,7 +770,7 @@ describe("Simple Form publish state machine", () => {
     });
     const deps = dependencies(store, external);
     await started(store, deps);
-    for (let index = 0; index < 8; index += 1) {
+    for (let index = 0; index < 9; index += 1) {
       await advanceSimpleFormPublish({ clientId: 5, funnelId: 11 }, deps);
     }
 
@@ -425,12 +787,26 @@ describe("Simple Form publish state machine", () => {
     expect(status.liveUrl).toBeNull();
   });
 
-  it("persists the run id returned directly by a retried dispatch", async () => {
+  it("reconciles a lost dispatch response without redispatching", async () => {
     const store = new MemoryPublishStore();
     const external = externalMocks();
     vi.mocked(external.dispatchWorkflow).mockImplementationOnce(
-      () => new Promise(() => undefined)
+      input =>
+        new Promise((_resolve, reject) => {
+          input.signal.addEventListener(
+            "abort",
+            () => reject(input.signal.reason),
+            { once: true }
+          );
+        })
     );
+    vi.mocked(external.findWorkflowRun).mockResolvedValueOnce({
+      workflowRunId: "run-501",
+      status: "queued",
+      conclusion: null,
+      headSha: "newer-default-branch-head",
+      displayTitle: EXPECTED_WORKFLOW_TITLE,
+    });
     const deps = dependencies(store, external, { externalTimeoutMs: 5 });
     await started(store, deps);
     for (let index = 0; index < 5; index += 1) {
@@ -444,13 +820,178 @@ describe("Simple Form publish state machine", () => {
     expect(failed.step).toBe("dispatch_workflow");
     expect(store.job?.dispatchRequestedAt).toEqual(FIRST_NOW);
 
-    const retried = await advanceSimpleFormPublish(
+    const reconciled = await advanceSimpleFormPublish(
       { clientId: 5, funnelId: 11 },
       deps
     );
-    expect(retried.step).toBe("monitor_workflow");
-    expect(retried.workflowRunId).toBe("run-501");
-    expect(external.dispatchWorkflow).toHaveBeenCalledTimes(2);
+    expect(reconciled.step).toBe("monitor_workflow");
+    expect(reconciled.workflowRunId).toBe("run-501");
+    expect(external.dispatchWorkflow).toHaveBeenCalledTimes(1);
+    expect(external.dispatchWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        publishJobId: "publish-11",
+        commitSha: PERSISTED_SOURCE_SHA,
+        signal: expect.any(AbortSignal),
+      })
+    );
+    expect(external.findWorkflowRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        publishJobId: "publish-11",
+        sourceSha: PERSISTED_SOURCE_SHA,
+        workflow: "deploy.yml",
+        signal: expect.any(AbortSignal),
+      })
+    );
+  });
+
+  it("persists a successful dispatch and reconciles a delayed run without redispatching", async () => {
+    const store = new MemoryPublishStore();
+    const external = externalMocks();
+    vi.mocked(external.findWorkflowRun)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        workflowRunId: "run-501",
+        status: "queued",
+        conclusion: null,
+        headSha: "newer-default-branch-head",
+        displayTitle: EXPECTED_WORKFLOW_TITLE,
+      });
+    const deps = dependencies(store, external);
+    await started(store, deps);
+    for (let index = 0; index < 5; index += 1) {
+      await advanceSimpleFormPublish({ clientId: 5, funnelId: 11 }, deps);
+    }
+
+    const dispatched = await advanceSimpleFormPublish(
+      { clientId: 5, funnelId: 11 },
+      deps
+    );
+    expect(dispatched).toMatchObject({
+      status: "pending",
+      step: "dispatch_workflow",
+      dispatchRequestedAt: FIRST_NOW,
+      workflowRunId: null,
+    });
+    expect(external.dispatchWorkflow).toHaveBeenCalledTimes(1);
+    expect(external.findWorkflowRun).not.toHaveBeenCalled();
+
+    const waiting = await advanceSimpleFormPublish(
+      { clientId: 5, funnelId: 11 },
+      deps
+    );
+    expect(waiting).toMatchObject({
+      status: "pending",
+      step: "dispatch_workflow",
+      error: null,
+      workflowRunId: null,
+    });
+    expect(external.dispatchWorkflow).toHaveBeenCalledTimes(1);
+    expect(external.findWorkflowRun).toHaveBeenCalledTimes(1);
+
+    const reconciled = await advanceSimpleFormPublish(
+      { clientId: 5, funnelId: 11 },
+      deps
+    );
+    expect(reconciled).toMatchObject({
+      status: "pending",
+      step: "monitor_workflow",
+      workflowRunId: "run-501",
+    });
+    expect(external.dispatchWorkflow).toHaveBeenCalledTimes(1);
+    expect(external.findWorkflowRun).toHaveBeenCalledTimes(2);
+  });
+
+  it("requires manual attention only after the dispatch reconciliation window", async () => {
+    const store = new MemoryPublishStore();
+    const external = externalMocks();
+    vi.mocked(external.findWorkflowRun).mockResolvedValue(null);
+    let now = FIRST_NOW;
+    const deps = dependencies(store, external, { now: () => now });
+    await started(store, deps);
+    for (let index = 0; index < 5; index += 1) {
+      await advanceSimpleFormPublish({ clientId: 5, funnelId: 11 }, deps);
+    }
+    await advanceSimpleFormPublish({ clientId: 5, funnelId: 11 }, deps);
+
+    now = new Date(FIRST_NOW.getTime() + 59_999);
+    const waiting = await advanceSimpleFormPublish(
+      { clientId: 5, funnelId: 11 },
+      deps
+    );
+    expect(waiting).toMatchObject({
+      status: "pending",
+      step: "dispatch_workflow",
+      error: null,
+    });
+
+    now = new Date(FIRST_NOW.getTime() + 60_001);
+    const failed = await advanceSimpleFormPublish(
+      { clientId: 5, funnelId: 11 },
+      deps
+    );
+    expect(failed).toMatchObject({
+      status: "failed",
+      step: "dispatch_workflow",
+      error: expect.stringMatching(/manual attention/i),
+    });
+    expect(external.dispatchWorkflow).toHaveBeenCalledTimes(1);
+    expect(external.findWorkflowRun).toHaveBeenCalledTimes(2);
+  });
+
+  it("never redispatches after a correlated workflow run fails", async () => {
+    const store = new MemoryPublishStore();
+    const external = externalMocks();
+    vi.mocked(external.getWorkflowRun).mockResolvedValue({
+      status: "completed",
+      conclusion: "failure",
+      headSha: "newer-default-branch-head",
+      displayTitle: EXPECTED_WORKFLOW_TITLE,
+    });
+    const deps = dependencies(store, external);
+    await started(store, deps);
+    for (let index = 0; index < 7; index += 1) {
+      await advanceSimpleFormPublish({ clientId: 5, funnelId: 11 }, deps);
+    }
+
+    const failed = await advanceSimpleFormPublish(
+      { clientId: 5, funnelId: 11 },
+      deps
+    );
+    expect(failed).toMatchObject({
+      status: "failed",
+      step: "monitor_workflow",
+      error: expect.stringMatching(/manual attention/i),
+    });
+    await advanceSimpleFormPublish({ clientId: 5, funnelId: 11 }, deps);
+    expect(external.dispatchWorkflow).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a workflow run whose display title has a different source SHA", async () => {
+    const store = new MemoryPublishStore();
+    const external = externalMocks();
+    vi.mocked(external.getWorkflowRun).mockResolvedValue({
+      status: "completed",
+      conclusion: "success",
+      headSha: "newer-default-branch-head",
+      displayTitle: `Deploy publish-11 ${"f".repeat(40)}`,
+    });
+    const deps = dependencies(store, external);
+    await started(store, deps);
+    for (let index = 0; index < 7; index += 1) {
+      await advanceSimpleFormPublish({ clientId: 5, funnelId: 11 }, deps);
+    }
+
+    const failed = await advanceSimpleFormPublish(
+      { clientId: 5, funnelId: 11 },
+      deps
+    );
+
+    expect(failed).toMatchObject({
+      status: "failed",
+      step: "monitor_workflow",
+      error: expect.stringMatching(/manual attention/i),
+    });
+    expect(external.patchRuntimeSecrets).not.toHaveBeenCalled();
   });
 
   it("never exposes runtime secrets or lease tokens in browser status", async () => {
@@ -458,9 +999,11 @@ describe("Simple Form publish state machine", () => {
     const deps = dependencies(store);
     await started(store, deps);
     if (!store.job) throw new Error("Expected publish job.");
+    const internalIntent = new Date("2026-08-17T18:00:12.345Z");
     store.job = {
       ...store.job,
       leaseToken: "private-lease",
+      repositoryCreateRequestedAt: internalIntent,
       lastError: "Safe summary",
     };
 
@@ -468,6 +1011,8 @@ describe("Simple Form publish state machine", () => {
 
     expect(serialized).not.toContain("server-only");
     expect(serialized).not.toContain("private-lease");
+    expect(serialized).not.toContain("repositoryCreateRequestedAt");
+    expect(serialized).not.toContain(internalIntent.toISOString());
     expect(serialized).toContain("Safe summary");
   });
 });

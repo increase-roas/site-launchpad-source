@@ -66,6 +66,10 @@ function createClient(fetchFn: FetchFunction) {
   });
 }
 
+function activeSignal(): AbortSignal {
+  return new AbortController().signal;
+}
+
 describe("Cloudflare publisher client", () => {
   it("uses the ten-second publisher request deadline", () => {
     expect(CLOUDFLARE_REQUEST_TIMEOUT_MS).toBe(10_000);
@@ -86,7 +90,8 @@ describe("Cloudflare publisher client", () => {
     ]);
 
     const result = await createClient(fetchFn).ensureKvNamespace(
-      "northland-funnel-sessions"
+      "northland-funnel-sessions",
+      activeSignal()
     );
 
     expect(result).toEqual({
@@ -114,7 +119,8 @@ describe("Cloudflare publisher client", () => {
     ]);
 
     const result = await createClient(fetchFn).ensureKvNamespace(
-      "northland-funnel-sessions"
+      "northland-funnel-sessions",
+      activeSignal()
     );
 
     expect(result.created).toBe(false);
@@ -138,7 +144,8 @@ describe("Cloudflare publisher client", () => {
     ]);
 
     const result = await createClient(fetchFn).ensureD1Database(
-      "northland-paid-funnel-events"
+      "northland-paid-funnel-events",
+      activeSignal()
     );
 
     expect(result).toEqual({
@@ -177,6 +184,7 @@ describe("Cloudflare publisher client", () => {
     const result = await createClient(fetchFn).ensureQueues({
       primary: "northland-capi-retries",
       deadLetter: "northland-capi-dead-letter",
+      signal: activeSignal(),
     });
 
     expect(result).toEqual({
@@ -216,6 +224,7 @@ describe("Cloudflare publisher client", () => {
           value: "https://example.invalid/runtime-hook",
         },
       ],
+      signal: activeSignal(),
     });
 
     expect(result).toEqual({
@@ -253,6 +262,7 @@ describe("Cloudflare publisher client", () => {
 
     const result = await createClient(fetchFn).getWorkersDevStatus({
       scriptName: "northland-simple-form",
+      signal: activeSignal(),
     });
 
     expect(result).toEqual({
@@ -277,8 +287,51 @@ describe("Cloudflare publisher client", () => {
       createClient(fetchFn).ensureQueues({
         primary: "same-queue",
         deadLetter: "same-queue",
+        signal: activeSignal(),
       })
     ).rejects.toThrow("Primary and dead-letter queue names must differ.");
     expect(requests).toHaveLength(0);
+  });
+
+  it("does not start another pagination request after cancellation", async () => {
+    const controller = new AbortController();
+    const requests: RecordedRequest[] = [];
+    const fetchFn: FetchFunction = async (input, init) => {
+      requests.push({ url: String(input), init });
+      controller.abort(new DOMException("cancelled", "AbortError"));
+      return successEnvelope([{ id: "kv-unrelated", title: "unrelated" }], {
+        page: 1,
+        per_page: 1,
+        total_pages: 2,
+        total_count: 2,
+        count: 1,
+      });
+    };
+
+    await expect(
+      createClient(fetchFn).ensureKvNamespace(
+        "northland-funnel-sessions",
+        controller.signal
+      )
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(requests).toHaveLength(1);
+  });
+
+  it("does not start the workers.dev subdomain lookup after cancellation", async () => {
+    const controller = new AbortController();
+    const requests: RecordedRequest[] = [];
+    const fetchFn: FetchFunction = async (input, init) => {
+      requests.push({ url: String(input), init });
+      controller.abort(new DOMException("cancelled", "AbortError"));
+      return successEnvelope({ enabled: true, previews_enabled: false });
+    };
+
+    await expect(
+      createClient(fetchFn).getWorkersDevStatus({
+        scriptName: "northland-simple-form",
+        signal: controller.signal,
+      })
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(requests).toHaveLength(1);
   });
 });

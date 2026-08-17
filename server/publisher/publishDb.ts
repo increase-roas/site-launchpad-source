@@ -165,6 +165,45 @@ export const simpleFormPublishStore: SimpleFormPublishStore = {
     return rows[0] ?? null;
   },
 
+  async renewLease(input) {
+    const db = await requireDb();
+    const rows = await db
+      .update(funnelPublishes)
+      .set({
+        leaseUntil: input.leaseUntil,
+        updatedAt: input.now,
+      })
+      .where(
+        and(
+          eq(funnelPublishes.id, input.jobId),
+          eq(funnelPublishes.leaseToken, input.leaseToken),
+          eq(funnelPublishes.status, "running")
+        )
+      )
+      .returning({ id: funnelPublishes.id });
+    return rows.length > 0;
+  },
+
+  async markRepositoryCreateRequested(input) {
+    const db = await requireDb();
+    const rows = await db
+      .update(funnelPublishes)
+      .set({
+        repositoryCreateRequestedAt: input.requestedAt,
+        updatedAt: input.requestedAt,
+      })
+      .where(
+        and(
+          eq(funnelPublishes.id, input.jobId),
+          eq(funnelPublishes.leaseToken, input.leaseToken),
+          eq(funnelPublishes.step, "create_repository"),
+          isNull(funnelPublishes.repositoryCreateRequestedAt)
+        )
+      )
+      .returning();
+    return rows[0] ?? null;
+  },
+
   async markDispatchRequested(input) {
     const db = await requireDb();
     const rows = await db

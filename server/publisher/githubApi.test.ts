@@ -12,6 +12,11 @@ type RecordedRequest = {
   init: RequestInit | undefined;
 };
 
+const PERSISTED_SOURCE_SHA =
+  "0123456789abcdef0123456789abcdef01234567";
+const EXPECTED_WORKFLOW_TITLE =
+  `Deploy publish-job-123 ${PERSISTED_SOURCE_SHA}`;
+
 function jsonResponse(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), {
     status,
@@ -32,6 +37,10 @@ function createMockFetch(responses: readonly Response[]): {
     return response;
   };
   return { fetchFn, requests };
+}
+
+function abortSignal(): AbortSignal {
+  return new AbortController().signal;
 }
 
 function parseRequestBody(
@@ -78,6 +87,7 @@ describe("GitHub publisher client", () => {
       owner: "customer-repositories",
       repository: "northland-simple-form",
       description: "Northland Simple Form funnel",
+      signal: abortSignal(),
     });
 
     expect(result).toEqual({
@@ -98,6 +108,87 @@ describe("GitHub publisher client", () => {
       description: "Northland Simple Form funnel",
       private: false,
       include_all_branches: false,
+    });
+    expect(requests[0]?.init?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("gets repository identity and template provenance", async () => {
+    const { fetchFn, requests } = createMockFetch([
+      jsonResponse({
+        id: 101,
+        owner: { login: "customer-repositories" },
+        name: "northland-simple-form",
+        full_name: "customer-repositories/northland-simple-form",
+        private: false,
+        visibility: "public",
+        template_repository: {
+          owner: { login: "increase-roas" },
+          name: "paid-funnel-simple-form-funnel",
+        },
+        html_url:
+          "https://github.com/customer-repositories/northland-simple-form",
+        default_branch: "main",
+      }),
+    ]);
+    const client = createGitHubApiClient({
+      token: "opaque-test-credential",
+      fetchFn,
+    });
+
+    await expect(
+      client.getRepository({
+        owner: "customer-repositories",
+        repository: "northland-simple-form",
+        signal: abortSignal(),
+      })
+    ).resolves.toEqual({
+      id: 101,
+      ownerLogin: "customer-repositories",
+      name: "northland-simple-form",
+      fullName: "customer-repositories/northland-simple-form",
+      private: false,
+      visibility: "public",
+      templateOwnerLogin: "increase-roas",
+      templateRepositoryName: "paid-funnel-simple-form-funnel",
+      htmlUrl: "https://github.com/customer-repositories/northland-simple-form",
+      defaultBranch: "main",
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({
+      url: "https://api.github.com/repos/customer-repositories/northland-simple-form",
+      init: { method: "GET" },
+    });
+  });
+
+  it("treats only repository lookup 404 as absent", async () => {
+    const notFound = createMockFetch([jsonResponse({ message: "Not Found" }, 404)]);
+    const forbidden = createMockFetch([jsonResponse({ message: "Forbidden" }, 403)]);
+    const notFoundClient = createGitHubApiClient({
+      token: "opaque-test-credential",
+      fetchFn: notFound.fetchFn,
+    });
+    const forbiddenClient = createGitHubApiClient({
+      token: "opaque-test-credential",
+      fetchFn: forbidden.fetchFn,
+    });
+
+    await expect(
+      notFoundClient.getRepository({
+        owner: "customer-repositories",
+        repository: "northland-simple-form",
+        signal: abortSignal(),
+      })
+    ).resolves.toBeNull();
+    await expect(
+      forbiddenClient.getRepository({
+        owner: "customer-repositories",
+        repository: "northland-simple-form",
+        signal: abortSignal(),
+      })
+    ).rejects.toMatchObject({
+      name: "GitHubApiError",
+      operation: "repository lookup",
+      status: 403,
     });
   });
 
@@ -123,6 +214,7 @@ describe("GitHub publisher client", () => {
         wranglerToml: 'name = "northland-simple-form"\n',
         funnelConfigTs: "export default {};\n",
       },
+      signal: abortSignal(),
     });
 
     expect(result).toEqual({
@@ -183,11 +275,109 @@ describe("GitHub publisher client", () => {
     expect(requests.every(request => !request.url.includes("/contents/"))).toBe(
       true
     );
+    expect(
+      requests.every(request => request.init?.signal instanceof AbortSignal)
+    ).toBe(true);
   });
 
-  it("returns the workflow run id from dispatch without listing runs", async () => {
+  it("does not begin another commit request after cancellation", async () => {
+    const controller = new AbortController();
+    const abortReason = new DOMException("Stop publishing.", "AbortError");
+    const requests: RecordedRequest[] = [];
+    const fetchFn: FetchFunction = async (input, init) => {
+      requests.push({ url: String(input), init });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => {
+          controller.abort(abortReason);
+          return { object: { sha: "base-commit-sha" } };
+        },
+      } as Response;
+    };
+    const client = createGitHubApiClient({
+      token: "opaque-test-credential",
+      fetchFn,
+    });
+
+    await expect(
+      client.commitPublisherFiles({
+        owner: "customer-repositories",
+        repository: "northland-simple-form",
+        branch: "main",
+        message: "chore: configure generated funnel",
+        files: {
+          wranglerToml: 'name = "northland-simple-form"\n',
+          funnelConfigTs: "export default {};\n",
+        },
+        signal: controller.signal,
+      })
+    ).rejects.toBe(abortReason);
+    expect(requests).toHaveLength(1);
+  });
+
+  it("does not begin an initially cancelled request", async () => {
+    const controller = new AbortController();
+    const abortReason = new DOMException("Stop publishing.", "AbortError");
+    controller.abort(abortReason);
+    const fetchFn = vi.fn<FetchFunction>();
+    const client = createGitHubApiClient({
+      token: "opaque-test-credential",
+      fetchFn,
+    });
+
+    await expect(
+      client.generatePublicRepository({
+        templateOwner: "increase-roas",
+        templateRepository: "paid-funnel-simple-form-funnel",
+        owner: "customer-repositories",
+        repository: "northland-simple-form",
+        signal: controller.signal,
+      })
+    ).rejects.toBe(abortReason);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("waits for an aborted request to settle before returning", async () => {
+    const controller = new AbortController();
+    const abortReason = new DOMException("Stop publishing.", "AbortError");
+    let settleRequest: (() => void) | undefined;
+    const fetchFn: FetchFunction = (_input, init) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => {
+            settleRequest = () => reject(init.signal?.reason);
+          },
+          { once: true }
+        );
+      });
+    const client = createGitHubApiClient({
+      token: "opaque-test-credential",
+      fetchFn,
+    });
+    const completion = vi.fn();
+    const request = client.getRepository({
+      owner: "customer-repositories",
+      repository: "northland-simple-form",
+      signal: controller.signal,
+    });
+    void request.then(
+      () => completion("resolved"),
+      error => completion(error)
+    );
+
+    controller.abort(abortReason);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(completion).not.toHaveBeenCalled();
+    settleRequest?.();
+    await expect(request).rejects.toBe(abortReason);
+  });
+
+  it("accepts the documented 204 dispatch without parsing a run id", async () => {
     const { fetchFn, requests } = createMockFetch([
-      jsonResponse({ workflow_run_id: 987654321 }, 201),
+      new Response(null, { status: 204 }),
     ]);
     const client = createGitHubApiClient({
       token: "opaque-test-credential",
@@ -199,10 +389,12 @@ describe("GitHub publisher client", () => {
       repository: "northland-simple-form",
       workflow: "deploy.yml",
       ref: "main",
-      inputs: { environment: "production" },
+      publishJobId: "publish-job-123",
+      sourceSha: PERSISTED_SOURCE_SHA,
+      signal: abortSignal(),
     });
 
-    expect(result).toEqual({ workflow_run_id: 987654321 });
+    expect(result).toBeUndefined();
     expect(requests).toHaveLength(1);
     expect(requests[0]?.url).toBe(
       "https://api.github.com/repos/customer-repositories/northland-simple-form/actions/workflows/deploy.yml/dispatches"
@@ -210,15 +402,24 @@ describe("GitHub publisher client", () => {
     expect(requests[0]?.init?.headers).toMatchObject({
       "X-GitHub-Api-Version": "2026-03-10",
     });
+    expect(parseRequestBody(requests[0])).toEqual({
+      ref: "main",
+      inputs: {
+        publish_job_id: "publish-job-123",
+        source_sha: PERSISTED_SOURCE_SHA,
+      },
+    });
     expect(requests.some(request => request.url.includes("/runs"))).toBe(false);
   });
 
-  it("looks up only the persisted workflow run id", async () => {
+  it("looks up only the persisted workflow run id without treating head SHA as source SHA", async () => {
     const { fetchFn, requests } = createMockFetch([
       jsonResponse({
         id: 987654321,
         status: "completed",
         conclusion: "success",
+        head_sha: "newer-default-branch-head",
+        display_title: EXPECTED_WORKFLOW_TITLE,
       }),
     ]);
     const client = createGitHubApiClient({
@@ -231,11 +432,14 @@ describe("GitHub publisher client", () => {
         owner: "customer-repositories",
         repository: "northland-simple-form",
         workflowRunId: 987654321,
+        signal: abortSignal(),
       })
     ).resolves.toEqual({
       id: 987654321,
       status: "completed",
       conclusion: "success",
+      headSha: "newer-default-branch-head",
+      displayTitle: EXPECTED_WORKFLOW_TITLE,
     });
     expect(requests).toHaveLength(1);
     expect(requests[0]).toMatchObject({
@@ -244,10 +448,33 @@ describe("GitHub publisher client", () => {
     });
   });
 
-  it("rejects an untyped dispatch response without exposing its body", async () => {
-    const unsafeResponseValue = "opaque-response-value";
-    const { fetchFn } = createMockFetch([
-      jsonResponse({ workflow_run_id: unsafeResponseValue }, 201),
+  it("finds only a recent dispatch with exact display-title source correlation", async () => {
+    const { fetchFn, requests } = createMockFetch([
+      jsonResponse({
+        workflow_runs: [
+          {
+            id: 1,
+            status: "completed",
+            conclusion: "success",
+            head_sha: "newer-branch-sha",
+            display_title: `Deploy publish-job-123 ${"f".repeat(40)}`,
+          },
+          {
+            id: 2,
+            status: "completed",
+            conclusion: "success",
+            head_sha: "newer-branch-sha",
+            display_title: `${EXPECTED_WORKFLOW_TITLE}-extra`,
+          },
+          {
+            id: 3,
+            status: "in_progress",
+            conclusion: null,
+            head_sha: "newer-branch-sha",
+            display_title: EXPECTED_WORKFLOW_TITLE,
+          },
+        ],
+      }),
     ]);
     const client = createGitHubApiClient({
       token: "opaque-test-credential",
@@ -255,13 +482,56 @@ describe("GitHub publisher client", () => {
     });
 
     await expect(
-      client.dispatchWorkflow({
+      client.findWorkflowRun({
         owner: "customer-repositories",
         repository: "northland-simple-form",
         workflow: "deploy.yml",
-        ref: "main",
+        publishJobId: "publish-job-123",
+        sourceSha: PERSISTED_SOURCE_SHA,
+        signal: abortSignal(),
       })
-    ).rejects.not.toThrow(unsafeResponseValue);
+    ).resolves.toEqual({
+      id: 3,
+      status: "in_progress",
+      conclusion: null,
+      headSha: "newer-branch-sha",
+      displayTitle: EXPECTED_WORKFLOW_TITLE,
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.url).toBe(
+      "https://api.github.com/repos/customer-repositories/northland-simple-form/actions/workflows/deploy.yml/runs?event=workflow_dispatch&per_page=50&page=1"
+    );
+  });
+
+  it("returns null when recent dispatches do not match the exact title", async () => {
+    const { fetchFn } = createMockFetch([
+      jsonResponse({
+        workflow_runs: [
+          {
+            id: 1,
+            status: "completed",
+            conclusion: "success",
+            head_sha: "newer-branch-sha",
+            display_title: `Deploy publish-job-123 ${"f".repeat(40)}`,
+          },
+        ],
+      }),
+    ]);
+    const client = createGitHubApiClient({
+      token: "opaque-test-credential",
+      fetchFn,
+    });
+
+    await expect(
+      client.findWorkflowRun({
+        owner: "customer-repositories",
+        repository: "northland-simple-form",
+        workflow: "deploy.yml",
+        publishJobId: "publish-job-123",
+        sourceSha: PERSISTED_SOURCE_SHA,
+        signal: abortSignal(),
+      })
+    ).resolves.toBeNull();
   });
 
   it("uses the required API version and bounded timeout constants", () => {
@@ -272,8 +542,14 @@ describe("GitHub publisher client", () => {
 
   it("allows fifteen seconds only for repository generation", async () => {
     vi.useFakeTimers();
-    const fetchFn: FetchFunction = async () =>
-      new Promise<Response>(() => undefined);
+    const fetchFn: FetchFunction = async (_input, init) =>
+      await new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => reject(init.signal?.reason),
+          { once: true }
+        );
+      });
     const client = createGitHubApiClient({
       token: "opaque-test-credential",
       fetchFn,
@@ -285,6 +561,7 @@ describe("GitHub publisher client", () => {
         templateRepository: "paid-funnel-simple-form-funnel",
         owner: "customer-repositories",
         repository: "northland-simple-form",
+        signal: abortSignal(),
       })
       .then(
         () => completion("resolved"),
@@ -304,8 +581,14 @@ describe("GitHub publisher client", () => {
 
   it("uses ten seconds for workflow dispatch", async () => {
     vi.useFakeTimers();
-    const fetchFn: FetchFunction = async () =>
-      new Promise<Response>(() => undefined);
+    const fetchFn: FetchFunction = async (_input, init) =>
+      await new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => reject(init.signal?.reason),
+          { once: true }
+        );
+      });
     const client = createGitHubApiClient({
       token: "opaque-test-credential",
       fetchFn,
@@ -317,6 +600,9 @@ describe("GitHub publisher client", () => {
         repository: "northland-simple-form",
         workflow: "deploy.yml",
         ref: "main",
+        publishJobId: "publish-job-123",
+        sourceSha: "persisted-source-sha",
+        signal: abortSignal(),
       })
       .then(
         () => completion("resolved"),
