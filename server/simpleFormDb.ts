@@ -17,6 +17,7 @@ import {
   SIMPLE_FORM_TEMPLATE_KEY,
   type SimpleFormRuntimeSecretKey,
 } from "../shared/simpleFormContract";
+import type { SimpleFormPublishMaterial } from "./publisher/publishSimpleForm";
 import {
   buildSimpleFormValidatedConfiguration,
   buildSimpleFormReadiness,
@@ -169,6 +170,10 @@ function parseStoredRecord(value: Record<string, unknown>): SimpleFormStoredReco
 function decryptedGhlWebhookUrl(row: FunnelRuntimeSecret | undefined): string | null {
   const encrypted = row?.ghlWebhookUrlEncrypted;
   return hasProtectedValue(encrypted) ? decryptSetupValue(encrypted as string) : null;
+}
+
+function decryptRuntimeSecret(value: string | null | undefined): string | null {
+  return hasProtectedValue(value) ? decryptSetupValue(value as string) : null;
 }
 
 export async function getSimpleFormDetail(clientId: number, funnelId: number) {
@@ -382,5 +387,41 @@ export async function getSimpleFormPublishHandoff(clientId: number, funnelId: nu
     requiredCloudflareInfrastructure: SIMPLE_FORM_CLOUDFLARE_INFRA,
     validatedConfiguration: configurationReady ? validatedConfiguration : null,
     missing: detail.readiness.sections.flatMap(section => section.missing),
+  };
+}
+
+export async function getSimpleFormPublishMaterial(input: {
+  clientId: number;
+  funnelId: number;
+}): Promise<SimpleFormPublishMaterial> {
+  const detail = await getSimpleFormDetail(input.clientId, input.funnelId);
+  if (!detail.readiness.configurationReady) {
+    throw new Error("Complete Simple Form readiness before publishing.");
+  }
+  const db = await requireDb();
+  const rows = await db
+    .select()
+    .from(funnelRuntimeSecrets)
+    .where(eq(funnelRuntimeSecrets.funnelId, input.funnelId))
+    .limit(1);
+  const secrets = rows[0];
+  if (!secrets) throw new Error("Simple Form runtime secrets are missing.");
+  return {
+    config: detail.config,
+    runtimeSecrets: {
+      META_CAPI_ACCESS_TOKEN: decryptRuntimeSecret(
+        secrets.metaCapiAccessTokenEncrypted,
+      ),
+      META_TEST_EVENT_CODE: decryptRuntimeSecret(
+        secrets.metaTestEventCodeEncrypted,
+      ),
+      GHL_WEBHOOK_URL: decryptRuntimeSecret(secrets.ghlWebhookUrlEncrypted),
+      CRM_CALLBACK_SECRET: decryptRuntimeSecret(
+        secrets.crmCallbackSecretEncrypted,
+      ),
+      SUBMISSION_ALERT_WEBHOOK_URL: decryptRuntimeSecret(
+        secrets.submissionAlertWebhookUrlEncrypted,
+      ),
+    },
   };
 }

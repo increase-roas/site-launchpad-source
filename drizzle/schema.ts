@@ -11,6 +11,10 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
+import {
+  funnelPublishStatusValues,
+  funnelPublishStepValues,
+} from "../shared/simpleFormPublish";
 
 export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
 
@@ -547,6 +551,75 @@ export const funnelRuntimeSecrets = pgTable("funnelRuntimeSecrets", {
 
 export type FunnelRuntimeSecret = typeof funnelRuntimeSecrets.$inferSelect;
 export type InsertFunnelRuntimeSecret = typeof funnelRuntimeSecrets.$inferInsert;
+
+export const funnelPublishStepEnum = pgEnum(
+  "funnel_publish_step",
+  funnelPublishStepValues,
+);
+export const funnelPublishStatusEnum = pgEnum(
+  "funnel_publish_status",
+  funnelPublishStatusValues,
+);
+
+export const funnelPublishes = pgTable(
+  "funnelPublishes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    clientId: integer("clientId")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    funnelId: integer("funnelId")
+      .notNull()
+      .references(() => funnels.id, { onDelete: "cascade" }),
+    externalFunnelId: varchar("externalFunnelId", { length: 120 }).notNull(),
+    resourceName: varchar("resourceName", { length: 120 }).notNull(),
+    repositoryName: varchar("repositoryName", { length: 120 }).notNull(),
+    workerName: varchar("workerName", { length: 120 }).notNull(),
+    step: funnelPublishStepEnum("step").default("create_repository").notNull(),
+    status: funnelPublishStatusEnum("status").default("pending").notNull(),
+    repositoryId: varchar("repositoryId", { length: 120 }),
+    repositoryFullName: varchar("repositoryFullName", { length: 240 }),
+    repositoryUrl: varchar("repositoryUrl", { length: 1000 }),
+    defaultBranch: varchar("defaultBranch", { length: 120 }),
+    commitSha: varchar("commitSha", { length: 120 }),
+    liveUrl: varchar("liveUrl", { length: 1000 }),
+    dispatchRequestedAt: timestamp("dispatchRequestedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    workflowRunId: varchar("workflowRunId", { length: 120 }),
+    workflowStatus: varchar("workflowStatus", { length: 80 }),
+    workflowCheckedAt: timestamp("workflowCheckedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    leaseToken: uuid("leaseToken"),
+    leaseUntil: timestamp("leaseUntil", { withTimezone: true, mode: "date" }),
+    lastError: text("lastError"),
+    attemptCount: integer("attemptCount").default(0).notNull(),
+    completedAt: timestamp("completedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  table => [
+    uniqueIndex("funnel_publishes_funnel_unique").on(table.funnelId),
+    uniqueIndex("funnel_publishes_external_funnel_unique").on(
+      table.externalFunnelId,
+    ),
+    index("funnel_publishes_status_idx").on(table.status),
+    index("funnel_publishes_lease_until_idx").on(table.leaseUntil),
+  ],
+).enableRLS();
+
+export type FunnelPublish = typeof funnelPublishes.$inferSelect;
+export type InsertFunnelPublish = typeof funnelPublishes.$inferInsert;
 
 export const homepageSectionTypeValues = [
   "hero",

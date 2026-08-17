@@ -2,6 +2,11 @@ import { z } from "zod";
 import { simpleFormStoredRecordSchema } from "../../shared/simpleFormConfig";
 import { SIMPLE_FORM_TEMPLATE_KEY } from "../../shared/simpleFormContract";
 import { protectedProcedure, router } from "../_core/trpc";
+import {
+  advancePublish,
+  publishStatus,
+  startPublish,
+} from "../publisher/publishSimpleForm";
 import { mapRouterError } from "../trpcErrors";
 import {
   createSimpleFormFromTemplate,
@@ -97,6 +102,30 @@ export const simpleFormRouter = router({
       return await getSimpleFormPublishHandoff(input.clientId, input.funnelId);
     } catch (error) {
       throw mapRouterError(error, "Publish handoff could not be loaded.");
+    }
+  }),
+
+  startPublish: protectedProcedure.input(ownedFunnelInput).mutation(async ({ input }) => {
+    try {
+      return await startPublish(input.clientId, input.funnelId);
+    } catch (error) {
+      throw mapRouterError(error, "Publishing could not be started.");
+    }
+  }),
+
+  advancePublish: protectedProcedure.input(ownedFunnelInput).mutation(async ({ input }) => {
+    try {
+      return await advancePublish(input.clientId, input.funnelId);
+    } catch (error) {
+      throw mapRouterError(error, "Publishing could not be advanced.");
+    }
+  }),
+
+  publishStatus: protectedProcedure.input(ownedFunnelInput).query(async ({ input }) => {
+    try {
+      return await publishStatus(input.clientId, input.funnelId);
+    } catch (error) {
+      throw mapRouterError(error, "Publish status could not be loaded.");
     }
   }),
 });

@@ -9,6 +9,7 @@ import {
   clientSecretSetups,
   clients,
   funnelConfigs,
+  funnelPublishes,
   funnelRuntimeSecrets,
   funnelSimpleFormConfigs,
   funnelSteps,
@@ -30,6 +31,7 @@ const applicationTables = {
   clientSecretSetups: { table: clientSecretSetups, databaseName: "clientSecretSetups" },
   clients: { table: clients, databaseName: "clients" },
   funnelConfigs: { table: funnelConfigs, databaseName: "funnelConfigs" },
+  funnelPublishes: { table: funnelPublishes, databaseName: "funnelPublishes" },
   funnelRuntimeSecrets: { table: funnelRuntimeSecrets, databaseName: "funnelRuntimeSecrets" },
   funnelSimpleFormConfigs: {
     table: funnelSimpleFormConfigs,
@@ -64,7 +66,7 @@ describe("PostgreSQL application-table RLS", () => {
       .sort((left, right) => left.exportName.localeCompare(right.exportName));
 
     expect(discovered).toEqual(expected);
-    expect(discovered).toHaveLength(15);
+    expect(discovered).toHaveLength(16);
   });
 
   it("enables RLS without schema policies on every application table", () => {

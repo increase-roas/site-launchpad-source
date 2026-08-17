@@ -13,16 +13,85 @@ import {
   type SimpleFormStoredRecord,
 } from "@shared/simpleFormConfig";
 import type { SimpleFormSecretGuide } from "@shared/simpleFormContract";
+import type {
+  FunnelPublishStatus,
+  FunnelPublishStep,
+  SimpleFormPublishStatusView,
+} from "@shared/simpleFormPublish";
 import {
+  AlertCircle,
   ArrowLeft,
   CheckCircle2,
   ExternalLink,
   Eye,
   Loader2,
+  Rocket,
   Save,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { toast } from "sonner";
+
+type PublishStateLike = {
+  status: FunnelPublishStatus;
+  step: FunnelPublishStep;
+};
+
+export function publishActionLabel(
+  publish: PublishStateLike | null,
+): "Publish" | "Retry" | null {
+  if (!publish) return "Publish";
+  if (publish.status === "published") return null;
+  return "Retry";
+}
+
+export function shouldAutoAdvancePublish(
+  publish: PublishStateLike | null,
+): boolean {
+  return Boolean(
+    publish &&
+      (publish.status === "pending" || publish.status === "running") &&
+      publish.step !== "published",
+  );
+}
+
+export function publishProgressPercent(progress: {
+  completed: number;
+  total: number;
+}): number {
+  if (progress.total <= 0) return 0;
+  return Math.min(
+    100,
+    Math.max(0, Math.round((progress.completed / progress.total) * 100)),
+  );
+}
+
+function publishStepLabel(step: FunnelPublishStep): string {
+  switch (step) {
+    case "create_repository":
+      return "Creating repository";
+    case "commit_source":
+      return "Committing generated source";
+    case "configure_cloudflare":
+      return "Configuring Cloudflare";
+    case "dispatch_workflow":
+      return "Starting deployment workflow";
+    case "locate_workflow":
+      return "Waiting for workflow";
+    case "monitor_workflow":
+      return "Monitoring deployment";
+    case "published":
+      return "Published";
+    default: {
+      const exhaustive: never = step;
+      return exhaustive;
+    }
+  }
+}
 
 function Field({
   label,
@@ -181,10 +250,16 @@ export function SimpleFormFunnelEditor({
 }) {
   const utils = trpc.useUtils();
   const query = trpc.simpleForm.get.useQuery({ clientId, funnelId });
+  const publishQuery = trpc.simpleForm.publishStatus.useQuery(
+    { clientId, funnelId },
+    { refetchInterval: 3_000 },
+  );
   const [record, setRecord] = useState<SimpleFormStoredRecord | null>(null);
   const [zipText, setZipText] = useState("");
   const [secretDrafts, setSecretDrafts] = useState<Record<string, string>>({});
   const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
+  const [activePublish, setActivePublish] =
+    useState<SimpleFormPublishStatusView | null>(null);
 
   useEffect(() => {
     if (!query.data) return;
@@ -214,6 +289,53 @@ export function SimpleFormFunnelEditor({
     onSuccess: result => setRevealedSecret(result.value),
     onError: error => toast.error(error.message),
   });
+  const startPublishMutation = trpc.simpleForm.startPublish.useMutation({
+    onSuccess: async status => {
+      setActivePublish(status);
+      await utils.simpleForm.publishStatus.invalidate({ clientId, funnelId });
+    },
+    onError: error => toast.error(error.message),
+  });
+  const advancePublishMutation = trpc.simpleForm.advancePublish.useMutation({
+    onSuccess: async status => {
+      setActivePublish(status);
+      await utils.simpleForm.publishStatus.invalidate({ clientId, funnelId });
+    },
+    onError: error => {
+      setActivePublish(null);
+      toast.error(error.message);
+    },
+  });
+  const requestPublishAdvance = advancePublishMutation.mutate;
+  const publishAdvancePending = advancePublishMutation.isPending;
+
+  const publish = activePublish ?? publishQuery.data ?? null;
+  useEffect(() => {
+    if (
+      !activePublish ||
+      !shouldAutoAdvancePublish(activePublish) ||
+      publishAdvancePending
+    ) {
+      return;
+    }
+    const delay =
+      activePublish.status === "running"
+        ? 3_000
+        : activePublish.step === "locate_workflow" ||
+            activePublish.step === "monitor_workflow"
+          ? 2_000
+          : 0;
+    const timeout = window.setTimeout(() => {
+      requestPublishAdvance({ clientId, funnelId });
+    }, delay);
+    return () => window.clearTimeout(timeout);
+  }, [
+    activePublish,
+    clientId,
+    funnelId,
+    publishAdvancePending,
+    requestPublishAdvance,
+  ]);
 
   const config = record?.config;
   const patchConfig = (partial: Partial<SimpleFormOperatorConfig>) => {
@@ -224,6 +346,13 @@ export function SimpleFormFunnelEditor({
   const readiness = query.data?.readiness;
   const assets = query.data?.assets ?? [];
   const guides = useMemo(() => query.data?.secretGuides ?? [], [query.data?.secretGuides]);
+  const publishAction =
+    activePublish && shouldAutoAdvancePublish(activePublish)
+      ? null
+      : publishActionLabel(publish);
+  const publishBusy =
+    startPublishMutation.isPending || publishAdvancePending;
+  const progress = publish?.progress ?? { completed: 0, total: 6 };
 
   if (query.isLoading || !record || !config) {
     return (
@@ -277,8 +406,86 @@ export function SimpleFormFunnelEditor({
             <p className="text-sm font-extrabold text-cyan-300">
               {readiness?.configurationReady ? "CONFIGURATION READY" : "Not ready"}
             </p>
-            <p className="text-xs font-bold text-muted-foreground">Not published · Publish is not built yet</p>
+            <p className="text-xs font-bold text-muted-foreground">
+              {publish ? publishStepLabel(publish.step) : "Not published"}
+            </p>
           </div>
+        </div>
+        <div className="mt-4 space-y-3 rounded-xl border border-white/8 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-extrabold">
+                {publish ? publishStepLabel(publish.step) : "Ready to publish"}
+              </p>
+              <p className="text-xs font-semibold text-muted-foreground">
+                {progress.completed} of {progress.total} publish steps complete
+              </p>
+            </div>
+            {publishAction ? (
+              <Button
+                type="button"
+                disabled={
+                  publishBusy ||
+                  (publishAction === "Publish" &&
+                    !readiness?.configurationReady)
+                }
+                onClick={() => {
+                  if (publishAction === "Publish") {
+                    startPublishMutation.mutate({ clientId, funnelId });
+                    return;
+                  }
+                  requestPublishAdvance({ clientId, funnelId });
+                }}
+                className="h-11 gap-2 rounded-xl bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
+              >
+                {publishBusy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Rocket className="h-4 w-4" />
+                )}
+                {publishAction}
+              </Button>
+            ) : null}
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-cyan-300 transition-[width]"
+              style={{ width: `${publishProgressPercent(progress)}%` }}
+            />
+          </div>
+          {publish?.error ? (
+            <div className="flex items-start gap-2 rounded-lg border border-red-400/20 bg-red-400/5 p-3 text-sm font-bold text-red-200">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{publish.error}</span>
+            </div>
+          ) : null}
+          {publish?.repositoryUrl ||
+          (publish?.status === "published" && publish.liveUrl) ? (
+            <div className="flex flex-wrap gap-4 text-sm font-extrabold">
+              {publish.repositoryUrl ? (
+                <a
+                  href={publish.repositoryUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-cyan-300"
+                >
+                  Repository
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              ) : null}
+              {publish.status === "published" && publish.liveUrl ? (
+                <a
+                  href={publish.liveUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-emerald-300"
+                >
+                  Live site
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              ) : null}
+            </div>
+          ) : null}
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {(readiness?.sections ?? []).map(section => (

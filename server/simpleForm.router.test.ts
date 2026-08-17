@@ -16,6 +16,14 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("./simpleFormDb", () => mocks);
 
+const publishMocks = vi.hoisted(() => ({
+  startPublish: vi.fn(),
+  advancePublish: vi.fn(),
+  publishStatus: vi.fn(),
+}));
+
+vi.mock("./publisher/publishSimpleForm", () => publishMocks);
+
 import { simpleFormRouter } from "./routers/simpleForm";
 
 function context(role: "admin" | "user" | null = "user"): TrpcContext {
@@ -107,6 +115,25 @@ describe("simple form template procedures", () => {
       secretsPresent: detail.secretStatus,
       validatedConfiguration: null,
     });
+    publishMocks.startPublish.mockResolvedValue({
+      id: "publish-11",
+      status: "pending",
+      step: "create_repository",
+      progress: { completed: 0, total: 6 },
+      error: null,
+      repositoryUrl: null,
+      liveUrl: null,
+    });
+    publishMocks.advancePublish.mockResolvedValue({
+      id: "publish-11",
+      status: "pending",
+      step: "commit_source",
+      progress: { completed: 1, total: 6 },
+      error: null,
+      repositoryUrl: "https://github.com/launchpad-sites/simple-form-northland-11",
+      liveUrl: null,
+    });
+    publishMocks.publishStatus.mockResolvedValue(null);
   });
 
   it("lists the approved Simple Form template", async () => {
@@ -140,6 +167,29 @@ describe("simple form template procedures", () => {
     const handoff = await caller.publishHandoff({ clientId: 5, funnelId: 11 });
     expect(handoff.published).toBe(false);
     expect(JSON.stringify(handoff)).not.toContain("generated-secret");
+  });
+
+  it("starts and advances publishing only through mutations", async () => {
+    const caller = simpleFormRouter.createCaller(context());
+
+    await caller.startPublish({ clientId: 5, funnelId: 11 });
+    await caller.advancePublish({ clientId: 5, funnelId: 11 });
+
+    expect(publishMocks.startPublish).toHaveBeenCalledWith(5, 11);
+    expect(publishMocks.advancePublish).toHaveBeenCalledWith(5, 11);
+  });
+
+  it("keeps concurrent publish-status polls read-only", async () => {
+    const caller = simpleFormRouter.createCaller(context());
+
+    await Promise.all([
+      caller.publishStatus({ clientId: 5, funnelId: 11 }),
+      caller.publishStatus({ clientId: 5, funnelId: 11 }),
+      caller.publishStatus({ clientId: 5, funnelId: 11 }),
+    ]);
+
+    expect(publishMocks.publishStatus).toHaveBeenCalledTimes(3);
+    expect(publishMocks.advancePublish).not.toHaveBeenCalled();
   });
 
   it("rejects unauthenticated template listing", async () => {
