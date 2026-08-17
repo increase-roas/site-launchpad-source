@@ -3,6 +3,7 @@ import {
   fetchAwaitingCancellation,
   type FetchFunction,
 } from "../../shared/requestTimeout";
+import type { SimpleFormRuntimeSecretKey } from "../../shared/simpleFormContract";
 import type { PublisherWorkerSecretKey } from "./workerSecrets";
 
 export const CLOUDFLARE_REQUEST_TIMEOUT_MS = 10_000;
