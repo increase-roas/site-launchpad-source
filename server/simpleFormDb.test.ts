@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  funnelRuntimeSecrets,
+  clientLeadIntegrations,
   funnelSimpleFormConfigs,
   funnelSteps,
   funnels,
@@ -42,7 +42,11 @@ function buildReadyRecord() {
 
 function detailDatabase(
   record: ReturnType<typeof buildReadyRecord>,
-  ghlWebhookUrl: string
+  integrationOverrides: Partial<{
+    ghlLocationId: string;
+    googleSheetsId: string;
+    metaPixelId: string;
+  }> = {}
 ) {
   const funnel = {
     id: 11,
@@ -56,13 +60,16 @@ function detailDatabase(
     deploymentStatus: "draft",
     status: "draft",
   };
-  const secretRow = {
-    funnelId: 11,
+  const integrationRow = {
+    clientId: 5,
+    ghlLocationId: "location-123",
+    googleSheetsId: "sheet-123",
+    metaPixelId: "123456789012345",
+    ghlApiKeyEncrypted: encryptSetupValue("ghl-key"),
     metaCapiAccessTokenEncrypted: encryptSetupValue("meta-token"),
-    metaTestEventCodeEncrypted: null,
-    ghlWebhookUrlEncrypted: encryptSetupValue(ghlWebhookUrl),
-    crmCallbackSecretEncrypted: encryptSetupValue("crm-secret"),
-    submissionAlertWebhookUrlEncrypted: null,
+    stageWebhookSecretEncrypted: encryptSetupValue("stage-secret"),
+    alertWebhookUrlEncrypted: null,
+    ...integrationOverrides,
   };
   return {
     select: () => ({
@@ -73,7 +80,7 @@ function detailDatabase(
             if (table === funnelSimpleFormConfigs) {
               return [{ funnelId: 11, configJson: record }];
             }
-            if (table === funnelRuntimeSecrets) return [secretRow];
+            if (table === clientLeadIntegrations) return [integrationRow];
             return [];
           },
         }),
@@ -249,10 +256,10 @@ describe("createSimpleFormFromTemplate", () => {
 });
 
 describe("Simple Form private candidate validation", () => {
-  it("uses the decrypted stored GHL URL to prevent false readiness", async () => {
+  it("requires the client GHL location before marking configuration ready", async () => {
     process.env.JWT_SECRET = "test-only-secret-that-is-long-enough";
     dbMocks.getDb.mockResolvedValue(
-      detailDatabase(buildReadyRecord(), "not-a-url")
+      detailDatabase(buildReadyRecord(), { ghlLocationId: "" })
     );
     dbMocks.getClientAssets.mockResolvedValue([]);
     dbMocks.getClientById.mockResolvedValue({
@@ -267,16 +274,15 @@ describe("Simple Form private candidate validation", () => {
     expect(
       detail.readiness.sections
         .find(section => section.key === "ghl")
-        ?.missing.some(item => item.includes("Canonical Shape A"))
+        ?.missing.some(item => item.includes("GHL Location ID"))
     ).toBe(true);
-    expect(JSON.stringify(detail)).not.toContain("not-a-url");
+    expect(JSON.stringify(detail)).not.toContain("ghl-key");
   });
 
   it("returns validated non-secret configuration separately from secret status", async () => {
     process.env.JWT_SECRET = "test-only-secret-that-is-long-enough";
-    const ghlWebhookUrl = "https://services.leadconnectorhq.com/hooks/example";
     dbMocks.getDb.mockResolvedValue(
-      detailDatabase(buildReadyRecord(), ghlWebhookUrl)
+      detailDatabase(buildReadyRecord())
     );
     dbMocks.getClientAssets.mockResolvedValue([]);
     dbMocks.getClientById.mockResolvedValue({
@@ -289,10 +295,17 @@ describe("Simple Form private candidate validation", () => {
 
     expect(handoff.configurationReady).toBe(true);
     expect(handoff.validatedConfiguration).not.toHaveProperty("ghlWebhookUrl");
-    expect(handoff.secretsPresent.GHL_WEBHOOK_URL).toBe(true);
+    expect(handoff.clientIntegration).toEqual({
+      GHL_LOCATION_ID: "location-123",
+      GOOGLE_SHEETS_ID: "sheet-123",
+      META_PIXEL_ID: "123456789012345",
+    });
+    expect(handoff.secretsPresent.GHL_API_KEY).toBe(true);
+    expect(handoff.secretsPresent.META_CAPI_ACCESS_TOKEN).toBe(true);
+    expect(handoff.secretsPresent.STAGE_WEBHOOK_SECRET).toBe(true);
     expect(JSON.stringify(handoff)).not.toContain("meta-token");
-    expect(JSON.stringify(handoff)).not.toContain(ghlWebhookUrl);
-    expect(JSON.stringify(handoff)).not.toContain("crm-secret");
+    expect(JSON.stringify(handoff)).not.toContain("ghl-key");
+    expect(JSON.stringify(handoff)).not.toContain("stage-secret");
     expect(JSON.stringify(handoff)).not.toContain("[PRESENT]");
   });
 });

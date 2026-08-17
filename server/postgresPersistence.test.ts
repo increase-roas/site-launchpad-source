@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   astroClientConfigs,
   clientAssets,
+  clientLeadIntegrations,
   clientSecretSetups,
   funnelConfigs,
   funnelRuntimeSecrets,
@@ -66,8 +67,8 @@ const expectedConflictCallsites = {
       usesUpdatedAt: true,
     },
     {
-      insertedTable: "funnelRuntimeSecrets",
-      target: "funnelRuntimeSecrets",
+      insertedTable: "clientLeadIntegrations",
+      target: "clientLeadIntegrations",
       usesUpdatedAt: true,
     },
   ],
@@ -158,6 +159,9 @@ describe("PostgreSQL persistence helpers", () => {
       clientAssets.clientId,
       clientAssets.slot,
     ]);
+    expect(postgresConflictTargets.clientLeadIntegrations).toBe(
+      clientLeadIntegrations.clientId,
+    );
     expect(postgresConflictTargets.astroClientConfigs).toBe(astroClientConfigs.clientId);
     expect(postgresConflictTargets.wranglerSecretSetups).toBe(wranglerSecretSetups.clientId);
     expect(postgresConflictTargets.funnelConfigs).toBe(funnelConfigs.funnelId);

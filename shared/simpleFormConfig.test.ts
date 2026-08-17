@@ -14,18 +14,22 @@ import { SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT } from "./simpleFormContract";
 
 const missingSecrets = {
   META_CAPI_ACCESS_TOKEN: false,
-  META_TEST_EVENT_CODE: false,
-  GHL_WEBHOOK_URL: false,
-  CRM_CALLBACK_SECRET: false,
-  SUBMISSION_ALERT_WEBHOOK_URL: false,
+  GHL_API_KEY: false,
+  STAGE_WEBHOOK_SECRET: false,
+  ALERT_WEBHOOK_URL: false,
 };
 
 const readySecrets = {
   META_CAPI_ACCESS_TOKEN: true,
-  META_TEST_EVENT_CODE: false,
-  GHL_WEBHOOK_URL: true,
-  CRM_CALLBACK_SECRET: true,
-  SUBMISSION_ALERT_WEBHOOK_URL: false,
+  GHL_API_KEY: true,
+  STAGE_WEBHOOK_SECRET: true,
+  ALERT_WEBHOOK_URL: false,
+};
+
+const readyIntegration = {
+  GHL_LOCATION_ID: "location-123",
+  GOOGLE_SHEETS_ID: "sheet-123",
+  META_PIXEL_ID: "123456789012345",
 };
 
 function buildReadyRecord(): SimpleFormStoredRecord {
@@ -74,67 +78,50 @@ describe("Simple Form readiness", () => {
       businessName: "Northland Spas",
       slug: "northland-spas-simple-form",
     });
-    const readiness = buildSimpleFormReadiness(record, missingSecrets);
+    const readiness = buildSimpleFormReadiness(record, missingSecrets, {
+      GHL_LOCATION_ID: "",
+      GOOGLE_SHEETS_ID: "",
+      META_PIXEL_ID: "",
+    });
     expect(readiness.published).toBe(false);
     expect(readiness.configurationReady).toBe(false);
     const missing = readiness.sections.flatMap(section => section.missing);
     expect(missing).toContain("Client phone (E.164)");
     expect(missing).toContain("Meta Pixel ID");
     expect(missing).toContain("Meta CAPI Access Token");
-    expect(missing).toContain("GHL Webhook URL");
-    expect(missing).toContain("CRM Callback Secret");
+    expect(missing).toContain("GHL Location ID");
+    expect(missing).toContain("GHL API Key");
+    expect(missing).toContain("Google Sheet ID");
+    expect(missing).toContain("Lifecycle Callback Secret");
     expect(missing.some(item => item.includes("CTA URL"))).toBe(true);
   });
 
-  it("fails production secrets when a Meta test event code is present", () => {
-    const record = buildSimpleFormStoredRecord({
-      businessName: "Northland Spas",
-      slug: "northland-spas-simple-form",
-      phone: "+17015551234",
-    });
-    record.config.meta.pixelId = "123456789012345";
-    const readiness = buildSimpleFormReadiness(record, {
-      META_CAPI_ACCESS_TOKEN: true,
-      META_TEST_EVENT_CODE: true,
-      GHL_WEBHOOK_URL: true,
-      CRM_CALLBACK_SECRET: true,
-      SUBMISSION_ALERT_WEBHOOK_URL: false,
-    });
-    expect(
-      readiness.sections
-        .find(section => section.key === "productionSecrets")
-        ?.missing,
-    ).toContain("Remove Meta Test Event Code before production");
-  });
-
   it("marks a complete canonical Shape A candidate ready", () => {
-    const readiness = buildSimpleFormReadiness(buildReadyRecord(), readySecrets, {
-      GHL_WEBHOOK_URL: "https://services.leadconnectorhq.com/hooks/example",
-    });
+    const readiness = buildSimpleFormReadiness(
+      buildReadyRecord(),
+      readySecrets,
+      readyIntegration,
+    );
 
     expect(readiness.configurationReady).toBe(true);
   });
 
   it.each([
-    ["CRM_CALLBACK_SECRET", "CRM Callback Secret"],
-    ["META_CAPI_ACCESS_TOKEN", "Meta CAPI Access Token"],
-    ["GHL_WEBHOOK_URL", "GHL Webhook URL"],
+    ["STAGE_WEBHOOK_SECRET", "Lifecycle Callback Secret", "productionSecrets"],
+    ["META_CAPI_ACCESS_TOKEN", "Meta CAPI Access Token", "meta"],
+    ["GHL_API_KEY", "GHL API Key", "ghl"],
   ] as const)(
     "requires offline conversion runtime secret %s",
-    (runtimeKey, missingLabel) => {
+    (runtimeKey, missingLabel, sectionKey) => {
       const readiness = buildSimpleFormReadiness(
         buildReadyRecord(),
         { ...readySecrets, [runtimeKey]: false },
-        {
-          GHL_WEBHOOK_URL: "https://services.leadconnectorhq.com/hooks/example",
-        },
+        readyIntegration,
       );
 
       expect(readiness.configurationReady).toBe(false);
       expect(
-        readiness.sections.find(
-          section => section.key === "productionSecrets",
-        )?.missing,
+        readiness.sections.find(section => section.key === sectionKey)?.missing,
       ).toContain(missingLabel);
     },
   );
@@ -143,9 +130,7 @@ describe("Simple Form readiness", () => {
     const readiness = buildSimpleFormReadiness(
       buildReadyRecord(),
       readySecrets,
-      {
-        GHL_WEBHOOK_URL: "https://services.leadconnectorhq.com/hooks/example",
-      },
+      readyIntegration,
       null,
     );
 
@@ -160,9 +145,7 @@ describe("Simple Form readiness", () => {
     const readiness = buildSimpleFormReadiness(
       buildReadyRecord(),
       readySecrets,
-      {
-        GHL_WEBHOOK_URL: "https://services.leadconnectorhq.com/hooks/example",
-      },
+      readyIntegration,
       {
         ...SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT,
         joinKey: "leadId",
@@ -218,36 +201,35 @@ describe("Simple Form readiness", () => {
     const record = buildReadyRecord();
     mutate(record);
 
-    const readiness = buildSimpleFormReadiness(record, readySecrets, {
-      GHL_WEBHOOK_URL: "https://services.leadconnectorhq.com/hooks/example",
-    });
+    const readiness = buildSimpleFormReadiness(
+      record,
+      readySecrets,
+      readyIntegration,
+    );
 
     expect(readiness.configurationReady).toBe(false);
   });
 
-  it("rejects an invalid stored GHL webhook URL", () => {
+  it("rejects an invalid client Meta Pixel ID", () => {
     const readiness = buildSimpleFormReadiness(buildReadyRecord(), readySecrets, {
-      GHL_WEBHOOK_URL: "not-a-url",
+      ...readyIntegration,
+      META_PIXEL_ID: "not-a-pixel-id",
     });
 
     expect(readiness.configurationReady).toBe(false);
   });
 
-  it("returns transformed validated config without the GHL webhook secret", () => {
+  it("returns transformed validated config without integration secrets", () => {
     const record = buildReadyRecord();
     record.config.meta.currency = "usd";
     record.config.validation.defaultCountry = "us";
 
-    const validated = buildSimpleFormValidatedConfiguration(record.config, {
-      GHL_WEBHOOK_URL: "https://services.leadconnectorhq.com/hooks/example",
-    });
+    const validated = buildSimpleFormValidatedConfiguration(record.config);
 
     expect(validated?.meta.currency).toBe("USD");
     expect(validated?.validation.defaultCountry).toBe("US");
     expect(validated).not.toHaveProperty("ghlWebhookUrl");
-    expect(JSON.stringify(validated)).not.toContain(
-      "https://services.leadconnectorhq.com/hooks/example",
-    );
+    expect(JSON.stringify(validated)).not.toContain("meta-token");
   });
 });
 

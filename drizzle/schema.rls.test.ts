@@ -6,6 +6,7 @@ import {
   assetUploadSessions,
   astroClientConfigs,
   clientAssets,
+  clientLeadIntegrations,
   clientSecretSetups,
   clients,
   funnelConfigs,
@@ -28,6 +29,10 @@ const applicationTables = {
   },
   astroClientConfigs: { table: astroClientConfigs, databaseName: "astroClientConfigs" },
   clientAssets: { table: clientAssets, databaseName: "clientAssets" },
+  clientLeadIntegrations: {
+    table: clientLeadIntegrations,
+    databaseName: "clientLeadIntegrations",
+  },
   clientSecretSetups: { table: clientSecretSetups, databaseName: "clientSecretSetups" },
   clients: { table: clients, databaseName: "clients" },
   funnelConfigs: { table: funnelConfigs, databaseName: "funnelConfigs" },
@@ -66,7 +71,7 @@ describe("PostgreSQL application-table RLS", () => {
       .sort((left, right) => left.exportName.localeCompare(right.exportName));
 
     expect(discovered).toEqual(expected);
-    expect(discovered).toHaveLength(16);
+    expect(discovered).toHaveLength(17);
   });
 
   it("enables RLS without schema policies on every application table", () => {

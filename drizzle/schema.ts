@@ -178,6 +178,32 @@ export const clientSecretSetups = pgTable(
 export type ClientSecretSetup = typeof clientSecretSetups.$inferSelect;
 export type InsertClientSecretSetup = typeof clientSecretSetups.$inferInsert;
 
+export const clientLeadIntegrations = pgTable(
+  "clientLeadIntegrations",
+  {
+    clientId: integer("clientId")
+      .primaryKey()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    ghlLocationId: text("ghlLocationId"),
+    googleSheetsId: text("googleSheetsId"),
+    metaPixelId: text("metaPixelId"),
+    ghlApiKeyEncrypted: text("ghlApiKeyEncrypted"),
+    metaCapiAccessTokenEncrypted: text("metaCapiAccessTokenEncrypted"),
+    stageWebhookSecretEncrypted: text("stageWebhookSecretEncrypted"),
+    alertWebhookUrlEncrypted: text("alertWebhookUrlEncrypted"),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  table => [index("client_lead_integrations_updated_at_idx").on(table.updatedAt)]
+).enableRLS();
+
+export type ClientLeadIntegration = typeof clientLeadIntegrations.$inferSelect;
+export type InsertClientLeadIntegration = typeof clientLeadIntegrations.$inferInsert;
+
 export const assetSlotValues = [
   "logo",
   "hero",

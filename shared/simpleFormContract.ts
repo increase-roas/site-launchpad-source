@@ -8,8 +8,8 @@ export const simpleFormOfflineConversionContractSchema = z.strictObject({
   joinKey: z.literal("leadUuid"),
   callback: z.strictObject({
     method: z.literal("POST"),
-    route: z.literal("/api/funnel/{slug}/conversion"),
-    authentication: z.literal("Bearer CRM_CALLBACK_SECRET"),
+    route: z.literal("/api/lead-stage"),
+    authentication: z.literal("Bearer STAGE_WEBHOOK_SECRET"),
   }),
   stageMappings: z.tuple([
     z.strictObject({
@@ -34,9 +34,14 @@ export const simpleFormOfflineConversionContractSchema = z.strictObject({
     }),
   ]),
   requiredRuntimeSecrets: z.tuple([
-    z.literal("CRM_CALLBACK_SECRET"),
+    z.literal("GHL_API_KEY"),
+    z.literal("GHL_LOCATION_ID"),
+    z.literal("GOOGLE_SHEETS_ID"),
+    z.literal("GOOGLE_SERVICE_ACCOUNT_EMAIL"),
+    z.literal("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY"),
+    z.literal("META_PIXEL_ID"),
     z.literal("META_CAPI_ACCESS_TOKEN"),
-    z.literal("GHL_WEBHOOK_URL"),
+    z.literal("STAGE_WEBHOOK_SECRET"),
   ]),
   deduplication: z.strictObject({
     idempotencyKey: z.literal("downstream_conversions.external_id"),
@@ -81,13 +86,37 @@ export const SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT =
   SIMPLE_FORM_MANIFEST.offlineConversionContract;
 
 export const SIMPLE_FORM_RUNTIME_SECRET_KEYS = [
+  "GHL_API_KEY",
+  "GHL_LOCATION_ID",
+  "GOOGLE_SHEETS_ID",
+  "GOOGLE_SERVICE_ACCOUNT_EMAIL",
+  "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
+  "META_PIXEL_ID",
   "META_CAPI_ACCESS_TOKEN",
-  "META_TEST_EVENT_CODE",
-  "GHL_WEBHOOK_URL",
-  "CRM_CALLBACK_SECRET",
-  "SUBMISSION_ALERT_WEBHOOK_URL",
+  "STAGE_WEBHOOK_SECRET",
+  "ALERT_WEBHOOK_URL",
 ] as const;
 export type SimpleFormRuntimeSecretKey = (typeof SIMPLE_FORM_RUNTIME_SECRET_KEYS)[number];
+
+export const SIMPLE_FORM_CLIENT_INTEGRATION_FIELD_KEYS = [
+  "GHL_LOCATION_ID",
+  "GOOGLE_SHEETS_ID",
+  "META_PIXEL_ID",
+] as const;
+export type SimpleFormClientIntegrationFieldKey =
+  (typeof SIMPLE_FORM_CLIENT_INTEGRATION_FIELD_KEYS)[number];
+export type SimpleFormClientIntegrationFields = Record<
+  SimpleFormClientIntegrationFieldKey,
+  string | null
+>;
+
+export const SIMPLE_FORM_CLIENT_SECRET_KEYS = [
+  "GHL_API_KEY",
+  "META_CAPI_ACCESS_TOKEN",
+  "STAGE_WEBHOOK_SECRET",
+  "ALERT_WEBHOOK_URL",
+] as const;
+export type SimpleFormClientSecretKey = (typeof SIMPLE_FORM_CLIENT_SECRET_KEYS)[number];
 
 export const SIMPLE_FORM_CLOUDFLARE_VARS = ["ENVIRONMENT", "META_GRAPH_API_VERSION"] as const;
 export const SIMPLE_FORM_CLOUDFLARE_BINDINGS = [
@@ -114,7 +143,7 @@ export const SIMPLE_FORM_CLOUDFLARE_INFRA = {
 export type SecretRequirement = "required" | "optional" | "testing-only" | "generated";
 
 export type SimpleFormSecretGuide = {
-  runtimeKey: SimpleFormRuntimeSecretKey;
+  runtimeKey: SimpleFormClientSecretKey;
   friendlyName: string;
   requirement: SecretRequirement;
   requiredFor: string;
@@ -133,35 +162,26 @@ export const SIMPLE_FORM_SECRET_GUIDES: SimpleFormSecretGuide[] = [
     docsUrl: "https://developers.facebook.com/docs/marketing-api/conversions-api/get-started",
   },
   {
-    runtimeKey: "META_TEST_EVENT_CODE",
-    friendlyName: "Meta Test Event Code",
-    requirement: "testing-only",
-    requiredFor: "Sending events into Events Manager test mode during smoke tests",
-    whereToFind:
-      "Events Manager → Test events. Remove this before production. Configuration ready fails if it stays set.",
-    docsUrl: "https://developers.facebook.com/docs/marketing-api/conversions-api/using-the-api",
-  },
-  {
-    runtimeKey: "GHL_WEBHOOK_URL",
-    friendlyName: "GoHighLevel Inbound Webhook",
+    runtimeKey: "GHL_API_KEY",
+    friendlyName: "GoHighLevel API Key",
     requirement: "required",
-    requiredFor: "Creating or updating the lead in GoHighLevel",
+    requiredFor: "Creating or updating the lead and retaining its contact ID",
     whereToFind:
-      "In the client GHL location, open Automation → Workflows, add an Inbound Webhook trigger, and copy the URL.",
-    docsUrl: "https://help.gohighlevel.com/support/solutions/articles/48001181454-workflow-trigger-inbound-webhook",
+      "Create a private integration token for the client GHL location with contact access.",
+    docsUrl: "https://marketplace.gohighlevel.com/docs/Authorization/PrivateIntegrationsToken/",
   },
   {
-    runtimeKey: "CRM_CALLBACK_SECRET",
-    friendlyName: "CRM Callback Secret",
+    runtimeKey: "STAGE_WEBHOOK_SECRET",
+    friendlyName: "Lifecycle Callback Secret",
     requirement: "generated",
     requiredFor:
-      "Bearer auth on POST /api/funnel/{slug}/conversion for qualified, appointment, show, and sale",
+      "Bearer auth on POST /api/lead-stage for qualified, appointment, show, and sale",
     whereToFind:
-      "Launchpad generates this per funnel. Use Reveal secret to copy the currently stored value into the GHL callback workflow, and keep it private.",
+      "Launchpad generates this per client. Regenerate it only when rotating the GHL lifecycle callback credential.",
     docsUrl: "https://developers.cloudflare.com/workers/configuration/secrets/",
   },
   {
-    runtimeKey: "SUBMISSION_ALERT_WEBHOOK_URL",
+    runtimeKey: "ALERT_WEBHOOK_URL",
     friendlyName: "Submission Alert Webhook",
     requirement: "optional",
     requiredFor: "Operational alert when GHL delivery fails",
@@ -201,9 +221,8 @@ export const SIMPLE_FORM_STEPS = [
 ];
 
 export const SIMPLE_FORM_SECRET_COLUMN = {
+  GHL_API_KEY: "ghlApiKeyEncrypted",
   META_CAPI_ACCESS_TOKEN: "metaCapiAccessTokenEncrypted",
-  META_TEST_EVENT_CODE: "metaTestEventCodeEncrypted",
-  GHL_WEBHOOK_URL: "ghlWebhookUrlEncrypted",
-  CRM_CALLBACK_SECRET: "crmCallbackSecretEncrypted",
-  SUBMISSION_ALERT_WEBHOOK_URL: "submissionAlertWebhookUrlEncrypted",
+  STAGE_WEBHOOK_SECRET: "stageWebhookSecretEncrypted",
+  ALERT_WEBHOOK_URL: "alertWebhookUrlEncrypted",
 } as const;

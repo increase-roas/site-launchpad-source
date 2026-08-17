@@ -14,6 +14,7 @@ import {
 } from "@shared/simpleFormConfig";
 import {
   SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT,
+  type SimpleFormClientIntegrationFields,
   type SimpleFormSecretGuide,
 } from "@shared/simpleFormContract";
 import type {
@@ -26,7 +27,6 @@ import {
   ArrowLeft,
   CheckCircle2,
   ExternalLink,
-  Eye,
   Loader2,
   Rocket,
   Save,
@@ -516,7 +516,12 @@ export function SimpleFormFunnelEditor({
   const [record, setRecord] = useState<SimpleFormStoredRecord | null>(null);
   const [zipText, setZipText] = useState("");
   const [secretDrafts, setSecretDrafts] = useState<Record<string, string>>({});
-  const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
+  const [integrationDrafts, setIntegrationDrafts] =
+    useState<SimpleFormClientIntegrationFields>({
+      GHL_LOCATION_ID: "",
+      GOOGLE_SHEETS_ID: "",
+      META_PIXEL_ID: "",
+    });
   const [activePublish, setActivePublish] = useState<{
     clientId: number;
     funnelId: number;
@@ -545,7 +550,7 @@ export function SimpleFormFunnelEditor({
     setRecord(query.data.record);
     setZipText(query.data.record.config.serviceAreaZipCodes.join("\n"));
     setSecretDrafts({});
-    setRevealedSecret(null);
+    setIntegrationDrafts(query.data.integration);
   }, [query.data]);
 
   useEffect(
@@ -561,16 +566,12 @@ export function SimpleFormFunnelEditor({
     },
     onError: error => toast.error(error.message),
   });
-  const secretsMutation = trpc.simpleForm.saveSecrets.useMutation({
+  const integrationMutation = trpc.simpleForm.saveIntegration.useMutation({
     onSuccess: async () => {
       await utils.simpleForm.get.invalidate({ clientId, funnelId });
       setSecretDrafts({});
-      toast.success("Secrets saved.");
+      toast.success("Lead integration settings saved.");
     },
-    onError: error => toast.error(error.message),
-  });
-  const revealMutation = trpc.simpleForm.revealCrmCallbackSecret.useMutation({
-    onSuccess: result => setRevealedSecret(result.value),
     onError: error => toast.error(error.message),
   });
   const startPublishMutation = trpc.simpleForm.startPublish.useMutation({
@@ -1034,11 +1035,7 @@ export function SimpleFormFunnelEditor({
           />
         </Field>
         {guides
-          .filter(
-            guide =>
-              guide.runtimeKey === "META_CAPI_ACCESS_TOKEN" ||
-              guide.runtimeKey === "META_TEST_EVENT_CODE"
-          )
+          .filter(guide => guide.runtimeKey === "META_CAPI_ACCESS_TOKEN")
           .map(guide => (
             <SecretField
               key={guide.runtimeKey}
@@ -1053,25 +1050,21 @@ export function SimpleFormFunnelEditor({
               }
             />
           ))}
-        {query.data?.secretStatus.META_TEST_EVENT_CODE ? (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() =>
-              secretsMutation.mutate({
-                clientId,
-                funnelId,
-                clearMetaTestEventCode: true,
-              })
-            }
-            className="h-11 rounded-xl border-amber-300/30 font-extrabold text-amber-200"
-          >
-            Remove Meta Test Event Code
-          </Button>
-        ) : null}
       </Section>
 
       <Section title="GHL">
+        <Field label="GHL Location ID" hint="The client sub-account location ID.">
+          <Input
+            value={integrationDrafts.GHL_LOCATION_ID ?? ""}
+            onChange={event =>
+              setIntegrationDrafts(current => ({
+                ...current,
+                GHL_LOCATION_ID: event.target.value,
+              }))
+            }
+            className="h-12 rounded-xl border-white/10 bg-white/[0.035] font-mono"
+          />
+        </Field>
         <div className="space-y-2 rounded-xl border border-white/8 bg-white/[0.025] p-4">
           <p className="text-sm font-extrabold">
             Offline conversion callback stages
@@ -1089,11 +1082,7 @@ export function SimpleFormFunnelEditor({
           </ul>
         </div>
         {guides
-          .filter(
-            guide =>
-              guide.runtimeKey === "GHL_WEBHOOK_URL" ||
-              guide.runtimeKey === "CRM_CALLBACK_SECRET"
-          )
+          .filter(guide => guide.runtimeKey === "GHL_API_KEY")
           .map(guide => (
             <SecretField
               key={guide.runtimeKey}
@@ -1106,72 +1095,67 @@ export function SimpleFormFunnelEditor({
                   [guide.runtimeKey]: value,
                 }))
               }
-              extra={
-                <div className="space-y-3">
-                  <p className="text-sm font-medium text-muted-foreground">
-                    {query.data?.secretStatus.CRM_CALLBACK_SECRET
-                      ? "Generated and saved."
-                      : "Not generated yet."}
-                  </p>
-                  <p className="text-sm font-medium text-muted-foreground">
-                    {"Revealing displays the currently stored secret. Keep it private."}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        revealMutation.mutate({ clientId, funnelId })
-                      }
-                      className="h-11 gap-2 rounded-xl font-extrabold"
-                    >
-                      <Eye className="h-4 w-4" />
-                      Reveal secret
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        secretsMutation.mutate({
-                          clientId,
-                          funnelId,
-                          regenerateCrmCallbackSecret: true,
-                        })
-                      }
-                      className="h-11 rounded-xl font-extrabold"
-                    >
-                      Generate a new secret
-                    </Button>
-                  </div>
-                  {revealedSecret ? (
-                    <Input
-                      readOnly
-                      value={revealedSecret}
-                      className="h-12 rounded-xl border-white/10 bg-white/[0.035] font-mono text-sm"
-                    />
-                  ) : null}
-                </div>
-              }
             />
           ))}
+        <div className="space-y-3 rounded-xl border border-white/8 bg-white/[0.025] p-4">
+          <p className="font-extrabold">Lifecycle callback secret</p>
+          <p className="text-sm font-medium text-muted-foreground">
+            {query.data?.secretStatus.STAGE_WEBHOOK_SECRET
+              ? "Generated and saved. The value is never returned to the browser."
+              : "Not generated yet."}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              integrationMutation.mutate({
+                clientId,
+                funnelId,
+                regenerateStageWebhookSecret: true,
+              })
+            }
+            className="h-11 rounded-xl font-extrabold"
+          >
+            Generate a new secret
+          </Button>
+        </div>
         <Button
           type="button"
-          disabled={secretsMutation.isPending}
+          disabled={integrationMutation.isPending}
           onClick={() =>
-            secretsMutation.mutate({
+            integrationMutation.mutate({
               clientId,
               funnelId,
+              GHL_LOCATION_ID: integrationDrafts.GHL_LOCATION_ID ?? "",
+              GOOGLE_SHEETS_ID: integrationDrafts.GOOGLE_SHEETS_ID ?? "",
+              META_PIXEL_ID: config.meta.pixelId,
+              GHL_API_KEY: secretDrafts.GHL_API_KEY,
               META_CAPI_ACCESS_TOKEN: secretDrafts.META_CAPI_ACCESS_TOKEN,
-              META_TEST_EVENT_CODE: secretDrafts.META_TEST_EVENT_CODE,
-              GHL_WEBHOOK_URL: secretDrafts.GHL_WEBHOOK_URL,
-              SUBMISSION_ALERT_WEBHOOK_URL:
-                secretDrafts.SUBMISSION_ALERT_WEBHOOK_URL,
+              ALERT_WEBHOOK_URL: secretDrafts.ALERT_WEBHOOK_URL,
             })
           }
           className="h-11 rounded-xl bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
         >
-          Save secrets
+          Save lead integration
         </Button>
+      </Section>
+
+      <Section title="Google Sheets">
+        <Field
+          label="Lead vault Sheet ID"
+          hint="The spreadsheet ID used for All Leads and Missed Leads."
+        >
+          <Input
+            value={integrationDrafts.GOOGLE_SHEETS_ID ?? ""}
+            onChange={event =>
+              setIntegrationDrafts(current => ({
+                ...current,
+                GOOGLE_SHEETS_ID: event.target.value,
+              }))
+            }
+            className="h-12 rounded-xl border-white/10 bg-white/[0.035] font-mono"
+          />
+        </Field>
       </Section>
 
       <Section title="Inventory">
@@ -1383,7 +1367,7 @@ export function SimpleFormFunnelEditor({
           />
         </div>
         {guides
-          .filter(guide => guide.runtimeKey === "SUBMISSION_ALERT_WEBHOOK_URL")
+          .filter(guide => guide.runtimeKey === "ALERT_WEBHOOK_URL")
           .map(guide => (
             <SecretField
               key={guide.runtimeKey}

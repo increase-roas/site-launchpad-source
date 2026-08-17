@@ -1,21 +1,23 @@
 import { and, eq } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import {
-  funnelRuntimeSecrets,
+  clientLeadIntegrations,
   funnelSimpleFormConfigs,
   funnelSteps,
   funnels,
-  type FunnelRuntimeSecret,
+  type ClientLeadIntegration,
 } from "../drizzle/schema";
 import {
   SIMPLE_FORM_CLOUDFLARE_INFRA,
+  SIMPLE_FORM_CLIENT_SECRET_KEYS,
   SIMPLE_FORM_MANIFEST,
   SIMPLE_FORM_PREVIEW,
   SIMPLE_FORM_SECRET_COLUMN,
   SIMPLE_FORM_SECRET_GUIDES,
   SIMPLE_FORM_STEPS,
   SIMPLE_FORM_TEMPLATE_KEY,
-  type SimpleFormRuntimeSecretKey,
+  type SimpleFormClientIntegrationFields,
+  type SimpleFormClientSecretKey,
 } from "../shared/simpleFormContract";
 import type { SimpleFormPublishMaterial } from "./publisher/publishSimpleForm";
 import {
@@ -40,11 +42,6 @@ import {
 import { isDuplicateKeyError } from "./trpcErrors";
 import { funnelStepRows } from "./workspaceSeed";
 
-/** Website wrangler rows keep older names. Funnel secrets use the Simple Form contract names:
- * STAGE_WEBHOOK_SECRET -> CRM_CALLBACK_SECRET
- * ALERT_WEBHOOK_URL -> SUBMISSION_ALERT_WEBHOOK_URL
- */
-
 async function requireDb() {
   const db = await getDb();
   if (!db) throw new Error("Database is not available.");
@@ -53,21 +50,30 @@ async function requireDb() {
 
 function emptySecretPresence(): SimpleFormSecretPresence {
   return {
+    GHL_API_KEY: false,
     META_CAPI_ACCESS_TOKEN: false,
-    META_TEST_EVENT_CODE: false,
-    GHL_WEBHOOK_URL: false,
-    CRM_CALLBACK_SECRET: false,
-    SUBMISSION_ALERT_WEBHOOK_URL: false,
+    STAGE_WEBHOOK_SECRET: false,
+    ALERT_WEBHOOK_URL: false,
   };
 }
 
-export function secretPresenceFromRow(row: FunnelRuntimeSecret | undefined): SimpleFormSecretPresence {
+export function secretPresenceFromRow(row: ClientLeadIntegration | undefined): SimpleFormSecretPresence {
   const presence = emptySecretPresence();
   if (!row) return presence;
-  for (const key of Object.keys(SIMPLE_FORM_SECRET_COLUMN) as SimpleFormRuntimeSecretKey[]) {
+  for (const key of SIMPLE_FORM_CLIENT_SECRET_KEYS) {
     presence[key] = hasProtectedValue(row[SIMPLE_FORM_SECRET_COLUMN[key]]);
   }
   return presence;
+}
+
+function integrationFieldsFromRow(
+  row: ClientLeadIntegration | undefined,
+): SimpleFormClientIntegrationFields {
+  return {
+    GHL_LOCATION_ID: row?.ghlLocationId ?? null,
+    GOOGLE_SHEETS_ID: row?.googleSheetsId ?? null,
+    META_PIXEL_ID: row?.metaPixelId ?? null,
+  };
 }
 
 async function getOwnedFunnel(clientId: number, funnelId: number) {
@@ -127,7 +133,7 @@ export async function createSimpleFormFromTemplate(clientId: number) {
     slug,
     phone: client.phone,
   });
-  const crmSecret = generateCrmCallbackSecret();
+  const stageWebhookSecret = generateCrmCallbackSecret();
 
   try {
     const funnelId = await db.transaction(async transaction => {
@@ -148,10 +154,14 @@ export async function createSimpleFormFromTemplate(clientId: number) {
       const id = requireSinglePositiveId(inserted, "Funnel could not be created.");
       await transaction.insert(funnelSteps).values(funnelStepRows(id, slug, SIMPLE_FORM_STEPS));
       await transaction.insert(funnelSimpleFormConfigs).values({ funnelId: id, configJson: record });
-      await transaction.insert(funnelRuntimeSecrets).values({
-        funnelId: id,
-        crmCallbackSecretEncrypted: encryptSetupValue(crmSecret),
-      });
+      await transaction
+        .insert(clientLeadIntegrations)
+        .values({
+          clientId,
+          metaPixelId: record.config.meta.pixelId.trim() || null,
+          stageWebhookSecretEncrypted: encryptSetupValue(stageWebhookSecret),
+        })
+        .onConflictDoNothing({ target: clientLeadIntegrations.clientId });
       return id;
     });
     return { alreadyExists: false as const, funnelId };
@@ -167,11 +177,6 @@ function parseStoredRecord(value: Record<string, unknown>): SimpleFormStoredReco
   return simpleFormStoredRecordSchema.parse(value);
 }
 
-function decryptedGhlWebhookUrl(row: FunnelRuntimeSecret | undefined): string | null {
-  const encrypted = row?.ghlWebhookUrlEncrypted;
-  return hasProtectedValue(encrypted) ? decryptSetupValue(encrypted as string) : null;
-}
-
 function decryptRuntimeSecret(value: string | null | undefined): string | null {
   return hasProtectedValue(value) ? decryptSetupValue(value as string) : null;
 }
@@ -182,20 +187,19 @@ export async function getSimpleFormDetail(clientId: number, funnelId: number) {
   if (funnel.templateKey !== SIMPLE_FORM_TEMPLATE_KEY) {
     throw new Error("This funnel is not a Simple Form template instance.");
   }
-  const [configRows, secretRows, assets, client] = await Promise.all([
+  const [configRows, integrationRows, assets, client] = await Promise.all([
     db.select().from(funnelSimpleFormConfigs).where(eq(funnelSimpleFormConfigs.funnelId, funnelId)).limit(1),
-    db.select().from(funnelRuntimeSecrets).where(eq(funnelRuntimeSecrets.funnelId, funnelId)).limit(1),
+    db.select().from(clientLeadIntegrations).where(eq(clientLeadIntegrations.clientId, clientId)).limit(1),
     getClientAssets(clientId),
     getClientById(clientId),
   ]);
   if (!client) throw new Error("Client not found.");
   const stored = parseStoredRecord((configRows[0]?.configJson ?? {}) as Record<string, unknown>);
-  const secrets = secretPresenceFromRow(secretRows[0]);
+  const secrets = secretPresenceFromRow(integrationRows[0]);
+  const integration = integrationFieldsFromRow(integrationRows[0]);
   const config = resolveSimpleFormImages(stored, assets);
   const record = { ...stored, config };
-  const readiness = buildSimpleFormReadiness(record, secrets, {
-    GHL_WEBHOOK_URL: decryptedGhlWebhookUrl(secretRows[0]),
-  });
+  const readiness = buildSimpleFormReadiness(record, secrets, integration);
   return {
     funnel: {
       id: funnel.id,
@@ -218,6 +222,7 @@ export async function getSimpleFormDetail(clientId: number, funnelId: number) {
       filename: asset.filename,
     })),
     secretStatus: secrets,
+    integration,
     secretGuides: SIMPLE_FORM_SECRET_GUIDES,
     readiness,
     template: {
@@ -284,16 +289,18 @@ export async function saveSimpleFormConfig(
   return getSimpleFormDetail(clientId, funnelId);
 }
 
-export async function saveSimpleFormSecrets(
+export async function saveSimpleFormIntegration(
   clientId: number,
   funnelId: number,
   input: {
+    GHL_LOCATION_ID?: string;
+    GOOGLE_SHEETS_ID?: string;
+    META_PIXEL_ID?: string;
+    GHL_API_KEY?: string;
     META_CAPI_ACCESS_TOKEN?: string;
-    META_TEST_EVENT_CODE?: string;
-    GHL_WEBHOOK_URL?: string;
-    SUBMISSION_ALERT_WEBHOOK_URL?: string;
-    clearMetaTestEventCode?: boolean;
-    regenerateCrmCallbackSecret?: boolean;
+    ALERT_WEBHOOK_URL?: string;
+    clearAlertWebhookUrl?: boolean;
+    regenerateStageWebhookSecret?: boolean;
   },
 ) {
   const funnel = await getOwnedFunnel(clientId, funnelId);
@@ -301,70 +308,44 @@ export async function saveSimpleFormSecrets(
     throw new Error("This funnel is not a Simple Form template instance.");
   }
   const db = await requireDb();
-  const updates: Partial<FunnelRuntimeSecret> = {};
-  const assign = (key: SimpleFormRuntimeSecretKey, value: string | undefined) => {
+  const existing = await db
+    .select()
+    .from(clientLeadIntegrations)
+    .where(eq(clientLeadIntegrations.clientId, clientId))
+    .limit(1);
+  const updates: Partial<ClientLeadIntegration> = {};
+  const assign = (key: SimpleFormClientSecretKey, value: string | undefined) => {
     const trimmed = value?.trim();
     if (!trimmed) return;
     updates[SIMPLE_FORM_SECRET_COLUMN[key]] = encryptSetupValue(trimmed);
   };
+  if (input.GHL_LOCATION_ID !== undefined) updates.ghlLocationId = input.GHL_LOCATION_ID.trim() || null;
+  if (input.GOOGLE_SHEETS_ID !== undefined) updates.googleSheetsId = input.GOOGLE_SHEETS_ID.trim() || null;
+  if (input.META_PIXEL_ID !== undefined) updates.metaPixelId = input.META_PIXEL_ID.trim() || null;
+  assign("GHL_API_KEY", input.GHL_API_KEY);
   assign("META_CAPI_ACCESS_TOKEN", input.META_CAPI_ACCESS_TOKEN);
-  assign("GHL_WEBHOOK_URL", input.GHL_WEBHOOK_URL);
-  assign("SUBMISSION_ALERT_WEBHOOK_URL", input.SUBMISSION_ALERT_WEBHOOK_URL);
-  if (input.clearMetaTestEventCode) {
-    updates.metaTestEventCodeEncrypted = null;
-  } else {
-    assign("META_TEST_EVENT_CODE", input.META_TEST_EVENT_CODE);
-  }
-  if (input.regenerateCrmCallbackSecret) {
-    updates.crmCallbackSecretEncrypted = encryptSetupValue(generateCrmCallbackSecret());
+  assign("ALERT_WEBHOOK_URL", input.ALERT_WEBHOOK_URL);
+  if (input.clearAlertWebhookUrl) updates.alertWebhookUrlEncrypted = null;
+  if (input.regenerateStageWebhookSecret || !existing[0]) {
+    updates.stageWebhookSecretEncrypted = encryptSetupValue(generateCrmCallbackSecret());
   }
   if (Object.keys(updates).length > 0) {
     await db
-      .insert(funnelRuntimeSecrets)
-      .values({ funnelId, ...updates })
+      .insert(clientLeadIntegrations)
+      .values({ clientId, ...updates })
       .onConflictDoUpdate({
-        target: postgresConflictTargets.funnelRuntimeSecrets,
+        target: postgresConflictTargets.clientLeadIntegrations,
         set: withUpdatedAt(updates),
       });
   }
   return getSimpleFormDetail(clientId, funnelId);
 }
 
-export async function revealCrmCallbackSecret(clientId: number, funnelId: number) {
-  const funnel = await getOwnedFunnel(clientId, funnelId);
-  if (funnel.templateKey !== SIMPLE_FORM_TEMPLATE_KEY) {
-    throw new Error("This funnel is not a Simple Form template instance.");
-  }
-  const db = await requireDb();
-  const rows = await db
-    .select()
-    .from(funnelRuntimeSecrets)
-    .where(eq(funnelRuntimeSecrets.funnelId, funnelId))
-    .limit(1);
-  const encrypted = rows[0]?.crmCallbackSecretEncrypted;
-  if (!hasProtectedValue(encrypted)) {
-    throw new Error("CRM Callback Secret has not been generated.");
-  }
-  return {
-    runtimeKey: "CRM_CALLBACK_SECRET" as const,
-    value: decryptSetupValue(encrypted as string),
-  };
-}
-
 export async function getSimpleFormPublishHandoff(clientId: number, funnelId: number) {
   const detail = await getSimpleFormDetail(clientId, funnelId);
   const client = await getClientById(clientId);
   if (!client) throw new Error("Client not found.");
-  const db = await requireDb();
-  const secretRows = await db
-    .select()
-    .from(funnelRuntimeSecrets)
-    .where(eq(funnelRuntimeSecrets.funnelId, funnelId))
-    .limit(1);
-  const validatedConfiguration = buildSimpleFormValidatedConfiguration(
-    detail.config,
-    { GHL_WEBHOOK_URL: decryptedGhlWebhookUrl(secretRows[0]) },
-  );
+  const validatedConfiguration = buildSimpleFormValidatedConfiguration(detail.config);
   const configurationReady =
     detail.readiness.configurationReady && validatedConfiguration !== null;
   return {
@@ -384,6 +365,7 @@ export async function getSimpleFormPublishHandoff(clientId: number, funnelId: nu
     templateRepository: SIMPLE_FORM_MANIFEST.repo,
     contractVersion: SIMPLE_FORM_MANIFEST.contractVersion,
     secretsPresent: detail.secretStatus,
+    clientIntegration: detail.integration,
     requiredCloudflareInfrastructure: SIMPLE_FORM_CLOUDFLARE_INFRA,
     validatedConfiguration: configurationReady ? validatedConfiguration : null,
     missing: detail.readiness.sections.flatMap(section => section.missing),
@@ -401,26 +383,28 @@ export async function getSimpleFormPublishMaterial(input: {
   const db = await requireDb();
   const rows = await db
     .select()
-    .from(funnelRuntimeSecrets)
-    .where(eq(funnelRuntimeSecrets.funnelId, input.funnelId))
+    .from(clientLeadIntegrations)
+    .where(eq(clientLeadIntegrations.clientId, input.clientId))
     .limit(1);
   const secrets = rows[0];
   if (!secrets) throw new Error("Simple Form runtime secrets are missing.");
   return {
     config: detail.config,
     runtimeSecrets: {
+      GHL_API_KEY: decryptRuntimeSecret(secrets.ghlApiKeyEncrypted),
+      GHL_LOCATION_ID: secrets.ghlLocationId,
+      GOOGLE_SHEETS_ID: secrets.googleSheetsId,
+      GOOGLE_SERVICE_ACCOUNT_EMAIL: null,
+      GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: null,
+      META_PIXEL_ID: secrets.metaPixelId,
       META_CAPI_ACCESS_TOKEN: decryptRuntimeSecret(
         secrets.metaCapiAccessTokenEncrypted,
       ),
-      META_TEST_EVENT_CODE: decryptRuntimeSecret(
-        secrets.metaTestEventCodeEncrypted,
+      STAGE_WEBHOOK_SECRET: decryptRuntimeSecret(
+        secrets.stageWebhookSecretEncrypted,
       ),
-      GHL_WEBHOOK_URL: decryptRuntimeSecret(secrets.ghlWebhookUrlEncrypted),
-      CRM_CALLBACK_SECRET: decryptRuntimeSecret(
-        secrets.crmCallbackSecretEncrypted,
-      ),
-      SUBMISSION_ALERT_WEBHOOK_URL: decryptRuntimeSecret(
-        secrets.submissionAlertWebhookUrlEncrypted,
+      ALERT_WEBHOOK_URL: decryptRuntimeSecret(
+        secrets.alertWebhookUrlEncrypted,
       ),
     },
   };

@@ -13,9 +13,8 @@ import {
   getSimpleFormDetail,
   getSimpleFormPublishHandoff,
   listApprovedFunnelTemplates,
-  revealCrmCallbackSecret,
   saveSimpleFormConfig,
-  saveSimpleFormSecrets,
+  saveSimpleFormIntegration,
 } from "../simpleFormDb";
 
 const ownedFunnelInput = z.object({
@@ -69,33 +68,27 @@ export const simpleFormRouter = router({
       }
     }),
 
-  saveSecrets: protectedProcedure
+  saveIntegration: protectedProcedure
     .input(
       ownedFunnelInput.extend({
+        GHL_LOCATION_ID: z.string().max(255).optional(),
+        GOOGLE_SHEETS_ID: z.string().max(255).optional(),
+        META_PIXEL_ID: z.string().max(255).optional(),
+        GHL_API_KEY: optionalSecret,
         META_CAPI_ACCESS_TOKEN: optionalSecret,
-        META_TEST_EVENT_CODE: optionalSecret,
-        GHL_WEBHOOK_URL: optionalSecret,
-        SUBMISSION_ALERT_WEBHOOK_URL: optionalSecret,
-        clearMetaTestEventCode: z.boolean().optional(),
-        regenerateCrmCallbackSecret: z.boolean().optional(),
+        ALERT_WEBHOOK_URL: optionalSecret,
+        clearAlertWebhookUrl: z.boolean().optional(),
+        regenerateStageWebhookSecret: z.boolean().optional(),
       }),
     )
     .mutation(async ({ input }) => {
       try {
-        const { clientId, funnelId, ...secrets } = input;
-        return await saveSimpleFormSecrets(clientId, funnelId, secrets);
+        const { clientId, funnelId, ...integration } = input;
+        return await saveSimpleFormIntegration(clientId, funnelId, integration);
       } catch (error) {
-        throw mapRouterError(error, "Secrets could not be saved.");
+        throw mapRouterError(error, "Lead integration settings could not be saved.");
       }
     }),
-
-  revealCrmCallbackSecret: protectedProcedure.input(ownedFunnelInput).mutation(async ({ input }) => {
-    try {
-      return await revealCrmCallbackSecret(input.clientId, input.funnelId);
-    } catch (error) {
-      throw mapRouterError(error, "CRM Callback Secret could not be shown.");
-    }
-  }),
 
   publishHandoff: protectedProcedure.input(ownedFunnelInput).query(async ({ input }) => {
     try {

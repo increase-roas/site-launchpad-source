@@ -2,8 +2,9 @@ import { z } from "zod";
 import { ASSET_SLOT_VALUES } from "./client";
 import {
   SIMPLE_FORM_MANIFEST,
-  SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT,
   simpleFormOfflineConversionContractSchema,
+  type SimpleFormClientIntegrationFields,
+  type SimpleFormClientSecretKey,
 } from "./simpleFormContract";
 
 const e164 = /^\+[1-9]\d{7,14}$/;
@@ -192,7 +193,6 @@ export const simpleFormCanonicalShapeAConfigSchema = z
       defaultCountry: z.string().trim().length(2).transform(value => value.toUpperCase()),
       duplicateWindowHours: z.number().int().min(1).max(168),
     }),
-    ghlWebhookUrl: z.string().url(),
     inventory: z.object({
       enabled: z.boolean(),
       headline: z.string().trim().min(8).max(140),
@@ -244,26 +244,13 @@ export const simpleFormCanonicalShapeAConfigSchema = z
 type SimpleFormCanonicalShapeAConfig = z.output<
   typeof simpleFormCanonicalShapeAConfigSchema
 >;
-export type SimpleFormValidatedConfiguration = Omit<
-  SimpleFormCanonicalShapeAConfig,
-  "ghlWebhookUrl"
->;
-export type SimpleFormPrivateRuntimeValues = {
-  GHL_WEBHOOK_URL?: string | null;
-};
+export type SimpleFormValidatedConfiguration = SimpleFormCanonicalShapeAConfig;
 
 export function buildSimpleFormValidatedConfiguration(
   config: SimpleFormOperatorConfig,
-  privateValues: SimpleFormPrivateRuntimeValues,
 ): SimpleFormValidatedConfiguration | null {
-  const result = simpleFormCanonicalShapeAConfigSchema.safeParse({
-    ...config,
-    ghlWebhookUrl: privateValues.GHL_WEBHOOK_URL ?? "",
-  });
-  if (!result.success) return null;
-  const { ghlWebhookUrl, ...validatedConfiguration } = result.data;
-  void ghlWebhookUrl;
-  return validatedConfiguration;
+  const result = simpleFormCanonicalShapeAConfigSchema.safeParse(config);
+  return result.success ? result.data : null;
 }
 
 export const simpleFormStoredRecordSchema = z.object({
@@ -430,14 +417,7 @@ export function buildSimpleFormStoredRecord(input: {
   };
 }
 
-export type SimpleFormSecretPresence = Record<
-  | "META_CAPI_ACCESS_TOKEN"
-  | "META_TEST_EVENT_CODE"
-  | "GHL_WEBHOOK_URL"
-  | "CRM_CALLBACK_SECRET"
-  | "SUBMISSION_ALERT_WEBHOOK_URL",
-  boolean
->;
+export type SimpleFormSecretPresence = Record<SimpleFormClientSecretKey, boolean>;
 
 export type SimpleFormReadinessSection = {
   key:
@@ -446,6 +426,7 @@ export type SimpleFormReadinessSection = {
     | "serviceArea"
     | "meta"
     | "ghl"
+    | "googleSheets"
     | "inventory"
     | "offlineConversion"
     | "productionSecrets";
@@ -479,7 +460,7 @@ export function isSimpleFormOfflineConversionContractReady(
 export function buildSimpleFormReadiness(
   record: SimpleFormStoredRecord,
   secrets: SimpleFormSecretPresence,
-  privateValues: SimpleFormPrivateRuntimeValues = {},
+  integration: SimpleFormClientIntegrationFields,
   manifestContract: unknown = SIMPLE_FORM_MANIFEST.offlineConversionContract,
 ): SimpleFormReadiness {
   const { config } = record;
@@ -501,14 +482,18 @@ export function buildSimpleFormReadiness(
   }
 
   const metaMissing: string[] = [];
-  if (!pixelId.test(config.meta.pixelId.trim())) metaMissing.push("Meta Pixel ID");
+  if (!pixelId.test(integration.META_PIXEL_ID?.trim() ?? "")) metaMissing.push("Meta Pixel ID");
   if (!secrets.META_CAPI_ACCESS_TOKEN) metaMissing.push("Meta CAPI Access Token");
   if (config.googleEnhancedConversions && !/^G-[A-Z0-9]{6,20}$/i.test(config.ga4MeasurementId ?? "")) {
     metaMissing.push("GA4 Measurement ID");
   }
 
   const ghlMissing: string[] = [];
-  if (!secrets.GHL_WEBHOOK_URL) ghlMissing.push("GHL Webhook URL");
+  if (!integration.GHL_LOCATION_ID?.trim()) ghlMissing.push("GHL Location ID");
+  if (!secrets.GHL_API_KEY) ghlMissing.push("GHL API Key");
+
+  const googleSheetsMissing: string[] = [];
+  if (!integration.GOOGLE_SHEETS_ID?.trim()) googleSheetsMissing.push("Google Sheet ID");
 
   const inventoryMissing: string[] = [];
   if (config.inventory.products.length !== 5) inventoryMissing.push("Exactly 5 inventory slots");
@@ -536,22 +521,9 @@ export function buildSimpleFormReadiness(
     : ["Canonical offline conversion contract"];
 
   const secretMissing: string[] = [];
-  const requiredSecretLabels = {
-    CRM_CALLBACK_SECRET: "CRM Callback Secret",
-    META_CAPI_ACCESS_TOKEN: "Meta CAPI Access Token",
-    GHL_WEBHOOK_URL: "GHL Webhook URL",
-  } as const;
-  for (const runtimeKey of SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT.requiredRuntimeSecrets) {
-    if (!secrets[runtimeKey]) {
-      secretMissing.push(requiredSecretLabels[runtimeKey]);
-    }
-  }
-  if (secrets.META_TEST_EVENT_CODE) secretMissing.push("Remove Meta Test Event Code before production");
+  if (!secrets.STAGE_WEBHOOK_SECRET) secretMissing.push("Lifecycle Callback Secret");
 
-  const canonicalResult = simpleFormCanonicalShapeAConfigSchema.safeParse({
-    ...config,
-    ghlWebhookUrl: privateValues.GHL_WEBHOOK_URL ?? "",
-  });
+  const canonicalResult = simpleFormCanonicalShapeAConfigSchema.safeParse(config);
   if (!canonicalResult.success) {
     for (const issue of canonicalResult.error.issues) {
       const path = issue.path.map(segment => String(segment)).join(".");
@@ -566,9 +538,7 @@ export function buildSimpleFormReadiness(
                 root === "ga4MeasurementId" ||
                 root === "googleEnhancedConversions"
               ? metaMissing
-              : root === "ghlWebhookUrl"
-                ? ghlMissing
-                : root === "inventory"
+              : root === "inventory"
                   ? inventoryMissing
                   : offerMissing;
       if (!missing.includes(message)) missing.push(message);
@@ -581,6 +551,7 @@ export function buildSimpleFormReadiness(
     { key: "serviceArea", label: "Service Area", ready: serviceMissing.length === 0, missing: serviceMissing },
     { key: "meta", label: "Meta", ready: metaMissing.length === 0, missing: metaMissing },
     { key: "ghl", label: "GHL", ready: ghlMissing.length === 0, missing: ghlMissing },
+    { key: "googleSheets", label: "Google Sheets", ready: googleSheetsMissing.length === 0, missing: googleSheetsMissing },
     { key: "inventory", label: "Inventory", ready: inventoryMissing.length === 0, missing: inventoryMissing },
     {
       key: "offlineConversion",

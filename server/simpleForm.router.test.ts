@@ -9,8 +9,7 @@ const mocks = vi.hoisted(() => ({
   createSimpleFormFromTemplate: vi.fn(),
   getSimpleFormDetail: vi.fn(),
   saveSimpleFormConfig: vi.fn(),
-  saveSimpleFormSecrets: vi.fn(),
-  revealCrmCallbackSecret: vi.fn(),
+  saveSimpleFormIntegration: vi.fn(),
   getSimpleFormPublishHandoff: vi.fn(),
 }));
 
@@ -71,10 +70,14 @@ const detail = {
   assets: [],
   secretStatus: {
     META_CAPI_ACCESS_TOKEN: false,
-    META_TEST_EVENT_CODE: false,
-    GHL_WEBHOOK_URL: false,
-    CRM_CALLBACK_SECRET: true,
-    SUBMISSION_ALERT_WEBHOOK_URL: false,
+    GHL_API_KEY: false,
+    STAGE_WEBHOOK_SECRET: true,
+    ALERT_WEBHOOK_URL: false,
+  },
+  integration: {
+    GHL_LOCATION_ID: "location-123",
+    GOOGLE_SHEETS_ID: "sheet-123",
+    META_PIXEL_ID: "123456789012345",
   },
   secretGuides: SIMPLE_FORM_SECRET_GUIDES,
   readiness: {
@@ -107,15 +110,12 @@ describe("simple form template procedures", () => {
     });
     mocks.getSimpleFormDetail.mockResolvedValue(detail);
     mocks.saveSimpleFormConfig.mockResolvedValue(detail);
-    mocks.saveSimpleFormSecrets.mockResolvedValue(detail);
-    mocks.revealCrmCallbackSecret.mockResolvedValue({
-      runtimeKey: "CRM_CALLBACK_SECRET",
-      value: "generated-secret",
-    });
+    mocks.saveSimpleFormIntegration.mockResolvedValue(detail);
     mocks.getSimpleFormPublishHandoff.mockResolvedValue({
       published: false,
       configurationReady: false,
       secretsPresent: detail.secretStatus,
+      clientIntegration: detail.integration,
       validatedConfiguration: null,
     });
     publishMocks.startPublish.mockResolvedValue({
@@ -171,7 +171,7 @@ describe("simple form template procedures", () => {
     const result = await caller.get({ clientId: 5, funnelId: 11 });
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain("generated-secret");
-    expect(result.secretStatus.CRM_CALLBACK_SECRET).toBe(true);
+    expect(result.secretStatus.STAGE_WEBHOOK_SECRET).toBe(true);
     expect(
       result.secretGuides.some(
         guide => guide.runtimeKey === "META_CAPI_ACCESS_TOKEN"

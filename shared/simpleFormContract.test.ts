@@ -13,8 +13,8 @@ const expectedOfflineConversionContract = {
   joinKey: "leadUuid",
   callback: {
     method: "POST",
-    route: "/api/funnel/{slug}/conversion",
-    authentication: "Bearer CRM_CALLBACK_SECRET",
+    route: "/api/lead-stage",
+    authentication: "Bearer STAGE_WEBHOOK_SECRET",
   },
   stageMappings: [
     {
@@ -39,9 +39,14 @@ const expectedOfflineConversionContract = {
     },
   ],
   requiredRuntimeSecrets: [
-    "CRM_CALLBACK_SECRET",
+    "GHL_API_KEY",
+    "GHL_LOCATION_ID",
+    "GOOGLE_SHEETS_ID",
+    "GOOGLE_SERVICE_ACCOUNT_EMAIL",
+    "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
+    "META_PIXEL_ID",
     "META_CAPI_ACCESS_TOKEN",
-    "GHL_WEBHOOK_URL",
+    "STAGE_WEBHOOK_SECRET",
   ],
   deduplication: {
     idempotencyKey: "downstream_conversions.external_id",
@@ -126,20 +131,19 @@ describe("Simple Form template contract", () => {
     ).toThrow();
   });
 
-  it("describes CRM secret reveal behavior accurately", () => {
+  it("keeps the lifecycle callback secret presence-only", () => {
     const crmGuide = SIMPLE_FORM_SECRET_GUIDES.find(
-      guide => guide.runtimeKey === "CRM_CALLBACK_SECRET",
+      guide => guide.runtimeKey === "STAGE_WEBHOOK_SECRET",
     );
-    expect(crmGuide?.whereToFind).toContain("Reveal secret");
-    expect(crmGuide?.whereToFind).not.toContain("Show once");
+    expect(crmGuide?.whereToFind).toContain("generates");
+    expect(crmGuide?.whereToFind).not.toContain("Reveal secret");
 
     const editor = readFileSync(
       "client/src/components/funnels/SimpleFormFunnelEditor.tsx",
       "utf8",
     );
-    expect(editor).toContain(
-      "Revealing displays the currently stored secret. Keep it private.",
-    );
-    expect(editor).not.toContain("Show once");
+    expect(editor).toContain("Generate a new secret");
+    expect(editor).not.toContain("Reveal secret");
+    expect(editor).not.toContain("GHL_WEBHOOK_URL");
   });
 });
