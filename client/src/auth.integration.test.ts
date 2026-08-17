@@ -14,7 +14,7 @@ describe("active client authentication wiring", () => {
     const useAuthSource = source("_core/hooks/useAuth.ts");
 
     expect(mainSource).toContain("getSupabaseBearerHeaders");
-    expect(mainSource).toContain('credentials: "omit"');
+    expect(mainSource).toContain('credentials: "same-origin"');
     expect(mainSource).not.toContain("sessionStorage");
     expect(mainSource).not.toContain("manus-cookie");
     expect(mainSource).not.toContain("startLogin");

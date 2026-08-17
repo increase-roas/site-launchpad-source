@@ -35,7 +35,7 @@ const trpcClient = trpc.createClient({
       fetch(input, init) {
         return globalThis.fetch(input, {
           ...(init ?? {}),
-          credentials: "omit",
+          credentials: "same-origin",
         });
       },
     }),
