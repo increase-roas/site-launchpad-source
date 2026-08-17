@@ -117,6 +117,7 @@ async function packageProductionApiLayout(outDir: string): Promise<{
   handlerBundlePath: string;
   indexPath: string;
   serverBundlePath: string;
+  trpcPath: string;
 }> {
   await writeFile(
     path.join(outDir, "package.json"),
@@ -128,6 +129,7 @@ async function packageProductionApiLayout(outDir: string): Promise<{
     "dir",
   );
   await mkdir(path.join(outDir, "api"), { recursive: true });
+  await mkdir(path.join(outDir, "api/trpc"), { recursive: true });
   await mkdir(path.join(outDir, "dist"), { recursive: true });
 
   const outfile = path.join(outDir, "dist/vercel-api-handler.js");
@@ -156,12 +158,17 @@ async function packageProductionApiLayout(outDir: string): Promise<{
     path.join(REPO_ROOT, "api/[...path].js"),
     path.join(outDir, "api/[...path].js"),
   );
+  await copyFile(
+    path.join(REPO_ROOT, "api/trpc/[procedure].js"),
+    path.join(outDir, "api/trpc/[procedure].js"),
+  );
 
   return {
     catchAllPath: path.join(outDir, "api/[...path].js"),
     handlerBundlePath: outfile,
     indexPath: path.join(outDir, "api/index.js"),
     serverBundlePath,
+    trpcPath: path.join(outDir, "api/trpc/[procedure].js"),
   };
 }
 
@@ -225,10 +232,15 @@ async function probeEmittedHandler(
 }
 
 describe("emitted Vercel API function packaging", () => {
-  it("invokes the production API handler artifacts for index and catch-all routes", async () => {
+  it("invokes the exact, catch-all, and nested tRPC production artifacts", async () => {
     const outDir = await createTempDirectory("site-launchpad-vercel-api-");
-    const { catchAllPath, handlerBundlePath, indexPath, serverBundlePath } =
-      await packageProductionApiLayout(outDir);
+    const {
+      catchAllPath,
+      handlerBundlePath,
+      indexPath,
+      serverBundlePath,
+      trpcPath,
+    } = await packageProductionApiLayout(outDir);
 
     for (const bundlePath of [serverBundlePath, handlerBundlePath]) {
       const bundle = await readFile(bundlePath, "utf8");
@@ -251,7 +263,7 @@ describe("emitted Vercel API function packaging", () => {
     expect(JSON.parse(missing.body)).toEqual({ error: "Not Found" });
 
     const health = await probeEmittedHandler(
-      catchAllPath,
+      trpcPath,
       { url: HEALTH_PATH },
       outDir,
     );
@@ -263,7 +275,7 @@ describe("emitted Vercel API function packaging", () => {
     });
 
     const healthPost = await probeEmittedHandler(
-      catchAllPath,
+      trpcPath,
       {
         url: "/api/trpc/system.health",
         method: "POST",
