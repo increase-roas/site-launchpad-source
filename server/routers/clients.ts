@@ -19,9 +19,8 @@ import {
   getClientAssets,
   getClientById,
   getClientSecretSetup,
-  listClientAssets,
-  listClientSecretSetups,
-  listClients,
+  getClientViewData,
+  listClientViewData,
   saveClientSecretSetup,
   updateClient,
 } from "../db";
@@ -80,27 +79,19 @@ function clientViewFrom(client: Client, assets: ClientAsset[], secretRow: Client
 }
 
 export async function getClientView(clientId: number) {
-  const [client, assets, secretRow] = await Promise.all([
-    getClientById(clientId),
-    getClientAssets(clientId),
-    getClientSecretSetup(clientId),
-  ]);
+  const { client, assets, secretSetup } = await getClientViewData(clientId);
 
   if (!client) throw new TRPCError({ code: "NOT_FOUND", message: "Client not found." });
-  return clientViewFrom(client, assets, secretRow);
+  return clientViewFrom(client, assets, secretSetup);
 }
 
 export const clientsRouter = router({
   list: protectedProcedure.query(async () => {
-    const [rows, assets, secretRows] = await observeRuntimeOperation(
-      "clients_list_database",
-      () =>
-        Promise.all([
-          listClients(),
-          listClientAssets(),
-          listClientSecretSetups(),
-        ]),
-    );
+    const { clients: rows, assets, secretSetups: secretRows } =
+      await observeRuntimeOperation(
+        "clients_list_database",
+        listClientViewData,
+      );
     const assetsByClient = new Map<number, ClientAsset[]>();
     for (const asset of assets) {
       const current = assetsByClient.get(asset.clientId) ?? [];

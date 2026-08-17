@@ -20,7 +20,10 @@ import {
   requireSinglePositiveId,
   withUpdatedAt,
 } from "./postgresPersistence";
-import { classifyRuntimeError } from "./_core/operationTelemetry";
+import {
+  classifyRuntimeError,
+  type RuntimeErrorClassification,
+} from "./_core/operationTelemetry";
 import { UpdateConflictError } from "./trpcErrors";
 import { seedWorkspaceDefaults, type WorkspaceSeedClient } from "./workspaceSeed";
 
@@ -47,6 +50,13 @@ export const POSTGRES_RUNTIME_OPTIONS = {
 } as const;
 
 export const DATABASE_OPERATION_TIMEOUT_MS = 20_000;
+export const RETRYABLE_DATABASE_MESSAGE =
+  "The database is temporarily unavailable. Please try again.";
+
+type RetryableDatabaseClassification = Extract<
+  RuntimeErrorClassification,
+  "database_connection" | "database_statement_timeout" | "timeout"
+>;
 
 export class DatabaseOperationTimeoutError extends Error {
   readonly code = "DATABASE_OPERATION_TIMEOUT";
@@ -55,6 +65,25 @@ export class DatabaseOperationTimeoutError extends Error {
     super("The database operation exceeded its deadline.");
     this.name = "DatabaseOperationTimeoutError";
   }
+}
+
+export class RetryableDatabaseError extends Error {
+  readonly code = "RETRYABLE_DATABASE_ERROR";
+
+  constructor(readonly classification: RetryableDatabaseClassification) {
+    super(RETRYABLE_DATABASE_MESSAGE);
+    this.name = "RetryableDatabaseError";
+  }
+}
+
+function isRetryableDatabaseClassification(
+  classification: RuntimeErrorClassification,
+): classification is RetryableDatabaseClassification {
+  return (
+    classification === "database_connection" ||
+    classification === "database_statement_timeout" ||
+    classification === "timeout"
+  );
 }
 
 function getDatabaseRuntime(): DatabaseRuntime | null {
@@ -71,18 +100,22 @@ function getDatabaseRuntime(): DatabaseRuntime | null {
   return databaseRuntime;
 }
 
-async function discardDatabaseRuntime(runtime: DatabaseRuntime): Promise<void> {
+function logDatabaseCloseFailure(error: unknown): void {
+  console.error("[DatabaseRuntime]", {
+    outcome: "close_failure",
+    classification: classifyRuntimeError(error),
+  });
+}
+
+function discardDatabaseRuntime(runtime: DatabaseRuntime): void {
   if (databaseRuntime !== runtime) {
     return;
   }
   databaseRuntime = null;
   try {
-    await runtime.client.end({ timeout: 0 });
+    void runtime.client.end({ timeout: 0 }).catch(logDatabaseCloseFailure);
   } catch (error) {
-    console.error("[DatabaseRuntime]", {
-      outcome: "close_failure",
-      classification: classifyRuntimeError(error),
-    });
+    logDatabaseCloseFailure(error);
   }
 }
 
@@ -108,8 +141,10 @@ async function runDatabaseOperation<T>(
       deadline,
     ]);
   } catch (error) {
-    if (error instanceof DatabaseOperationTimeoutError) {
-      await discardDatabaseRuntime(runtime);
+    const classification = classifyRuntimeError(error);
+    if (isRetryableDatabaseClassification(classification)) {
+      discardDatabaseRuntime(runtime);
+      throw new RetryableDatabaseError(classification);
     }
     throw error;
   } finally {
@@ -182,10 +217,22 @@ async function requireDb() {
   return db;
 }
 
-export async function listClients(): Promise<Client[]> {
-  return runDatabaseOperation("clients_list_database", database =>
-    database.select().from(clients).orderBy(desc(clients.updatedAt)),
-  );
+export type ClientListViewData = {
+  clients: Client[];
+  assets: ClientAsset[];
+  secretSetups: ClientSecretSetup[];
+};
+
+export async function listClientViewData(): Promise<ClientListViewData> {
+  return runDatabaseOperation("clients_list_database", async database => {
+    const clientRows = await database
+      .select()
+      .from(clients)
+      .orderBy(desc(clients.updatedAt));
+    const assets = await database.select().from(clientAssets);
+    const secretSetups = await database.select().from(clientSecretSetups);
+    return { clients: clientRows, assets, secretSetups };
+  });
 }
 
 export async function getClientById(clientId: number): Promise<Client | undefined> {
@@ -222,18 +269,6 @@ export async function updateClient(
     .returning({ id: clients.id });
   if (result.length > 0) return;
   resolveOptimisticUpdate(result, await getClientById(clientId));
-}
-
-export async function listClientAssets(): Promise<ClientAsset[]> {
-  return runDatabaseOperation("clients_list_database", database =>
-    database.select().from(clientAssets),
-  );
-}
-
-export async function listClientSecretSetups(): Promise<ClientSecretSetup[]> {
-  return runDatabaseOperation("clients_list_database", database =>
-    database.select().from(clientSecretSetups),
-  );
 }
 
 export async function getClientAssets(clientId: number): Promise<ClientAsset[]> {
@@ -279,6 +314,38 @@ export async function getClientSecretSetup(
     .where(eq(clientSecretSetups.clientId, clientId))
     .limit(1);
   return rows[0];
+}
+
+export type ClientViewData = {
+  client: Client | undefined;
+  assets: ClientAsset[];
+  secretSetup: ClientSecretSetup | undefined;
+};
+
+export async function getClientViewData(
+  clientId: number,
+): Promise<ClientViewData> {
+  return runDatabaseOperation("client_view_database", async database => {
+    const clientRows = await database
+      .select()
+      .from(clients)
+      .where(eq(clients.id, clientId))
+      .limit(1);
+    const assets = await database
+      .select()
+      .from(clientAssets)
+      .where(eq(clientAssets.clientId, clientId));
+    const secretRows = await database
+      .select()
+      .from(clientSecretSetups)
+      .where(eq(clientSecretSetups.clientId, clientId))
+      .limit(1);
+    return {
+      client: clientRows[0],
+      assets,
+      secretSetup: secretRows[0],
+    };
+  });
 }
 
 export async function saveClientSecretSetup(
@@ -362,6 +429,7 @@ export async function createDraftClientWithDb(
 }
 
 export async function createDraftClient(businessName: string): Promise<number> {
-  const db = await requireDb();
-  return createDraftClientWithDb(db, businessName);
+  return runDatabaseOperation("client_create_draft_database", database =>
+    createDraftClientWithDb(database, businessName),
+  );
 }

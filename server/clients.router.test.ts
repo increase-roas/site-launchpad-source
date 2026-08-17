@@ -9,10 +9,12 @@ const mocks = vi.hoisted(() => ({
   getClientById: vi.fn(),
   getClientAssets: vi.fn(),
   getClientSecretSetup: vi.fn(),
+  getClientViewData: vi.fn(),
   updateClient: vi.fn(),
   listClients: vi.fn(),
   listClientAssets: vi.fn(),
   listClientSecretSetups: vi.fn(),
+  listClientViewData: vi.fn(),
   createClientWithSecrets: vi.fn(),
   createDraftClient: vi.fn(),
   saveClientSecretSetup: vi.fn(),
@@ -124,10 +126,22 @@ describe("client launch gating", () => {
     mocks.getClientById.mockResolvedValue(baseClient);
     mocks.getClientAssets.mockResolvedValue([]);
     mocks.getClientSecretSetup.mockResolvedValue(undefined);
+    mocks.getClientViewData.mockImplementation(async clientId => {
+      const client = await mocks.getClientById(clientId);
+      const assets = await mocks.getClientAssets(clientId);
+      const secretSetup = await mocks.getClientSecretSetup(clientId);
+      return { client, assets, secretSetup };
+    });
     mocks.updateClient.mockResolvedValue(undefined);
     mocks.listClients.mockResolvedValue([baseClient]);
     mocks.listClientAssets.mockResolvedValue([]);
     mocks.listClientSecretSetups.mockResolvedValue([]);
+    mocks.listClientViewData.mockImplementation(async () => {
+      const clients = await mocks.listClients();
+      const assets = await mocks.listClientAssets();
+      const secretSetups = await mocks.listClientSecretSetups();
+      return { clients, assets, secretSetups };
+    });
     mocks.createClientWithSecrets.mockResolvedValue(7);
     mocks.createDraftClient.mockResolvedValue(7);
     mocks.saveClientSecretSetup.mockResolvedValue(undefined);
@@ -146,21 +160,50 @@ describe("client launch gating", () => {
     expect(list[0]?.client.id).toBe(7);
     expect(detail.client.businessName).toBe("Paradise Spas");
     expect(detail.readiness.isComplete).toBe(false);
+    expect(mocks.listClientViewData).toHaveBeenCalledTimes(1);
+    expect(mocks.getClientViewData).toHaveBeenCalledWith(7);
+  });
+
+  it("uses one grouped database operation for clients.list with a max-one runtime", async () => {
+    let activeReads = 0;
+    let maxConcurrentReads = 0;
+    const trackRead = async <T>(value: T): Promise<T> => {
+      activeReads += 1;
+      maxConcurrentReads = Math.max(maxConcurrentReads, activeReads);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      activeReads -= 1;
+      return value;
+    };
+    mocks.listClients.mockImplementation(() => trackRead([baseClient]));
+    mocks.listClientAssets.mockImplementation(() => trackRead([]));
+    mocks.listClientSecretSetups.mockImplementation(() => trackRead([]));
+
+    const caller = appRouter.createCaller(createContext());
+    await caller.clients.list();
+
+    expect(mocks.listClientViewData).toHaveBeenCalledTimes(1);
+    expect(maxConcurrentReads).toBeLessThanOrEqual(1);
   });
 
   it("classifies clients.list database failures without logging sensitive details", async () => {
     const unsafeDetail =
       "postgresql://private-user:private-password@private-host/database";
-    mocks.listClients.mockRejectedValueOnce(
-      Object.assign(new Error(unsafeDetail), {
-        code: "CONNECT_TIMEOUT",
-      }),
+    mocks.listClientViewData.mockRejectedValueOnce(
+      Object.assign(
+        new Error("The database is temporarily unavailable. Please try again."),
+        {
+          code: "RETRYABLE_DATABASE_ERROR",
+          classification: "database_connection",
+        },
+      ),
     );
     const logError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
       const caller = appRouter.createCaller(createContext());
 
-      await expect(caller.clients.list()).rejects.toThrow(unsafeDetail);
+      await expect(caller.clients.list()).rejects.toThrow(
+        "The database is temporarily unavailable. Please try again.",
+      );
 
       expect(logError).toHaveBeenCalledWith(
         "[RuntimeOperation]",
