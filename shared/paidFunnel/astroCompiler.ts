@@ -410,7 +410,7 @@ export function compilePaidFunnelToAstro(graph: PaidFunnelGraph): AstroOutputFil
     return { path, contents: pageSource(step, page, graph) };
   });
   return [
-    { path: "package.json", contents: JSON.stringify({ private: true, type: "module", scripts: { build: "astro build" }, dependencies: { astro: "7.2.1", "@astrojs/cloudflare": "14.2.1" } }, null, 2) + "\n" },
+    { path: "package.json", contents: JSON.stringify({ private: true, type: "module", scripts: { build: "astro build", deploy: "npm run build && wrangler deploy" }, dependencies: { astro: "7.2.1", "@astrojs/cloudflare": "14.2.1" }, devDependencies: { wrangler: "4.120.0" } }, null, 2) + "\n" },
     { path: "astro.config.mjs", contents: 'import { defineConfig } from "astro/config";\nimport cloudflare from "@astrojs/cloudflare";\nexport default defineConfig({ output: "server", session: false, adapter: cloudflare({ imageService: "compile" }) });\n' },
     { path: "src/layouts/FunnelLayout.astro", contents: layoutSource() },
     { path: "src/styles/funnel.css", contents: cssSource(graph) },

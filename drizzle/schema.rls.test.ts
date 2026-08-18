@@ -18,6 +18,7 @@ import {
   funnelSteps,
   funnelSurveyQuestions,
   funnels,
+  genericPaidFunnelPublishes,
   homepageSections,
   paidFunnelGraphRevisions,
   paidFunnelGraphs,
@@ -76,6 +77,10 @@ const applicationTables = {
     databaseName: "funnelSurveyQuestions",
   },
   funnels: { table: funnels, databaseName: "funnels" },
+  genericPaidFunnelPublishes: {
+    table: genericPaidFunnelPublishes,
+    databaseName: "generic_paid_funnel_publishes",
+  },
   homepageSections: {
     table: homepageSections,
     databaseName: "homepageSections",
@@ -135,7 +140,7 @@ describe("PostgreSQL application-table RLS", () => {
       .sort((left, right) => left.exportName.localeCompare(right.exportName));
 
     expect(discovered).toEqual(expected);
-    expect(discovered).toHaveLength(28);
+    expect(discovered).toHaveLength(29);
   });
 
   it("enables RLS without schema policies on every application table", () => {

@@ -14,6 +14,11 @@ import {
   saveReusableSection,
 } from "../paidFunnelDb";
 import { mapRouterError } from "../trpcErrors";
+import {
+  advancePublish,
+  publishStatus,
+  startPublish,
+} from "../publisher/publishGenericPaidFunnel";
 
 const ownedFunnelInput = z.object({
   clientId: z.number().int().positive(),
@@ -127,6 +132,40 @@ export const paidFunnelRouter = router({
         return await saveReusableSection(input);
       } catch (error) {
         throw mapRouterError(error, "Reusable section could not be saved.");
+      }
+    }),
+
+  startPublish: protectedProcedure
+    .input(ownedFunnelInput)
+    .mutation(async ({ input }) => {
+      try {
+        return await startPublish(input.clientId, input.funnelId);
+      } catch (error) {
+        throw mapRouterError(error, "Paid funnel publishing could not be started.");
+      }
+    }),
+
+  advancePublish: protectedProcedure
+    .input(ownedFunnelInput.extend({ retryFailed: z.boolean().optional() }))
+    .mutation(async ({ input }) => {
+      try {
+        return await advancePublish(
+          input.clientId,
+          input.funnelId,
+          input.retryFailed === true,
+        );
+      } catch (error) {
+        throw mapRouterError(error, "Paid funnel publishing could not advance.");
+      }
+    }),
+
+  publishStatus: protectedProcedure
+    .input(ownedFunnelInput)
+    .query(async ({ input }) => {
+      try {
+        return await publishStatus(input.clientId, input.funnelId);
+      } catch (error) {
+        throw mapRouterError(error, "Paid funnel publishing status could not be loaded.");
       }
     }),
 });

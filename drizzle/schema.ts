@@ -19,6 +19,12 @@ import {
   astroSitePublishStatusValues,
   astroSitePublishStepValues,
 } from "../shared/astroSitePublish";
+import {
+  genericPaidFunnelPublishStatusValues,
+  genericPaidFunnelPublishStepValues,
+  type GenericPaidFunnelProvisionedResources,
+  type GenericPaidFunnelResourceDefinitions,
+} from "../shared/genericPaidFunnelPublish";
 
 export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
 
@@ -1300,3 +1306,92 @@ export const paidFunnelPublishes = pgTable(
 export type PaidFunnelPublishRow = typeof paidFunnelPublishes.$inferSelect;
 export type InsertPaidFunnelPublishRow =
   typeof paidFunnelPublishes.$inferInsert;
+
+export const genericPaidFunnelPublishStepEnum = pgEnum(
+  "generic_paid_funnel_publish_step",
+  genericPaidFunnelPublishStepValues,
+);
+export const genericPaidFunnelPublishStatusEnum = pgEnum(
+  "generic_paid_funnel_publish_status",
+  genericPaidFunnelPublishStatusValues,
+);
+
+export const genericPaidFunnelPublishes = pgTable(
+  "generic_paid_funnel_publishes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    clientId: integer("clientId")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    funnelId: integer("funnelId")
+      .notNull()
+      .references(() => paidFunnels.id, { onDelete: "cascade" }),
+    externalFunnelId: varchar("externalFunnelId", { length: 120 }).notNull(),
+    templateKey: varchar("templateKey", { length: 80 }).notNull(),
+    templateVersion: varchar("templateVersion", { length: 40 }).notNull(),
+    resourceName: varchar("resourceName", { length: 120 }).notNull(),
+    repositoryName: varchar("repositoryName", { length: 120 }).notNull(),
+    workerName: varchar("workerName", { length: 120 }).notNull(),
+    resourceDefinitions: jsonb("resourceDefinitions")
+      .$type<GenericPaidFunnelResourceDefinitions>()
+      .notNull(),
+    provisionedResources: jsonb("provisionedResources")
+      .$type<GenericPaidFunnelProvisionedResources>(),
+    releaseNumber: integer("releaseNumber").default(1).notNull(),
+    step: genericPaidFunnelPublishStepEnum("step")
+      .default("create_repository")
+      .notNull(),
+    status: genericPaidFunnelPublishStatusEnum("status")
+      .default("pending")
+      .notNull(),
+    repositoryId: varchar("repositoryId", { length: 120 }),
+    repositoryFullName: varchar("repositoryFullName", { length: 240 }),
+    repositoryUrl: varchar("repositoryUrl", { length: 1000 }),
+    defaultBranch: varchar("defaultBranch", { length: 120 }),
+    repositoryCreateRequestedAt: timestamp("repositoryCreateRequestedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    commitSha: varchar("commitSha", { length: 120 }),
+    liveUrl: varchar("liveUrl", { length: 1000 }),
+    dispatchRequestedAt: timestamp("dispatchRequestedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    workflowRunId: varchar("workflowRunId", { length: 120 }),
+    workflowStatus: varchar("workflowStatus", { length: 80 }),
+    workflowCheckedAt: timestamp("workflowCheckedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    runtimeSecretsPatchedAt: timestamp("runtimeSecretsPatchedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    leaseToken: uuid("leaseToken"),
+    leaseUntil: timestamp("leaseUntil", { withTimezone: true, mode: "date" }),
+    lastError: text("lastError"),
+    attemptCount: integer("attemptCount").default(0).notNull(),
+    completedAt: timestamp("completedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  table => [
+    uniqueIndex("generic_paid_funnel_publishes_funnel_unique").on(table.funnelId),
+    uniqueIndex("generic_paid_funnel_publishes_external_unique").on(table.externalFunnelId),
+    index("generic_paid_funnel_publishes_status_idx").on(table.status),
+    index("generic_paid_funnel_publishes_lease_until_idx").on(table.leaseUntil),
+  ],
+).enableRLS();
+
+export type GenericPaidFunnelPublish =
+  typeof genericPaidFunnelPublishes.$inferSelect;
+export type InsertGenericPaidFunnelPublish =
+  typeof genericPaidFunnelPublishes.$inferInsert;

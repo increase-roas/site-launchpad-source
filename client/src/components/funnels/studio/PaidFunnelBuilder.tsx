@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import type { ClientIntegrationProfileDto } from "@shared/clientIntegrationProfile";
+import type { GenericPaidFunnelPublishStatusView } from "@shared/genericPaidFunnelPublish";
 import { renderFunnelCanvas, type CanvasBox } from "@shared/paidFunnel/canvas";
 import { breadcrumbFor, type PaletteItem } from "@shared/paidFunnel/ops";
 import { PAID_ADS_SECTION_PRESET_LABELS } from "@shared/paidFunnel/presets";
@@ -33,7 +34,7 @@ import {
 } from "@shared/paidFunnel/store";
 import { OPT_IN_TEMPLATE_LABELS, OPT_IN_TEMPLATE_VALUES } from "@shared/paidFunnel/templates";
 import { PaidFunnelInspector } from "./PaidFunnelInspector";
-import { ArrowLeft, CheckCircle2, ContactRound, FileText, GripVertical, LayoutTemplate, ListChecks, Monitor, Plus, Redo2, RefreshCw, Save, Smartphone, Tablet, Undo2, ZoomIn, ZoomOut } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ContactRound, ExternalLink, FileText, GripVertical, LayoutTemplate, ListChecks, Loader2, Monitor, Plus, Redo2, RefreshCw, Rocket, Save, Smartphone, Tablet, Undo2, ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useMemo, useState, type Dispatch, type PointerEvent as ReactPointerEvent, type SetStateAction } from "react";
 
 const SECTION_PRESETS = Object.keys(PAID_ADS_SECTION_PRESET_LABELS) as PaidFunnelSectionPreset[];
@@ -171,6 +172,10 @@ export function PaidFunnelBuilder({
   onChange,
   onBack,
   onResolveConflict,
+  publish,
+  publishPending,
+  onPublish,
+  onRetryPublish,
 }: {
   clientId: number;
   profile: ClientIntegrationProfileDto;
@@ -178,6 +183,10 @@ export function PaidFunnelBuilder({
   onChange: Dispatch<SetStateAction<StudioState | null>>;
   onBack: () => void;
   onResolveConflict: () => void;
+  publish: GenericPaidFunnelPublishStatusView | null | undefined;
+  publishPending: boolean;
+  onPublish: () => void;
+  onRetryPublish: () => void;
 }) {
   const [paletteTab, setPaletteTab] = useState<"section" | "row" | "element">("section");
   const [hover, setHover] = useState<{ id: string; index: number } | null>(null);
@@ -328,6 +337,16 @@ export function PaidFunnelBuilder({
           <span className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
             {saveLabel === "saving" ? "Saving" : saveLabel === "saved" ? "Saved" : "Error"}
           </span>
+          {publish?.repositoryUrl ? (
+            <a href={publish.repositoryUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-extrabold text-blue-700">
+              Repository <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          ) : null}
+          {publish?.liveUrl ? (
+            <a href={publish.liveUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-extrabold text-emerald-700">
+              Live funnel <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          ) : null}
           <Button type="button" variant="outline" disabled={!canUndoStudio(state)} onClick={() => onChange(studioHotkey(state, "z", { meta: true }))} className="h-9 rounded-lg" aria-label="Undo">
             <Undo2 className="h-4 w-4" />
           </Button>
@@ -349,8 +368,40 @@ export function PaidFunnelBuilder({
             {state.document.conflict ? <RefreshCw className="h-4 w-4" /> : <Save className="h-4 w-4" />}
             {state.document.conflict ? "Reload latest" : "Save"}
           </Button>
+          {publish?.status === "failed" ? (
+            <Button type="button" disabled={publishPending} onClick={onRetryPublish} className="h-9 rounded-lg bg-amber-500 font-extrabold text-white hover:bg-amber-600">
+              {publishPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Retry publish
+            </Button>
+          ) : publish?.status === "pending" || publish?.status === "running" ? (
+            <Button type="button" disabled className="h-9 rounded-lg bg-blue-600 font-extrabold text-white">
+              <Loader2 className="h-4 w-4 animate-spin" /> Publishing
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              disabled={publishPending || state.document.saveStatus !== "saved" || state.document.conflict}
+              onClick={onPublish}
+              className="h-9 rounded-lg bg-blue-600 font-extrabold text-white hover:bg-blue-700"
+            >
+              {publishPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+              {publish?.status === "published" ? "Republish" : "Publish"}
+            </Button>
+          )}
         </div>
       </header>
+
+      {publish ? (
+        <div className="border-b border-slate-200 bg-slate-50 px-4 py-2">
+          <div className="flex items-center justify-between gap-3 text-xs font-bold text-slate-600">
+            <span>{publish.status === "published" ? "Published" : publish.status === "failed" ? publish.error ?? "Publish failed." : `Publishing: ${publish.step.replaceAll("_", " ")}`}</span>
+            <span>{publish.progress.completed}/{publish.progress.total}</span>
+          </div>
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-200">
+            <div className={`h-full rounded-full ${publish.status === "failed" ? "bg-amber-500" : "bg-blue-600"}`} style={{ width: `${Math.round((publish.progress.completed / Math.max(1, publish.progress.total)) * 100)}%` }} />
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-[260px_minmax(0,1fr)_300px]">
         <aside className="flex min-h-0 flex-col border-r border-slate-200 bg-slate-50/70">

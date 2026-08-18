@@ -17,8 +17,12 @@ describe("paid funnel Astro compiler", () => {
     expect(paths).toContain("migrations/0001_funnel_events.sql");
     expect(files.find(file => file.path === "src/layouts/FunnelLayout.astro")?.contents).toContain('<script is:inline src="/scripts/funnel-runtime.js">');
     const astroConfig = files.find(file => file.path === "astro.config.mjs")?.contents ?? "";
+    const packageJson = JSON.parse(
+      files.find(file => file.path === "package.json")?.contents ?? "{}",
+    ) as { devDependencies?: Record<string, string> };
     expect(astroConfig).toContain("session: false");
     expect(astroConfig).toContain('imageService: "compile"');
+    expect(packageJson.devDependencies?.wrangler).toBe("4.120.0");
   });
 
   it("preserves attribution and reuses one event id for Pixel and CAPI deduplication", () => {

@@ -13,9 +13,17 @@ const mocks = vi.hoisted(() => ({
   savePaidFunnelGraph: vi.fn(),
   listReusableSections: vi.fn(),
   saveReusableSection: vi.fn(),
+  startPublish: vi.fn(),
+  advancePublish: vi.fn(),
+  publishStatus: vi.fn(),
 }));
 
 vi.mock("./paidFunnelDb", () => mocks);
+vi.mock("./publisher/publishGenericPaidFunnel", () => ({
+  startPublish: mocks.startPublish,
+  advancePublish: mocks.advancePublish,
+  publishStatus: mocks.publishStatus,
+}));
 
 import { paidFunnelRouter } from "./routers/paidFunnel";
 
@@ -85,6 +93,17 @@ describe("paid funnel registry procedures", () => {
       name: "Hero",
       section: { id: "section-hero", preset: "hero", rows: [] },
     });
+    const publish = {
+      id: "11111111-1111-4111-8111-111111111111",
+      funnelId: 21,
+      status: "pending",
+      step: "create_repository",
+      progress: { completed: 0, total: 7 },
+      error: null,
+    };
+    mocks.startPublish.mockResolvedValue(publish);
+    mocks.advancePublish.mockResolvedValue({ ...publish, status: "failed" });
+    mocks.publishStatus.mockResolvedValue(publish);
   });
 
   it("lists the generic paid-funnel fixture", async () => {
@@ -165,6 +184,18 @@ describe("paid funnel registry procedures", () => {
     expect(payload.graph.version).toBe(1);
     expect(payload.graph.pages[0].kind).toBe("page");
     expect(payload.graph.pages[0].sections[0].kind).toBe("section");
+  });
+
+  it("owns start, advance, Retry, and status by client plus funnel", async () => {
+    const caller = paidFunnelRouter.createCaller(context());
+    await caller.startPublish({ clientId: 5, funnelId: 21 });
+    await caller.advancePublish({ clientId: 5, funnelId: 21 });
+    await caller.advancePublish({ clientId: 5, funnelId: 21, retryFailed: true });
+    await caller.publishStatus({ clientId: 5, funnelId: 21 });
+    expect(mocks.startPublish).toHaveBeenCalledWith(5, 21);
+    expect(mocks.advancePublish).toHaveBeenNthCalledWith(1, 5, 21, false);
+    expect(mocks.advancePublish).toHaveBeenNthCalledWith(2, 5, 21, true);
+    expect(mocks.publishStatus).toHaveBeenCalledWith(5, 21);
   });
 
   it("rejects unauthenticated registry reads", async () => {

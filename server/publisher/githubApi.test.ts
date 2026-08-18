@@ -127,6 +127,40 @@ describe("GitHub publisher client", () => {
     expect(requests[0]?.init?.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it("creates an auto-initialized public organization repository for generated source", async () => {
+    const { fetchFn, requests } = createMockFetch([
+      jsonResponse(
+        {
+          id: 102,
+          name: "funnel-northland-7",
+          full_name: "customer-repositories/funnel-northland-7",
+          html_url: "https://github.com/customer-repositories/funnel-northland-7",
+          default_branch: "main",
+          private: false,
+        },
+        201,
+      ),
+    ]);
+    const client = createGitHubApiClient({ token: "opaque-test-credential", fetchFn });
+
+    await expect(client.createPublicRepository({
+      owner: "customer-repositories",
+      repository: "funnel-northland-7",
+      description: "Generated generic paid funnel generic-paid-funnel-7",
+      signal: abortSignal(),
+    })).resolves.toMatchObject({ id: 102, defaultBranch: "main" });
+    expect(requests[0]).toMatchObject({
+      url: "https://api.github.com/orgs/customer-repositories/repos",
+      init: { method: "POST" },
+    });
+    expect(parseRequestBody(requests[0])).toEqual({
+      name: "funnel-northland-7",
+      description: "Generated generic paid funnel generic-paid-funnel-7",
+      private: false,
+      auto_init: true,
+    });
+  });
+
   it("gets repository identity and template provenance", async () => {
     const { fetchFn, requests } = createMockFetch([
       jsonResponse({
@@ -159,6 +193,7 @@ describe("GitHub publisher client", () => {
     ).resolves.toEqual({
       id: 101,
       ownerLogin: "customer-repositories",
+      description: null,
       name: "northland-simple-form",
       fullName: "customer-repositories/northland-simple-form",
       private: false,

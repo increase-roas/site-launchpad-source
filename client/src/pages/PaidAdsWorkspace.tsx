@@ -49,7 +49,7 @@ import {
   studioHasUnsavedWork,
   type AutosaveRequest,
 } from "@shared/paidFunnel/autosave";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { paidAdsWorkspaceErrorCopy, shouldRetryWorkspaceQuery } from "@/lib/queryErrors";
 import { selectedFunnelForClient } from "./editorIsolation";
 
@@ -219,10 +219,61 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
     { clientId, funnelId: studioFunnelId ?? 0 },
     { enabled: studioFunnelId != null },
   );
+  const publishInput = useMemo(
+    () => ({ clientId, funnelId: studioFunnelId ?? 0 }),
+    [clientId, studioFunnelId],
+  );
+  const publishQuery = trpc.paidFunnel.publishStatus.useQuery(publishInput, {
+    enabled: studioFunnelId != null,
+    refetchInterval: state => {
+      const status = state.state.data?.status;
+      return status === "pending" || status === "running" ? 3_000 : false;
+    },
+  });
 
   const autosaveFlight = useRef(createAutosaveFlight());
   const autosaveSessionId = useRef(1);
+  const publishAdvanceInFlightRef = useRef(false);
   const saveGraphMutation = trpc.paidFunnel.saveGraph.useMutation();
+
+  const startPublishMutation = trpc.paidFunnel.startPublish.useMutation({
+    onSuccess: status => {
+      utils.paidFunnel.publishStatus.setData(publishInput, status);
+      toast.success(status.step === "commit_source" ? "Paid funnel republish started." : "Paid funnel publishing started.");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const advancePublishMutation = trpc.paidFunnel.advancePublish.useMutation({
+    onSuccess: status => {
+      utils.paidFunnel.publishStatus.setData(publishInput, status);
+      if (status.status === "published") toast.success("Paid funnel published.");
+    },
+    onError: error => toast.error(error.message),
+    onSettled: () => {
+      publishAdvanceInFlightRef.current = false;
+    },
+  });
+
+  useEffect(() => {
+    const publish = publishQuery.data;
+    if (
+      studioFunnelId == null ||
+      !publish ||
+      (publish.status !== "pending" && publish.status !== "running") ||
+      publish.step === "published" ||
+      publishAdvanceInFlightRef.current
+    ) return;
+    const delay = publish.step === "monitor_workflow" ||
+      (publish.step === "dispatch_workflow" && publish.dispatchRequestedAt)
+      ? 2_000
+      : 0;
+    const timer = window.setTimeout(() => {
+      if (publishAdvanceInFlightRef.current) return;
+      publishAdvanceInFlightRef.current = true;
+      advancePublishMutation.mutate({ clientId, funnelId: studioFunnelId, retryFailed: false });
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [advancePublishMutation, clientId, publishQuery.data, studioFunnelId]);
 
   const resetAutosaveSession = () => {
     autosaveSessionId.current += 1;
@@ -489,6 +540,16 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
           onChange={setStudio}
           onBack={closeStudio}
           onResolveConflict={() => void reloadStudioAfterConflict()}
+          publish={publishQuery.data}
+          publishPending={startPublishMutation.isPending || advancePublishMutation.isPending}
+          onPublish={() => {
+            if (studioFunnelId != null) startPublishMutation.mutate({ clientId, funnelId: studioFunnelId });
+          }}
+          onRetryPublish={() => {
+            if (studioFunnelId == null || publishAdvanceInFlightRef.current) return;
+            publishAdvanceInFlightRef.current = true;
+            advancePublishMutation.mutate({ clientId, funnelId: studioFunnelId, retryFailed: true });
+          }}
         />
       ) : studio && integrationProfileQuery.isError ? (
         <div className="rounded-3xl border border-red-400/20 bg-red-400/[0.05] p-8 text-center">

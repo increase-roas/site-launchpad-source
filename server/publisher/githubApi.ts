@@ -8,6 +8,13 @@ export const GITHUB_API_VERSION = "2026-03-10";
 export const DEFAULT_PUBLISHER_REQUEST_TIMEOUT_MS = 10_000;
 export const REPOSITORY_GENERATION_TIMEOUT_MS = 15_000;
 
+export type CreatePublicRepositoryInput = {
+  owner: string;
+  repository: string;
+  description: string;
+  signal: AbortSignal;
+};
+
 export type GeneratePublicRepositoryInput = {
   templateOwner: string;
   templateRepository: string;
@@ -27,6 +34,7 @@ export type GeneratedRepository = {
 
 export type Repository = GeneratedRepository & {
   ownerLogin: string;
+  description: string | null;
   private: boolean;
   visibility: "public" | "private" | "internal";
   templateOwnerLogin: string | null;
@@ -98,6 +106,9 @@ export type GitHubApiClient = {
   }): Promise<string>;
   generatePublicRepository(
     input: GeneratePublicRepositoryInput
+  ): Promise<GeneratedRepository>;
+  createPublicRepository(
+    input: CreatePublicRepositoryInput
   ): Promise<GeneratedRepository>;
   commitPublisherFiles(
     input: CommitPublisherFilesInput
@@ -292,6 +303,10 @@ function parseRepository(value: unknown): Repository {
   return {
     id: requirePositiveInteger(record, "id", operation),
     ownerLogin: requireString(owner, "login", operation),
+    description:
+      record.description === null || record.description === undefined
+        ? null
+        : requireString(record, "description", operation),
     name: requireString(record, "name", operation),
     fullName: requireString(record, "full_name", operation),
     private: requireBoolean(record, "private", operation),
@@ -506,6 +521,24 @@ export function createGitHubApiClient(options: {
         },
         input.signal,
         { timeoutMs: REPOSITORY_GENERATION_TIMEOUT_MS }
+      );
+      return parseGeneratedRepository(response);
+    },
+    async createPublicRepository(input) {
+      const response = await request(
+        "repository creation",
+        `/orgs/${encoded(input.owner)}/repos`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: input.repository,
+            description: input.description,
+            private: false,
+            auto_init: true,
+          }),
+        },
+        input.signal,
+        { timeoutMs: REPOSITORY_GENERATION_TIMEOUT_MS },
       );
       return parseGeneratedRepository(response);
     },
