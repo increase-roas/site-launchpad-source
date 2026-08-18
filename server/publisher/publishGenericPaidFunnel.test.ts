@@ -7,8 +7,10 @@ import {
   PublisherProvenNoEffectError,
   advanceGenericPaidFunnelPublish,
   genericPaidFunnelManagedFilePlan,
+  preflightGeneratedRepositoryActionsSecrets,
   startGenericPaidFunnelPublish,
 } from "./publishGenericPaidFunnel";
+import { GitHubApiError } from "./githubApi";
 import { decryptSetupValue } from "../clientSecurity";
 import { sealGenericPaidFunnelMaterialSnapshot } from "./genericPaidFunnelMaterial";
 
@@ -185,6 +187,35 @@ function inMemoryDependencies(initial: GenericPaidFunnelPublishJob) {
 }
 
 describe("generic Astro paid funnel workflow Retry", () => {
+  it("defers organization-secret verification when a repository token cannot read org metadata", async () => {
+    const getOrganizationActionsSecret = vi
+      .fn()
+      .mockRejectedValue(
+        new GitHubApiError("organization Actions secret lookup", 403)
+      );
+
+    await expect(
+      preflightGeneratedRepositoryActionsSecrets({
+        github: { getOrganizationActionsSecret },
+        organization: "increase-roas",
+        signal: new AbortController().signal,
+      })
+    ).resolves.toBeUndefined();
+    expect(getOrganizationActionsSecret).toHaveBeenCalledTimes(2);
+  });
+
+  it("still fails closed when an organization Actions secret is proven absent", async () => {
+    const getOrganizationActionsSecret = vi.fn().mockResolvedValue(null);
+
+    await expect(
+      preflightGeneratedRepositoryActionsSecrets({
+        github: { getOrganizationActionsSecret },
+        organization: "increase-roas",
+        signal: new AbortController().signal,
+      })
+    ).rejects.toThrow(/CLOUDFLARE_API_TOKEN/);
+  });
+
   it("creates one new workflow attempt and never repeats repository, D1, or source work", async () => {
     const harness = inMemoryDependencies(jobFixture());
 

@@ -14,6 +14,7 @@ import {
   createGitHubApiClient,
   expectedWorkflowDisplayTitle,
   GitHubApiError,
+  type GitHubApiClient,
 } from "./githubApi";
 import {
   genericPaidFunnelResourceDefinitions,
@@ -212,6 +213,45 @@ const REQUIRED_ACTIONS_SECRETS = [
   "CLOUDFLARE_API_TOKEN",
   "CLOUDFLARE_ACCOUNT_ID",
 ] as const;
+
+export async function preflightGeneratedRepositoryActionsSecrets(input: {
+  github: Pick<GitHubApiClient, "getOrganizationActionsSecret">;
+  organization: string;
+  signal: AbortSignal;
+}): Promise<void> {
+  for (const secretName of REQUIRED_ACTIONS_SECRETS) {
+    let secret;
+    try {
+      secret = await input.github.getOrganizationActionsSecret({
+        organization: input.organization,
+        secretName,
+        signal: input.signal,
+      });
+    } catch (error) {
+      // Repository-scoped publisher tokens can create and deploy repositories but
+      // GitHub reserves organization Actions-secret metadata for org admins.
+      // A 403 here is not proof that the inherited secret is absent; the generated
+      // workflow remains the authoritative deployment gate.
+      if (
+        error instanceof GitHubApiError &&
+        error.operation === "organization Actions secret lookup" &&
+        error.status === 403
+      ) {
+        continue;
+      }
+      throw error;
+    }
+    if (
+      !secret ||
+      secret.name !== secretName ||
+      secret.visibility !== "all"
+    ) {
+      throw new PublisherManualAttentionError(
+        `GitHub Actions credential ${secretName} is not available to all generated repositories; manual attention is required.`
+      );
+    }
+  }
+}
 
 function isProvenNoEffectGitHubError(error: unknown): boolean {
   return (
@@ -739,22 +779,11 @@ function createRuntimeExternal(): GenericPaidFunnelPublishExternal {
   const cloudflare = createCloudflareApiClient(cloudflareEnvironment);
   return {
     async preflightDeploymentCredentials(input) {
-      for (const secretName of REQUIRED_ACTIONS_SECRETS) {
-        const secret = await github.getOrganizationActionsSecret({
-          organization: githubEnvironment.owner,
-          secretName,
-          signal: input.signal,
-        });
-        if (
-          !secret ||
-          secret.name !== secretName ||
-          secret.visibility !== "all"
-        ) {
-          throw new PublisherManualAttentionError(
-            `GitHub Actions credential ${secretName} is not available to all generated repositories; manual attention is required.`
-          );
-        }
-      }
+      await preflightGeneratedRepositoryActionsSecrets({
+        github,
+        organization: githubEnvironment.owner,
+        signal: input.signal,
+      });
     },
     async ensureRepository(input) {
       const description = `Generated generic paid funnel ${input.externalFunnelId}`;
