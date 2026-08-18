@@ -39,6 +39,7 @@ import {
   type PaidAdsFunnelTab,
   type StudioState,
 } from "@shared/paidFunnel";
+import { paidAdsWorkspaceErrorCopy, shouldRetryWorkspaceQuery } from "@/lib/queryErrors";
 import { selectedFunnelForClient } from "./editorIsolation";
 
 type Step = {
@@ -180,7 +181,10 @@ function StepEditor({
 
 export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
   const utils = trpc.useUtils();
-  const workspaceQuery = trpc.workspace.get.useQuery({ clientId });
+  const workspaceQuery = trpc.workspace.get.useQuery(
+    { clientId },
+    { retry: shouldRetryWorkspaceQuery },
+  );
   const templatesQuery = trpc.paidFunnel.listTemplates.useQuery({ clientId }, { retry: 1 });
   const registryFunnelsQuery = trpc.paidFunnel.listFunnels.useQuery({ clientId }, { retry: 1 });
   const resolvedTemplates = resolveRegistryTemplates({
@@ -337,12 +341,28 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
     onError: error => toast.error(error.message),
   });
 
+  if (workspaceQuery.isError) {
+    const copy = paidAdsWorkspaceErrorCopy();
+    return (
+      <div className="rounded-3xl border border-red-400/20 bg-red-400/[0.05] p-8 text-center">
+        <h2 className="text-xl font-extrabold">{copy.title}</h2>
+        <p className="mt-2 text-sm font-medium text-muted-foreground">{copy.detail}</p>
+      </div>
+    );
+  }
+
   if (workspaceQuery.isLoading) {
     return <div className="grid min-h-[60vh] place-items-center"><Loader2 className="h-8 w-8 animate-spin text-cyan-300" /></div>;
   }
 
   if (!workspaceQuery.data) {
-    return <div className="rounded-3xl border border-red-400/20 bg-red-400/[0.05] p-8 text-center font-extrabold">Paid Ads funnels could not be loaded.</div>;
+    const copy = paidAdsWorkspaceErrorCopy();
+    return (
+      <div className="rounded-3xl border border-red-400/20 bg-red-400/[0.05] p-8 text-center">
+        <h2 className="text-xl font-extrabold">{copy.title}</h2>
+        <p className="mt-2 text-sm font-medium text-muted-foreground">{copy.detail}</p>
+      </div>
+    );
   }
 
   const workspace = workspaceQuery.data;

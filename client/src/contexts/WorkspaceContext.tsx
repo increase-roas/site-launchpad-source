@@ -13,6 +13,7 @@ type WorkspaceContextValue = {
   selectedClient?: ClientView;
   selectClient: (clientId: number) => void;
   isLoading: boolean;
+  isError: boolean;
 };
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -23,7 +24,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const clientsQuery = trpc.clients.list.useQuery(undefined, {
     retry: false,
   });
-  const clients = clientsQuery.data ?? [];
+  const clients = clientsQuery.isError ? [] : (clientsQuery.data ?? []);
+  const isError = clientsQuery.isError;
   const [selectedClientId, setSelectedClientId] = useState<number | undefined>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     const value = saved ? Number(saved) : undefined;
@@ -54,9 +56,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setSelectedClientId(clientId);
         localStorage.setItem(STORAGE_KEY, String(clientId));
       },
-      isLoading: clientsQuery.isLoading,
+      isLoading: clientsQuery.isLoading && !isError,
+      isError,
     }),
-    [clients, clientsQuery.isLoading, selectedClientId],
+    [clients, clientsQuery.isLoading, isError, selectedClientId],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
