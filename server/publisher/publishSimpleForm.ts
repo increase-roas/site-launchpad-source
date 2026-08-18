@@ -35,6 +35,7 @@ import {
 import { renderWranglerToml } from "./wranglerConfig";
 import {
   buildPublisherWorkerSecrets,
+  resolveGooglePublisherSecrets,
   type PublisherWorkerSecretValues,
 } from "./workerSecrets";
 
@@ -1209,18 +1210,14 @@ function createRuntimeExternal(): SimpleFormPublishExternal {
       });
     },
     async patchRuntimeSecrets(input) {
-      const profileGoogleSecrets = {
-        serviceAccountEmail:
-          input.runtimeSecrets.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim() ?? "",
-        serviceAccountPrivateKey:
-          input.runtimeSecrets.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.trim() ?? "",
-      };
+      const resolvedGoogle = resolveGooglePublisherSecrets({
+        profileEmail: input.runtimeSecrets.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+        profilePrivateKey: input.runtimeSecrets.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY,
+        loadPlatform: () => getGooglePublisherEnvironment(),
+      });
       const secrets = buildPublisherWorkerSecrets(
         input.runtimeSecrets,
-        profileGoogleSecrets.serviceAccountEmail &&
-          profileGoogleSecrets.serviceAccountPrivateKey
-          ? profileGoogleSecrets
-          : getGooglePublisherEnvironment()
+        resolvedGoogle.secrets
       );
       await cloudflare.patchWorkerSecrets({
         scriptName: input.workerName,
