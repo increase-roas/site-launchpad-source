@@ -479,7 +479,7 @@ export type SimpleFormReadinessSection = {
 export type SimpleFormReadiness = {
   sections: SimpleFormReadinessSection[];
   configurationReady: boolean;
-  published: false;
+  published: boolean;
 };
 
 function isHttpUrl(value: string): boolean {
@@ -506,7 +506,8 @@ export function buildSimpleFormReadiness(
   record: SimpleFormStoredRecord,
   secrets: SimpleFormSecretPresence,
   integration: SimpleFormClientIntegrationFields,
-  manifestContract: unknown = SIMPLE_FORM_MANIFEST.offlineConversionContract
+  manifestContract: unknown = SIMPLE_FORM_MANIFEST.offlineConversionContract,
+  publishState: { published?: boolean } = {}
 ): SimpleFormReadiness {
   const { config } = record;
   const clientMissing: string[] = [];
@@ -683,7 +684,7 @@ export function buildSimpleFormReadiness(
   return {
     sections,
     configurationReady: sections.every(section => section.ready),
-    published: false,
+    published: publishState.published === true,
   };
 }
 

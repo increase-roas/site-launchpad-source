@@ -114,6 +114,25 @@ describe("Simple Form readiness", () => {
     );
 
     expect(readiness.configurationReady).toBe(true);
+    expect(readiness.published).toBe(false);
+  });
+
+  it("derives published from a completed publish job with a live URL", () => {
+    const unpublished = buildSimpleFormReadiness(
+      buildReadyRecord(),
+      readySecrets,
+      readyIntegration
+    );
+    const published = buildSimpleFormReadiness(
+      buildReadyRecord(),
+      readySecrets,
+      readyIntegration,
+      undefined,
+      { published: true }
+    );
+    expect(unpublished.published).toBe(false);
+    expect(published.published).toBe(true);
+    expect(published.configurationReady).toBe(true);
   });
 
   it.each([

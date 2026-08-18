@@ -42,6 +42,8 @@ import type {
   ClientIntegrationSecretKey,
 } from "../shared/clientIntegrationProfile";
 import { getClientAssets, getClientById, getDb } from "./db";
+import { isCompletedPublishJob } from "../shared/operationalSummary";
+import { simpleFormPublishStore } from "./publisher/publishDb";
 import {
   postgresConflictTargets,
   requireSinglePositiveId,
@@ -195,11 +197,12 @@ export async function getSimpleFormDetail(clientId: number, funnelId: number) {
   if (funnel.templateKey !== SIMPLE_FORM_TEMPLATE_KEY) {
     throw new Error("This funnel is not a Simple Form template instance.");
   }
-  const [configRows, integrationProfile, assets, client] = await Promise.all([
+  const [configRows, integrationProfile, assets, client, publishJob] = await Promise.all([
     db.select().from(funnelSimpleFormConfigs).where(eq(funnelSimpleFormConfigs.funnelId, funnelId)).limit(1),
     loadOrBackfillResolvedClientIntegrationProfile(clientId),
     getClientAssets(clientId),
     getClientById(clientId),
+    simpleFormPublishStore.get(clientId, funnelId),
   ]);
   if (!client) throw new Error("Client not found.");
   const stored = parseStoredRecord((configRows[0]?.configJson ?? {}) as Record<string, unknown>);
@@ -207,7 +210,10 @@ export async function getSimpleFormDetail(clientId: number, funnelId: number) {
   const integration = simpleFormIntegrationFromProfile(integrationProfile);
   const config = resolveSimpleFormImages(stored, assets);
   const record = { ...stored, config };
-  const readiness = buildSimpleFormReadiness(record, secrets, integration);
+  const published = isCompletedPublishJob(publishJob);
+  const readiness = buildSimpleFormReadiness(record, secrets, integration, undefined, {
+    published,
+  });
   return {
     funnel: {
       id: funnel.id,
@@ -401,7 +407,7 @@ export async function getSimpleFormPublishHandoff(clientId: number, funnelId: nu
   const configurationReady =
     detail.readiness.configurationReady && validatedConfiguration !== null;
   return {
-    published: false as const,
+    published: detail.readiness.published,
     configurationReady,
     client: {
       id: client.id,

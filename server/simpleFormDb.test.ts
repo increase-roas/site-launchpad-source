@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clientLeadIntegrations,
+  funnelPublishes,
   funnelSimpleFormConfigs,
   funnelSteps,
   funnels,
@@ -141,7 +142,8 @@ function detailDatabase(
     ghlLocationId: string;
     googleSheetsId: string;
     metaPixelId: string;
-  }> = {}
+  }> = {},
+  publishJob: { status: string; liveUrl: string | null } | null = null
 ) {
   const funnel = {
     id: 11,
@@ -176,6 +178,11 @@ function detailDatabase(
               return [{ funnelId: 11, configJson: record }];
             }
             if (table === clientLeadIntegrations) return [integrationRow];
+            if (table === funnelPublishes) {
+              return publishJob
+                ? [{ status: publishJob.status, liveUrl: publishJob.liveUrl }]
+                : [];
+            }
             return [];
           },
         }),
@@ -438,6 +445,46 @@ describe("Simple Form private candidate validation", () => {
     expect(material.runtimeSecrets.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY).toBe(
       "astro-private-key",
     );
+  });
+
+  it("derives Simple Form published from a completed job live URL", async () => {
+    dbMocks.getDb.mockResolvedValue(
+      detailDatabase(buildReadyRecord(), {}, {
+        status: "published",
+        liveUrl: "https://simple-form-northland-11.example.workers.dev",
+      })
+    );
+    dbMocks.getClientAssets.mockResolvedValue([]);
+    dbMocks.getClientById.mockResolvedValue({
+      id: 5,
+      businessName: "Northland Spas",
+      shortName: "northland",
+    });
+
+    const detail = await getSimpleFormDetail(5, 11);
+    const handoff = await getSimpleFormPublishHandoff(5, 11);
+
+    expect(detail.readiness.published).toBe(true);
+    expect(handoff.published).toBe(true);
+    expect(JSON.stringify(detail)).not.toContain("ghl-key");
+  });
+
+  it("keeps Simple Form unpublished without a completed live URL", async () => {
+    dbMocks.getDb.mockResolvedValue(
+      detailDatabase(buildReadyRecord(), {}, {
+        status: "published",
+        liveUrl: null,
+      })
+    );
+    dbMocks.getClientAssets.mockResolvedValue([]);
+    dbMocks.getClientById.mockResolvedValue({
+      id: 5,
+      businessName: "Northland Spas",
+      shortName: "northland",
+    });
+
+    const detail = await getSimpleFormDetail(5, 11);
+    expect(detail.readiness.published).toBe(false);
   });
 
   it("writes Simple Form integration changes to canonical and compatibility stores", async () => {
