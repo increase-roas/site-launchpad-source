@@ -6,6 +6,7 @@ import {
   publishActionLabel,
   publishActionForState,
   publishAdvanceDelayMs,
+  publishPollInterval,
   publishProgressPercent,
   shouldAutoAdvancePublish,
 } from "./SimpleFormFunnelEditor";
@@ -57,6 +58,15 @@ describe("Simple Form publish controls", () => {
       })
     ).toBe(false);
     expect(shouldAutoAdvancePublish(null)).toBe(false);
+  });
+
+  it("polls only while a publish job is active", () => {
+    expect(publishPollInterval(null)).toBe(false);
+    expect(publishPollInterval(undefined)).toBe(false);
+    expect(publishPollInterval({ status: "failed", step: "monitor_workflow" })).toBe(false);
+    expect(publishPollInterval({ status: "published", step: "published" })).toBe(false);
+    expect(publishPollInterval({ status: "pending", step: "dispatch_workflow" })).toBe(3_000);
+    expect(publishPollInterval({ status: "running", step: "monitor_workflow" })).toBe(3_000);
   });
 
   it("resumes auto-advance from publish status loaded after reload", () => {

@@ -255,6 +255,12 @@ export function shouldAutoAdvancePublish(
   );
 }
 
+export function publishPollInterval(
+  publish: PublishStateLike | null | undefined,
+): 3_000 | false {
+  return shouldAutoAdvancePublish(publish ?? null) ? 3_000 : false;
+}
+
 export function publishProgressPercent(progress: {
   completed: number;
   total: number;
@@ -501,7 +507,9 @@ export function SimpleFormFunnelEditor({
   const query = trpc.simpleForm.get.useQuery({ clientId, funnelId });
   const publishQuery = trpc.simpleForm.publishStatus.useQuery(
     { clientId, funnelId },
-    { refetchInterval: 3_000 }
+    {
+      refetchInterval: state => publishPollInterval(state.state.data),
+    }
   );
   const [record, setRecord] = useState<SimpleFormStoredRecord | null>(null);
   const [zipText, setZipText] = useState("");

@@ -45,6 +45,32 @@ export type AstroSectionType = (typeof ASTRO_SECTION_TYPE_VALUES)[number];
 export type AstroCategory = (typeof ASTRO_CATEGORY_VALUES)[number];
 export type AstroIntegration = (typeof ASTRO_INTEGRATION_VALUES)[number];
 
+export const ASTRO_SECTION_LABELS: Record<AstroSectionType, string> = {
+  hero: "Hero",
+  cards: "Product cards",
+  visit: "Visit showroom",
+  steps: "How it works",
+  gallery: "Gallery",
+  reviews: "Reviews",
+  bignumber: "Featured number",
+  faq: "FAQ",
+  ctaband: "Call-to-action band",
+  cta: "Call to action",
+};
+
+export const ASTRO_SECTION_DESCRIPTIONS: Record<AstroSectionType, string> = {
+  hero: "Main headline, supporting copy, and primary action.",
+  cards: "Product or service cards customers can browse.",
+  visit: "Showroom information and a reason to visit.",
+  steps: "A short sequence explaining what happens next.",
+  gallery: "Approved website imagery.",
+  reviews: "Approved customer feedback.",
+  bignumber: "One prominent proof point or business statistic.",
+  faq: "Common customer questions and answers.",
+  ctaband: "A compact conversion prompt between sections.",
+  cta: "The final action customers should take.",
+};
+
 export const ASTRO_ASSET_LABELS: Record<AstroAssetSlot, string> = {
   navLogo: "Navigation logo",
   footerLogo: "Footer logo",
@@ -201,6 +227,21 @@ export const astroHomepageSectionSchema = z
     }
   });
 
+export const astroHomepageSectionOrderSchema = z
+  .array(
+    z.object({
+      id: z.string().min(1),
+      type: z.enum(ASTRO_SECTION_TYPE_VALUES),
+      enabled: z.boolean(),
+    }),
+  )
+  .max(40)
+  .superRefine((sections, context) => {
+    if (new Set(sections.map(section => section.id)).size !== sections.length) {
+      context.addIssue({ code: "custom", message: "Each homepage section must appear once." });
+    }
+  });
+
 export const astroIntegrationSchema = z
   .object({ enabled: z.boolean(), config: z.record(z.string(), z.string().max(2000)) })
   .superRefine((integration, context) => {
@@ -268,6 +309,7 @@ export const astroClientConfigInputSchema = z.object({
 export type AstroClientConfigInput = z.infer<typeof astroClientConfigInputSchema>;
 export type AstroNavigationItem = z.infer<typeof astroNavigationItemSchema>;
 export type AstroHomepageSection = z.infer<typeof astroHomepageSectionSchema>;
+export type AstroHomepageSectionOrder = z.infer<typeof astroHomepageSectionOrderSchema>;
 
 const sectionFields: Record<AstroSectionType, Record<string, string>> = {
   hero: { eyebrow: "", headline: "", subheadline: "", ctaLabel: "", ctaHref: "" },

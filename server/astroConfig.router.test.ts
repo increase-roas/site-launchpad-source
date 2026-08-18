@@ -7,6 +7,7 @@ import { UNAUTHED_ERR_MSG } from "../shared/const";
 const mocks = vi.hoisted(() => ({
   getAstroConfigView: vi.fn(),
   saveAstroConfig: vi.fn(),
+  saveAstroHomepageSectionOrder: vi.fn(),
   saveWranglerSecrets: vi.fn(),
   startPublish: vi.fn(),
   advancePublish: vi.fn(),
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("./astroConfigDb", () => ({
   getAstroConfigView: mocks.getAstroConfigView,
   saveAstroConfig: mocks.saveAstroConfig,
+  saveAstroHomepageSectionOrder: mocks.saveAstroHomepageSectionOrder,
   saveWranglerSecrets: mocks.saveWranglerSecrets,
 }));
 vi.mock("./publisher/publishAstroSite", () => ({
@@ -111,6 +113,7 @@ describe("authenticated Astro config procedures", () => {
     vi.clearAllMocks();
     mocks.getAstroConfigView.mockResolvedValue(view);
     mocks.saveAstroConfig.mockResolvedValue(view);
+    mocks.saveAstroHomepageSectionOrder.mockResolvedValue(view);
     mocks.saveWranglerSecrets.mockResolvedValue({ ...view, secretStatus: { ...view.secretStatus, GHL_API_KEY: true } });
     mocks.startPublish.mockResolvedValue({ ...publishView, status: "pending" });
     mocks.advancePublish.mockResolvedValue(publishView);
@@ -147,6 +150,20 @@ describe("authenticated Astro config procedures", () => {
     expect(savedInput.homepageSections.map((section: { id: string }) => section.id)).toEqual(
       reordered.homepageSections.map(section => section.id),
     );
+  });
+
+  it("saves homepage order through the Astro configuration source of truth", async () => {
+    const caller = astroConfigRouter.createCaller(context());
+    const sections = [...config.homepageSections].reverse().map(section => ({
+      id: section.id,
+      type: section.type,
+      enabled: section.enabled,
+    }));
+
+    await caller.saveHomepageSections({ clientId: 5, sections });
+
+    expect(mocks.saveAstroHomepageSectionOrder).toHaveBeenCalledWith(5, sections);
+    expect(mocks.saveAstroConfig).not.toHaveBeenCalled();
   });
 
   it("saves entered secrets without returning their raw values", async () => {

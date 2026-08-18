@@ -10,11 +10,14 @@ import {
   ASTRO_ASSET_SLOT_VALUES,
   ASTRO_CATEGORY_VALUES,
   WRANGLER_SECRET_VALUES,
+  astroClientConfigInputSchema,
   createDefaultAstroConfig,
   emptyWranglerSecretStatus,
   generateAstroClientConfig,
   type AstroAssetSlot,
   type AstroClientConfigInput,
+  type AstroHomepageSection,
+  type AstroHomepageSectionOrder,
   type WranglerSecretName,
 } from "../shared/astroConfig";
 import { decryptSetupValue, encryptSetupValue, hasProtectedValue } from "./clientSecurity";
@@ -115,6 +118,26 @@ export function mergeStoredAstroConfig(
       ]),
     ) as AstroClientConfigInput["integrations"],
   };
+}
+
+export function applyAstroHomepageSectionOrder(
+  existing: AstroHomepageSection[],
+  requested: AstroHomepageSectionOrder,
+): AstroHomepageSection[] {
+  if (requested.length !== existing.length) {
+    throw new Error("Homepage section order does not match the saved website configuration.");
+  }
+  const existingById = new Map(existing.map(section => [section.id, section]));
+  if (existingById.size !== existing.length) {
+    throw new Error("Saved homepage sections contain duplicate IDs.");
+  }
+  return requested.map(item => {
+    const section = existingById.get(item.id);
+    if (!section || section.type !== item.type) {
+      throw new Error("Homepage section order does not match the saved website configuration.");
+    }
+    return { ...section, enabled: item.enabled };
+  });
 }
 
 export function applyAstroAssetUrls(
@@ -325,6 +348,21 @@ export async function saveAstroConfig(clientId: number, input: AstroClientConfig
   });
 
   return getAstroConfigView(clientId);
+}
+
+export async function saveAstroHomepageSectionOrder(
+  clientId: number,
+  requested: AstroHomepageSectionOrder,
+) {
+  const current = await getAstroConfigView(clientId);
+  const input = astroClientConfigInputSchema.parse({
+    ...current.input,
+    homepageSections: applyAstroHomepageSectionOrder(
+      current.input.homepageSections,
+      requested,
+    ),
+  });
+  return saveAstroConfig(clientId, input);
 }
 
 export async function saveWranglerSecrets(
