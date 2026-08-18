@@ -11,6 +11,7 @@ import {
   startGenericPaidFunnelPublish,
 } from "./publishGenericPaidFunnel";
 import { GitHubApiError } from "./githubApi";
+import { samePersistedContractJson } from "./genericPaidFunnelPublishDb";
 import { decryptSetupValue } from "../clientSecurity";
 import { sealGenericPaidFunnelMaterialSnapshot } from "./genericPaidFunnelMaterial";
 
@@ -187,6 +188,15 @@ function inMemoryDependencies(initial: GenericPaidFunnelPublishJob) {
 }
 
 describe("generic Astro paid funnel workflow Retry", () => {
+  it("reuses a persisted JSONB resource contract regardless of object key order", () => {
+    expect(
+      samePersistedContractJson(
+        { d1: [{ name: "funnel-example-1-1", binding: "FUNNEL_DB" }] },
+        { d1: [{ binding: "FUNNEL_DB", name: "funnel-example-1-1" }] }
+      )
+    ).toBe(true);
+  });
+
   it("defers organization-secret verification when a repository token cannot read org metadata", async () => {
     const getOrganizationActionsSecret = vi
       .fn()

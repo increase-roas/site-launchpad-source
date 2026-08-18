@@ -1,4 +1,5 @@
 import { and, eq, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { isDeepStrictEqual } from "node:util";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import {
   genericPaidFunnelPublishes,
@@ -40,8 +41,11 @@ async function getWithDb(
   return rows[0] ?? null;
 }
 
-function sameJson(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+export function samePersistedContractJson(
+  left: unknown,
+  right: unknown
+): boolean {
+  return isDeepStrictEqual(left, right);
 }
 
 async function startWithDb(
@@ -73,7 +77,10 @@ async function startWithDb(
     job.clientId !== input.clientId ||
     job.templateKey !== input.templateKey ||
     job.templateVersion !== input.templateVersion ||
-    !sameJson(job.resourceDefinitions, input.resourceDefinitions)
+    !samePersistedContractJson(
+      job.resourceDefinitions,
+      input.resourceDefinitions
+    )
   ) {
     throw new Error(
       "Existing paid funnel publish job uses a different template contract; manual attention is required."
