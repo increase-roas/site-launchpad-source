@@ -1,4 +1,7 @@
-import { signOutAndClearAuth } from "@/lib/auth";
+import {
+  isUnauthorizedAuthResult,
+  signOutAndClearAuth,
+} from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
 import { useQueryClient } from "@tanstack/react-query";
@@ -14,7 +17,8 @@ export function useAuth() {
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
     enabled: !sessionLoading && Boolean(session),
-    retry: false,
+    retry: 1,
+    retryDelay: 250,
     refetchOnWindowFocus: false,
   });
 
@@ -53,12 +57,17 @@ export function useAuth() {
       loading,
       error: meQuery.error ?? null,
       isAuthenticated: Boolean(user),
-      isUnauthorized: Boolean(session && !loading && !user),
+      isUnauthorized: isUnauthorizedAuthResult({
+        hasSession: Boolean(session),
+        querySucceeded: meQuery.isSuccess,
+        user,
+      }),
     };
   }, [
     meQuery.data,
     meQuery.error,
     meQuery.isLoading,
+    meQuery.isSuccess,
     session,
     sessionLoading,
     signingOut,

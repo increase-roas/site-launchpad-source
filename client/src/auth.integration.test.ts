@@ -17,6 +17,8 @@ describe("active client authentication wiring", () => {
     expect(mainSource).toContain('credentials: "same-origin"');
     expect(mainSource).toContain("API_REQUEST_TIMEOUT_MS");
     expect(mainSource).toContain("fetchWithTimeout");
+    expect(mainSource).toContain("httpLink");
+    expect(mainSource).not.toContain("httpBatchLink");
     expect(mainSource).not.toContain("sessionStorage");
     expect(mainSource).not.toContain("manus-cookie");
     expect(mainSource).not.toContain("startLogin");
@@ -24,6 +26,18 @@ describe("active client authentication wiring", () => {
     expect(useAuthSource).toContain("signOutAndClearAuth");
     expect(useAuthSource).not.toContain("manus-runtime-user-info");
     expect(useAuthSource).not.toContain("startLogin");
+  });
+
+  it("does not block an Astro save on refetches or poll an idle publisher", () => {
+    const editorSource = source("pages/AstroClientEditor.tsx");
+
+    expect(editorSource).toContain("utils.astroConfig.get.setData(queryInput, view)");
+    expect(editorSource).toContain("void utils.clients.list.invalidate()");
+    expect(editorSource).not.toContain(
+      "await Promise.all([utils.clients.list.invalidate(), utils.astroConfig.get.invalidate(queryInput)])",
+    );
+    expect(editorSource).toContain("return isPublishActive(publishState) ? 3_000 : false");
+    expect(editorSource).toContain("Website configuration could not be loaded");
   });
 
   it("bounds clients.list without automatic retries and preserves the visible retry state", () => {

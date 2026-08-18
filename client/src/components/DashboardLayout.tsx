@@ -240,11 +240,12 @@ function DashboardShell({
 }
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
-  const { isUnauthorized, loading, logout, user } = useAuth();
+  const { error, isUnauthorized, loading, logout, refresh, user } = useAuth();
 
   if (loading) return <DashboardLayoutSkeleton />;
 
   if (!user) {
+    const temporarilyUnavailable = Boolean(error) && !isUnauthorized;
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <div className="flex w-full max-w-md flex-col items-center gap-8 rounded-3xl border border-white/8 bg-card/70 p-8 text-center shadow-[0_24px_70px_rgba(0,0,0,0.3)]">
@@ -253,18 +254,26 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           </div>
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight">
-              {isUnauthorized
+              {temporarilyUnavailable
+                ? "Workspace temporarily unavailable"
+                : isUnauthorized
                 ? "Account not approved"
                 : "Sign in to Site Launchpad"}
             </h1>
             <p className="mt-3 text-base font-medium leading-relaxed text-muted-foreground">
-              {isUnauthorized
+              {temporarilyUnavailable
+                ? "Your signed-in session is still intact. Retry the workspace connection."
+                : isUnauthorized
                 ? UNAPPROVED_ACCOUNT_MESSAGE
                 : "Only your agency team can open this workspace."}
             </p>
           </div>
           <Button
             onClick={() => {
+              if (temporarilyUnavailable) {
+                void refresh();
+                return;
+              }
               if (isUnauthorized) {
                 void switchGoogleAccount({
                   logout,
@@ -298,7 +307,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             size="lg"
             className="h-14 w-full rounded-2xl bg-cyan-400 text-base font-extrabold text-slate-950 hover:bg-cyan-300"
           >
-            {isUnauthorized
+            {temporarilyUnavailable
+              ? "Retry"
+              : isUnauthorized
               ? "Use another Google account"
               : "Sign in with Google"}
           </Button>
