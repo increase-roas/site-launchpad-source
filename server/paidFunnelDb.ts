@@ -549,31 +549,40 @@ export async function savePaidFunnelGraph(input: {
     .limit(1);
   if (!funnelRows[0]) throw new Error("Funnel not found.");
 
-  const graphRows = await db
-    .select()
-    .from(paidFunnelGraphs)
-    .where(
-      and(
-        eq(paidFunnelGraphs.funnelId, input.funnelId),
-        eq(paidFunnelGraphs.stepId, input.stepId)
-      )
-    )
-    .limit(1);
-  const current = graphRows[0];
-  if (!current) throw new Error("Graph not found.");
-  assertWritableVersion(current.updatedAt, input.expectedUpdatedAt);
-
   const graph = persistGraphInput(input.graph);
-  const revisionRows = await db
-    .select({ revision: paidFunnelGraphRevisions.revision })
-    .from(paidFunnelGraphRevisions)
-    .where(eq(paidFunnelGraphRevisions.graphId, current.id))
-    .orderBy(desc(paidFunnelGraphRevisions.revision))
-    .limit(1);
-  const nextRevision = (revisionRows[0]?.revision ?? 0) + 1;
-  const now = new Date();
-
   await db.transaction(async transaction => {
+    // Lock before comparing the version. PostgreSQL default timestamps retain
+    // microseconds while JavaScript Date values only retain milliseconds, so a
+    // SQL equality predicate against a round-tripped Date can reject the first
+    // valid edit. The row lock preserves optimistic concurrency without relying
+    // on that lossy SQL timestamp comparison.
+    const graphRows = await transaction
+      .select()
+      .from(paidFunnelGraphs)
+      .where(
+        and(
+          eq(paidFunnelGraphs.funnelId, input.funnelId),
+          eq(paidFunnelGraphs.stepId, input.stepId)
+        )
+      )
+      .for("update");
+    const current = graphRows[0];
+    if (!current) throw new Error("Graph not found.");
+    assertWritableVersion(current.updatedAt, input.expectedUpdatedAt);
+
+    const revisionRows = await transaction
+      .select({ revision: paidFunnelGraphRevisions.revision })
+      .from(paidFunnelGraphRevisions)
+      .where(eq(paidFunnelGraphRevisions.graphId, current.id))
+      .orderBy(desc(paidFunnelGraphRevisions.revision))
+      .limit(1);
+    const nextRevision = (revisionRows[0]?.revision ?? 0) + 1;
+    // The version token must always advance, including API-level saves that
+    // arrive within the same millisecond.
+    const now = new Date(
+      Math.max(Date.now(), current.updatedAt.getTime() + 1)
+    );
+
     const updated = await transaction
       .update(paidFunnelGraphs)
       .set({
@@ -581,12 +590,7 @@ export async function savePaidFunnelGraph(input: {
         graphVersion: graph.version,
         updatedAt: now,
       })
-      .where(
-        and(
-          eq(paidFunnelGraphs.id, current.id),
-          eq(paidFunnelGraphs.updatedAt, current.updatedAt)
-        )
-      )
+      .where(eq(paidFunnelGraphs.id, current.id))
       .returning({ id: paidFunnelGraphs.id });
     if (updated.length !== 1) throw new UpdateConflictError();
     await transaction.insert(paidFunnelGraphRevisions).values({

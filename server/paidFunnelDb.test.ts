@@ -32,6 +32,7 @@ type Row = Record<string, unknown> & { id?: number };
 
 function thenable<T>(result: T) {
   const builder = {
+    for: async () => result,
     limit: async () => result,
     orderBy: () => builder,
     then: (
@@ -53,6 +54,7 @@ function createMemoryDb() {
     [paidFunnelGraphRevisions, []],
   ]);
   let nextId = 1;
+  let lockedGraphRows = 0;
   const inserted: Array<{ table: unknown; values: Row }> = [];
 
   const api = {
@@ -86,7 +88,18 @@ function createMemoryDb() {
             }),
           }),
         }),
-        where: () => thenable(tables.get(table) ?? []),
+        where: () => {
+          const result = tables.get(table) ?? [];
+          const builder = thenable(result);
+          if (table !== paidFunnelGraphs) return builder;
+          return {
+            ...builder,
+            for: async () => {
+              lockedGraphRows += 1;
+              return result;
+            },
+          };
+        },
         orderBy: () => thenable(tables.get(table) ?? []),
       }),
     }),
@@ -117,6 +130,9 @@ function createMemoryDb() {
     }),
     transaction: async (callback: (tx: typeof api) => Promise<unknown>) =>
       callback(api),
+    get lockedGraphRows() {
+      return lockedGraphRows;
+    },
   };
   return api;
 }
@@ -245,5 +261,9 @@ describe("paid funnel registry persistence", () => {
     });
     expect(saved.studio?.graph.pages.landing.kind).toBe("page");
     expect(saved.graphs[0]?.graph.version).toBe(1);
+    expect(db.lockedGraphRows).toBe(1);
+    expect(saved.studio!.expectedUpdatedAt.getTime()).toBeGreaterThan(
+      detail.studio!.expectedUpdatedAt.getTime()
+    );
   });
 });
