@@ -96,6 +96,7 @@ export function renderFunnelCanvas(
         (input.breakpoint === "mobile"
           ? styles.mobile.sectionPadding
           : undefined);
+      const margin = pickResponsive(section.margin, input.breakpoint);
       return {
         id: section.id,
         kind: "section",
@@ -111,7 +112,9 @@ export function renderFunnelCanvas(
           minHeight: section.minHeight,
           padding: spacingCss(padding) ?? "0",
           margin:
-            spacingCss(pickResponsive(section.margin, input.breakpoint)) ?? "0",
+            section.layout === "boxed"
+              ? `${margin?.top ?? 0}px auto ${margin?.bottom ?? 0}px`
+              : spacingCss(margin) ?? "0",
           background: backgroundCss(section.background, "transparent"),
           textAlign: section.alignment,
           position: section.sticky ? "sticky" : "relative",

@@ -5,6 +5,7 @@ import type {
   DeviceVisibility,
   FunnelElement,
   FunnelPage,
+  FunnelSection,
   PaidFunnelBreakpoint,
   ResponsiveValue,
   FunnelStepNext,
@@ -648,6 +649,14 @@ function spacing(spacingValue: BoxSpacing | undefined): string {
     .join(" ");
 }
 
+function sectionMargin(
+  layout: FunnelSection["layout"],
+  margin: BoxSpacing | undefined,
+): string {
+  if (layout !== "boxed") return spacing(margin);
+  return `${finite(margin?.top)}px auto ${finite(margin?.bottom)}px`;
+}
+
 function background(
   backgroundValue: Background | undefined,
   fallback: string
@@ -709,7 +718,13 @@ function graphRules(
           ],
           ["min-height", `${finite(section.minHeight)}px`],
           ["padding", spacing(sectionPadding)],
-          ["margin", spacing(responsiveValue(section.margin, breakpoint))],
+          [
+            "margin",
+            sectionMargin(
+              section.layout,
+              responsiveValue(section.margin, breakpoint),
+            ),
+          ],
           ["background", background(section.background, "transparent")],
           ["text-align", section.alignment],
           [

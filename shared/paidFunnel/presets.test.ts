@@ -33,6 +33,7 @@ describe("paid-ad section presets and fixture", () => {
     expect(heroElements.map(element => element.type)).toEqual(
       expect.arrayContaining(["heading", "text", "image", "multipleChoice"])
     );
+    expect(hero).toMatchObject({ layout: "boxed", maxWidth: 720 });
     expect(choice?.props).toMatchObject({
       columns: 2,
       options: ["Option one", "Option two"],

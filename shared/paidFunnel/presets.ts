@@ -156,7 +156,7 @@ export function createSectionPreset(
   if (preset === "image-choice-hero") {
     return createSection(nextId, {
       preset,
-      layout: "full",
+      layout: "boxed",
       maxWidth: 720,
       minHeight: 720,
       alignment: "center",

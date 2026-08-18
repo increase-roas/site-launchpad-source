@@ -173,6 +173,18 @@ describe("paid funnel Astro compiler", () => {
     expect(css).toContain("max-width:560px");
   });
 
+  it("centers boxed sections at their configured max width", () => {
+    const graph = createGenericPaidFunnelFixture(createIdFactory("boxed"));
+    const section = graph.pages.landing.sections[0]!;
+    section.layout = "boxed";
+    section.maxWidth = 720;
+    const files = compilePaidFunnelToAstro(graph);
+    const css =
+      files.find(file => file.path === "src/styles/funnel.css")?.contents ?? "";
+    expect(css).toContain("max-width:720px");
+    expect(css).toContain("margin:0px auto 0px");
+  });
+
   it("preserves attribution and reuses one event id for Pixel and CAPI deduplication", () => {
     const graph = createGenericPaidFunnelFixture(createIdFactory("meta"));
     const files = compilePaidFunnelToAstro(graph);
