@@ -111,6 +111,30 @@ describe("paid funnel Astro compiler", () => {
     expect(runtime).toContain('document.querySelectorAll("[data-countdown]")');
   });
 
+  it("uses modern fallbacks for older saved font names and safe empty-image placeholders", () => {
+    const graph = createGenericPaidFunnelFixture(createIdFactory("legacy-font"));
+    graph.globalStyles.fonts = { heading: "Inter", body: "Inter" };
+    const column =
+      graph.pages[graph.steps[0]!.key]!.sections[0]!.rows[0]!.columns[0]!;
+    column.elements.push(
+      createElement(createIdFactory("empty-image"), "image", {
+        src: "",
+        alt: "Featured offer",
+      }),
+    );
+
+    const files = compilePaidFunnelToAstro(graph);
+    const css =
+      files.find(file => file.path === "src/styles/funnel.css")?.contents ?? "";
+    const page =
+      files.find(file => file.path === "src/pages/index.astro")?.contents ?? "";
+    expect(css).toContain("--heading:Inter,Arial,Helvetica,sans-serif");
+    expect(css).toContain("--body:Inter,Arial,Helvetica,sans-serif");
+    expect(css).toContain("font-family:Inter,Arial,Helvetica,sans-serif");
+    expect(page).toContain(">Upload an image</div>");
+    expect(page).not.toContain('src=""');
+  });
+
   it("publishes configurable choice grids and responsive element sizing", () => {
     const graph = createGenericPaidFunnelFixture(createIdFactory("choices"));
     const choice = Object.values(graph.pages)
