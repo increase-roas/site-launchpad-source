@@ -1,10 +1,20 @@
 import {
   declaredPaidFunnelResources,
   parsePaidFunnelPackage,
+  parsePaidFunnelPublishSettings,
   type PaidFunnelPackage,
   type PaidFunnelPublishAdapter,
   type PaidFunnelResources,
 } from "../../../shared/studio/paidFunnelPackage";
+import {
+  authorizePaidFunnelLiveRewrite,
+  mapProfileToGenericPaidFunnelBindings,
+  requiredPaidFunnelSecretNames,
+  resolvePaidFunnelProfileByClientId,
+  type ClientIntegrationProfileResolver,
+  type PaidFunnelAdapterBindings,
+  type PaidFunnelPublishAction,
+} from "./profileMapping";
 import {
   buildPaidFunnelReadiness,
   paidFunnelReadinessIssues,
@@ -34,6 +44,9 @@ export type GenericPaidFunnelPublishPlan = {
   steps: GenericPaidFunnelPlanStep[];
   resources: PaidFunnelResources;
   forcedCloudflareInfra: false;
+  clientId: number;
+  bindingNames: string[];
+  liveSyncAction: PaidFunnelPublishAction;
 };
 
 export type GenericPaidFunnelPlanResult =
@@ -48,6 +61,15 @@ export type GenericPaidFunnelPlanResult =
       plan: null;
       error: string;
     };
+
+export type GenericPaidFunnelPlanInput = {
+  package: unknown;
+  settings: unknown;
+  profile?: unknown;
+  resolver?: ClientIntegrationProfileResolver;
+  hasLiveDeploy?: boolean;
+  action?: PaidFunnelPublishAction;
+};
 
 export function selectPaidFunnelPublishAdapter(
   rawPackage: unknown
@@ -80,8 +102,12 @@ export function planGenericPaidFunnelResources(
 }
 
 export function genericPaidFunnelPlanSteps(
-  resources: PaidFunnelResources
+  resources: PaidFunnelResources,
+  action: PaidFunnelPublishAction = "publish"
 ): GenericPaidFunnelPlanStep[] {
+  if (action === "sync-integrations") {
+    return ["validate_readiness", "patch_runtime_secrets", "published"];
+  }
   const steps: GenericPaidFunnelPlanStep[] = [
     "validate_readiness",
     "create_repository",
@@ -110,11 +136,37 @@ export function genericPaidFunnelPlanSteps(
   return steps;
 }
 
+function resolveProfileForPlan(input: GenericPaidFunnelPlanInput): unknown {
+  if (input.profile !== undefined) return input.profile;
+  const settings = parsePaidFunnelPublishSettings(input.settings);
+  if (!settings.success || !input.resolver) return undefined;
+  const resolved = resolvePaidFunnelProfileByClientId(
+    settings.data.clientId,
+    input.resolver
+  );
+  return resolved.ok ? resolved.profile.dto : undefined;
+}
+
 export function planGenericPaidFunnelPublish(
   rawPackage: unknown,
-  rawSettings: unknown
+  rawSettings: unknown,
+  rawProfile?: unknown,
+  options?: {
+    resolver?: ClientIntegrationProfileResolver;
+    hasLiveDeploy?: boolean;
+    action?: PaidFunnelPublishAction;
+  }
 ): GenericPaidFunnelPlanResult {
-  const readiness = buildPaidFunnelReadiness(rawPackage, rawSettings);
+  const input: GenericPaidFunnelPlanInput = {
+    package: rawPackage,
+    settings: rawSettings,
+    profile: rawProfile,
+    resolver: options?.resolver,
+    hasLiveDeploy: options?.hasLiveDeploy,
+    action: options?.action,
+  };
+  const profile = resolveProfileForPlan(input);
+  const readiness = buildPaidFunnelReadiness(rawPackage, rawSettings, profile);
   if (!readiness.configurationReady) {
     return {
       ok: false,
@@ -123,6 +175,19 @@ export function planGenericPaidFunnelPublish(
       error:
         paidFunnelReadinessIssues(readiness)[0] ??
         "Paid funnel is not ready to publish.",
+    };
+  }
+
+  const live = authorizePaidFunnelLiveRewrite({
+    hasLiveDeploy: options?.hasLiveDeploy === true,
+    action: options?.action,
+  });
+  if (!live.ok) {
+    return {
+      ok: false,
+      readiness,
+      plan: null,
+      error: live.error,
     };
   }
 
@@ -137,7 +202,8 @@ export function planGenericPaidFunnelPublish(
   }
 
   const parsed = parsePaidFunnelPackage(rawPackage);
-  if (!parsed.success) {
+  const settings = parsePaidFunnelPublishSettings(rawSettings);
+  if (!parsed.success || !settings.success) {
     return {
       ok: false,
       readiness,
@@ -152,23 +218,35 @@ export function planGenericPaidFunnelPublish(
     readiness,
     plan: {
       adapter: GENERIC_PAID_FUNNEL_ADAPTER,
-      steps: genericPaidFunnelPlanSteps(resources),
+      steps: genericPaidFunnelPlanSteps(resources, live.action),
       resources,
       forcedCloudflareInfra: false,
+      clientId: settings.data.clientId,
+      bindingNames: requiredPaidFunnelSecretNames(parsed.data),
+      liveSyncAction: live.action,
     },
   };
 }
 
 export function assertGenericPaidFunnelPublishAuthorized(
   rawPackage: unknown,
-  rawSettings: unknown
+  rawSettings: unknown,
+  rawProfile?: unknown,
+  options?: {
+    resolver?: ClientIntegrationProfileResolver;
+    hasLiveDeploy?: boolean;
+    action?: PaidFunnelPublishAction;
+  }
 ): GenericPaidFunnelPublishPlan {
-  const planned = planGenericPaidFunnelPublish(rawPackage, rawSettings);
+  const planned = planGenericPaidFunnelPublish(
+    rawPackage,
+    rawSettings,
+    rawProfile,
+    options
+  );
   if (!planned.ok || !planned.plan) {
     throw new Error(
-      planned.ok
-        ? "Paid funnel is not ready to publish."
-        : planned.error
+      planned.ok ? "Paid funnel is not ready to publish." : planned.error
     );
   }
   return planned.plan;
@@ -178,13 +256,36 @@ export function genericPaidFunnelUsesForcedInfra(
   plan: GenericPaidFunnelPublishPlan
 ): boolean {
   return (
-    plan.forcedCloudflareInfra ||
-    plan.steps.includes("ensure_kv_namespace") ||
-    plan.steps.includes("ensure_d1_database") ||
-    plan.steps.includes("ensure_queues")
-  ) &&
+    (plan.forcedCloudflareInfra ||
+      plan.steps.includes("ensure_kv_namespace") ||
+      plan.steps.includes("ensure_d1_database") ||
+      plan.steps.includes("ensure_queues")) &&
     (plan.resources.kvNamespaces?.length ?? 0) === 0 &&
     (plan.resources.d1Databases?.length ?? 0) === 0 &&
     (plan.resources.queues?.producers?.length ?? 0) === 0 &&
-    (plan.resources.queues?.consumers?.length ?? 0) === 0;
+    (plan.resources.queues?.consumers?.length ?? 0) === 0
+  );
+}
+
+export function mapGenericPaidFunnelProfileBindings(input: {
+  clientId: number;
+  package: PaidFunnelPackage;
+  resolver: ClientIntegrationProfileResolver;
+}):
+  | { ok: true; bindings: PaidFunnelAdapterBindings }
+  | { ok: false; error: string } {
+  const resolved = resolvePaidFunnelProfileByClientId(
+    input.clientId,
+    input.resolver
+  );
+  if (!resolved.ok) return resolved;
+  return {
+    ok: true,
+    bindings: mapProfileToGenericPaidFunnelBindings({
+      clientId: input.clientId,
+      identifiers: resolved.profile.dto.identifiers,
+      secrets: resolved.profile.secrets,
+      requiredNames: requiredPaidFunnelSecretNames(input.package),
+    }),
+  };
 }

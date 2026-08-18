@@ -248,6 +248,7 @@ export type PaidFunnelStepState = z.infer<typeof paidFunnelStepStateSchema>;
 export const paidFunnelPublishSettingsSchema = z
   .object({
     audience: z.literal("qa"),
+    clientId: z.number().int().positive(),
     clientKey: z.string().trim().min(1).max(80),
     templateKey: z.string().trim().min(1).max(80),
     domain: z.string().trim().min(1).max(253),
@@ -258,19 +259,12 @@ export const paidFunnelPublishSettingsSchema = z
     tracking: z.object({
       preserveUtm: z.boolean(),
       preserveClickIds: z.boolean(),
-      metaPixelId: z.string().trim().nullable(),
-      metaCapiPresent: z.boolean(),
-    }),
-    integrations: z.object({
-      ghlLocationId: z.string().trim().nullable(),
-      googleSheetsId: z.string().trim().nullable(),
     }),
     consent: z.object({
       version: z.string().trim().min(1).max(40),
       text: z.string().trim().min(40).max(700),
     }),
     navigationTargets: z.array(z.string().trim().min(1)).default([]),
-    secretPresence: z.record(z.string(), z.boolean()),
     stepStates: z.array(paidFunnelStepStateSchema).min(1),
   })
   .strict();
@@ -413,13 +407,12 @@ export function buildGenericPaidFunnelPackageFixture(
 }
 
 export function buildGenericPaidFunnelSettingsFixture(
-  pkg: PaidFunnelPackage = buildGenericPaidFunnelPackageFixture()
+  pkg: PaidFunnelPackage = buildGenericPaidFunnelPackageFixture(),
+  clientId = 5
 ): PaidFunnelPublishSettings {
-  const secretPresence = Object.fromEntries(
-    pkg.requiredRuntimeSecrets.map(name => [name, true])
-  );
   return paidFunnelPublishSettingsSchema.parse({
     audience: "qa",
+    clientId,
     clientKey: "qa-client",
     templateKey: pkg.templateKey,
     domain: "qa-generic-funnel.example",
@@ -427,12 +420,6 @@ export function buildGenericPaidFunnelSettingsFixture(
     tracking: {
       preserveUtm: true,
       preserveClickIds: true,
-      metaPixelId: "123456789012345",
-      metaCapiPresent: true,
-    },
-    integrations: {
-      ghlLocationId: "location-123",
-      googleSheetsId: "sheet-123",
     },
     consent: {
       version: "2026-08-18",
@@ -441,7 +428,6 @@ export function buildGenericPaidFunnelSettingsFixture(
     navigationTargets: pkg.steps
       .map(step => step.nextStep)
       .filter((value): value is string => Boolean(value)),
-    secretPresence,
     stepStates: pkg.steps.map(step => ({
       stepKey: step.key,
       previewReady: true,

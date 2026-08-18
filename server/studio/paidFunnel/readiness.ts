@@ -1,3 +1,9 @@
+import {
+  clientIntegrationProfileDtoSchema,
+  isIdentifierKey,
+  isSecretKey,
+  type ClientIntegrationProfileDto,
+} from "../../../shared/clientIntegrationProfile";
 import { simpleFormOfflineConversionContractSchema } from "../../../shared/simpleFormContract";
 import {
   REQUIRED_FORM_LEAD_FIELDS,
@@ -9,6 +15,7 @@ import {
   type PaidFunnelPackage,
   type PaidFunnelPublishSettings,
 } from "../../../shared/studio/paidFunnelPackage";
+import { requiredPaidFunnelSecretNames } from "./profileMapping";
 
 export const PAID_FUNNEL_READINESS_KEYS = [
   "package",
@@ -61,9 +68,7 @@ function section(
 }
 
 function failClosedInvalidPackage(errors: string[]): PaidFunnelReadiness {
-  const packageMissing = errors.length
-    ? errors
-    : ["Package is invalid"];
+  const packageMissing = errors.length ? errors : ["Package is invalid"];
   return {
     sections: PAID_FUNNEL_READINESS_KEYS.map(key =>
       key === "package"
@@ -190,15 +195,19 @@ function checkNavigation(
 
 function checkIntegration(
   pkg: PaidFunnelPackage,
-  settings: PaidFunnelPublishSettings
+  profile: ClientIntegrationProfileDto | null
 ): string[] {
+  if (!profile) return ["Client integration profile"];
+  if (profile.reconciliationStatus === "conflict") {
+    return ["Integration profile conflict"];
+  }
   const missing: string[] = [];
-  if (pkg.integrations.ghl && !settings.integrations.ghlLocationId?.trim()) {
+  if (pkg.integrations.ghl && !profile.identifiers.GHL_LOCATION_ID?.trim()) {
     missing.push("GHL Location ID");
   }
   if (
     pkg.integrations.googleSheets &&
-    !settings.integrations.googleSheetsId?.trim()
+    !profile.identifiers.GOOGLE_SHEETS_ID?.trim()
   ) {
     missing.push("Google Sheet ID");
   }
@@ -207,7 +216,8 @@ function checkIntegration(
 
 function checkTracking(
   pkg: PaidFunnelPackage,
-  settings: PaidFunnelPublishSettings
+  settings: PaidFunnelPublishSettings,
+  profile: ClientIntegrationProfileDto | null
 ): string[] {
   const missing: string[] = [];
   if (!settings.tracking.preserveUtm) {
@@ -217,10 +227,17 @@ function checkTracking(
     missing.push("Click-ID preservation");
   }
   if (pkg.integrations.meta) {
-    if (!isValidMetaPixelId(settings.tracking.metaPixelId)) {
+    if (!profile) {
+      missing.push("Client integration profile");
+      return unique(missing);
+    }
+    if (profile.reconciliationStatus === "conflict") {
+      missing.push("Integration profile conflict");
+    }
+    if (!isValidMetaPixelId(profile.identifiers.META_PIXEL_ID)) {
       missing.push("Meta Pixel ID");
     }
-    if (!settings.tracking.metaCapiPresent) {
+    if (profile.secretPresence.META_CAPI_ACCESS_TOKEN !== "SET") {
       missing.push("Meta CAPI presence");
     }
   }
@@ -229,19 +246,32 @@ function checkTracking(
 
 function checkSecrets(
   pkg: PaidFunnelPackage,
-  settings: PaidFunnelPublishSettings
+  settings: PaidFunnelPublishSettings,
+  profile: ClientIntegrationProfileDto | null
 ): string[] {
-  const missing: string[] = [];
-  const required = unique([
-    ...pkg.requiredRuntimeSecrets,
-    ...pkg.offlineConversionContract.requiredRuntimeSecrets,
-  ]);
-  for (const name of required) {
-    if (settings.secretPresence[name] !== true) {
-      missing.push(name);
-    }
+  if (!profile) return ["Client integration profile"];
+  if (profile.clientId !== settings.clientId) {
+    return ["Client integration profile clientId mismatch"];
   }
-  return missing;
+  if (profile.reconciliationStatus === "conflict") {
+    return unique([
+      "Integration profile conflict",
+      ...profile.conflictedKeys,
+    ]);
+  }
+  const missing: string[] = [];
+  for (const name of requiredPaidFunnelSecretNames(pkg)) {
+    if (isIdentifierKey(name)) {
+      if (!profile.identifiers[name]?.trim()) missing.push(name);
+      continue;
+    }
+    if (isSecretKey(name)) {
+      if (profile.secretPresence[name] !== "SET") missing.push(name);
+      continue;
+    }
+    missing.push(name);
+  }
+  return unique(missing);
 }
 
 function checkBuild(pkg: PaidFunnelPackage): string[] {
@@ -270,9 +300,33 @@ function checkAdapter(
   return unique(missing);
 }
 
+function parseProfile(
+  rawProfile: unknown
+):
+  | { ok: true; profile: ClientIntegrationProfileDto }
+  | { ok: false; errors: string[] } {
+  if (rawProfile == null) {
+    return { ok: false, errors: ["Client integration profile"] };
+  }
+  const parsed = clientIntegrationProfileDtoSchema.safeParse(rawProfile);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      errors: parsed.error.issues.map(issue => {
+        const path = issue.path.map(segment => String(segment)).join(".");
+        return path
+          ? `profile.${path}: ${issue.message}`
+          : `profile: ${issue.message}`;
+      }),
+    };
+  }
+  return { ok: true, profile: parsed.data };
+}
+
 export function buildPaidFunnelReadiness(
   rawPackage: unknown,
-  rawSettings: unknown
+  rawSettings: unknown,
+  rawProfile?: unknown
 ): PaidFunnelReadiness {
   const parsedPackage = parsePaidFunnelPackage(rawPackage);
   if (!parsedPackage.success) {
@@ -296,16 +350,25 @@ export function buildPaidFunnelReadiness(
     );
   }
 
+  const parsedProfile = parseProfile(rawProfile);
+  const profile = parsedProfile.ok ? parsedProfile.profile : null;
   const pkg = parsedPackage.data;
   const settings = parsedSettings.data;
+  const profileErrors = parsedProfile.ok ? [] : parsedProfile.errors;
   const sections = [
     section("package", checkPackage(pkg, settings)),
     section("steps", checkSteps(pkg, settings)),
     section("formMapping", checkFormMapping(pkg)),
     section("navigation", checkNavigation(pkg, settings)),
-    section("integration", checkIntegration(pkg, settings)),
-    section("tracking", checkTracking(pkg, settings)),
-    section("secrets", checkSecrets(pkg, settings)),
+    section(
+      "integration",
+      unique([...profileErrors, ...checkIntegration(pkg, profile)])
+    ),
+    section("tracking", checkTracking(pkg, settings, profile)),
+    section(
+      "secrets",
+      unique([...profileErrors, ...checkSecrets(pkg, settings, profile)])
+    ),
     section("build", checkBuild(pkg)),
     section("adapter", checkAdapter(pkg, settings)),
   ];

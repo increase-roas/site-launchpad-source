@@ -11,6 +11,7 @@ export {
   assertGenericPaidFunnelPublishAuthorized,
   genericPaidFunnelPlanSteps,
   genericPaidFunnelUsesForcedInfra,
+  mapGenericPaidFunnelProfileBindings,
   planGenericPaidFunnelPublish,
   planGenericPaidFunnelResources,
   selectPaidFunnelPublishAdapter,
@@ -18,3 +19,16 @@ export {
   type GenericPaidFunnelPlanStep,
   type GenericPaidFunnelPublishPlan,
 } from "./publishAdapter";
+export {
+  PAID_FUNNEL_LIVE_SYNC_ACTIONS,
+  authorizePaidFunnelLiveRewrite,
+  buildReadyPaidFunnelProfileDto,
+  clonePaidFunnelClientProfile,
+  mapProfileToGenericPaidFunnelBindings,
+  requiredPaidFunnelSecretNames,
+  resolvePaidFunnelProfileByClientId,
+  resolvePublisherMappings,
+  type PaidFunnelAdapterBindings,
+  type PaidFunnelPublishAction,
+  type PaidFunnelResolvedProfile,
+} from "./profileMapping";

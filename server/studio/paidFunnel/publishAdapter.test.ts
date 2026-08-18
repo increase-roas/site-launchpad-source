@@ -4,19 +4,31 @@ import {
   buildGenericPaidFunnelSettingsFixture,
 } from "../../../shared/studio/paidFunnelPackage";
 import {
+  buildReadyPaidFunnelProfileDto,
+  buildReadyPaidFunnelSecrets,
+  memoryProfileResolver,
+} from "./profileMapping";
+import {
   GENERIC_PAID_FUNNEL_ADAPTER,
   assertGenericPaidFunnelPublishAuthorized,
   genericPaidFunnelUsesForcedInfra,
+  mapGenericPaidFunnelProfileBindings,
   planGenericPaidFunnelPublish,
   selectPaidFunnelPublishAdapter,
 } from "./publishAdapter";
 
+function readyContext() {
+  const pkg = buildGenericPaidFunnelPackageFixture();
+  const settings = buildGenericPaidFunnelSettingsFixture(pkg);
+  const profile = buildReadyPaidFunnelProfileDto(settings.clientId);
+  return { pkg, settings, profile };
+}
+
 describe("generic paid-funnel publish adapter", () => {
   it("selects the generic adapter and plans no forced KV/D1/queues", () => {
-    const pkg = buildGenericPaidFunnelPackageFixture();
-    const settings = buildGenericPaidFunnelSettingsFixture(pkg);
+    const { pkg, settings, profile } = readyContext();
     const selected = selectPaidFunnelPublishAdapter(pkg);
-    const planned = planGenericPaidFunnelPublish(pkg, settings);
+    const planned = planGenericPaidFunnelPublish(pkg, settings, profile);
 
     expect(selected).toEqual({
       ok: true,
@@ -27,6 +39,14 @@ describe("generic paid-funnel publish adapter", () => {
     expect(planned.plan.adapter).toBe(GENERIC_PAID_FUNNEL_ADAPTER);
     expect(planned.plan.forcedCloudflareInfra).toBe(false);
     expect(planned.plan.resources).toEqual({});
+    expect(planned.plan.clientId).toBe(settings.clientId);
+    expect(planned.plan.bindingNames).toEqual(
+      expect.arrayContaining([
+        "GHL_API_KEY",
+        "GHL_LOCATION_ID",
+        "STAGE_WEBHOOK_SECRET",
+      ])
+    );
     expect(planned.plan.steps).toEqual([
       "validate_readiness",
       "create_repository",
@@ -38,7 +58,7 @@ describe("generic paid-funnel publish adapter", () => {
       "published",
     ]);
     expect(genericPaidFunnelUsesForcedInfra(planned.plan)).toBe(false);
-    expect(assertGenericPaidFunnelPublishAuthorized(pkg, settings)).toEqual(
+    expect(assertGenericPaidFunnelPublishAuthorized(pkg, settings, profile)).toEqual(
       planned.plan
     );
   });
@@ -63,9 +83,11 @@ describe("generic paid-funnel publish adapter", () => {
         },
       },
     });
+    const settings = buildGenericPaidFunnelSettingsFixture(pkg);
     const planned = planGenericPaidFunnelPublish(
       pkg,
-      buildGenericPaidFunnelSettingsFixture(pkg)
+      settings,
+      buildReadyPaidFunnelProfileDto(settings.clientId)
     );
     expect(planned.ok).toBe(true);
     if (!planned.ok || !planned.plan) throw new Error("expected a plan");
@@ -90,14 +112,15 @@ describe("generic paid-funnel publish adapter", () => {
   it("refuses to plan when readiness is not fully closed-ready", () => {
     const pkg = buildGenericPaidFunnelPackageFixture();
     const settings = buildGenericPaidFunnelSettingsFixture(pkg);
-    settings.secretPresence.META_CAPI_ACCESS_TOKEN = false;
-    const planned = planGenericPaidFunnelPublish(pkg, settings);
+    const profile = buildReadyPaidFunnelProfileDto(settings.clientId);
+    profile.secretPresence.STAGE_WEBHOOK_SECRET = "NOT SET";
+    const planned = planGenericPaidFunnelPublish(pkg, settings, profile);
     expect(planned.ok).toBe(false);
     expect(planned.plan).toBeNull();
-    expect(planned.ok ? "" : planned.error).toContain("META_CAPI_ACCESS_TOKEN");
+    expect(planned.ok ? "" : planned.error).toContain("STAGE_WEBHOOK_SECRET");
     expect(() =>
-      assertGenericPaidFunnelPublishAuthorized(pkg, settings)
-    ).toThrow(/META_CAPI_ACCESS_TOKEN/);
+      assertGenericPaidFunnelPublishAuthorized(pkg, settings, profile)
+    ).toThrow(/STAGE_WEBHOOK_SECRET/);
   });
 
   it("refuses the specialized Simple Form adapter and website packages", () => {
@@ -115,5 +138,63 @@ describe("generic paid-funnel publish adapter", () => {
       kind: "website",
     });
     expect(website.ok).toBe(false);
+  });
+
+  it("does not silently rewrite an existing live deploy", () => {
+    const { pkg, settings, profile } = readyContext();
+    const blocked = planGenericPaidFunnelPublish(pkg, settings, profile, {
+      hasLiveDeploy: true,
+    });
+    expect(blocked.ok).toBe(false);
+    expect(blocked.ok ? "" : blocked.error).toMatch(
+      /Republish or Sync Integrations/
+    );
+
+    const republish = planGenericPaidFunnelPublish(pkg, settings, profile, {
+      hasLiveDeploy: true,
+      action: "republish",
+    });
+    expect(republish.ok).toBe(true);
+    if (!republish.ok || !republish.plan) throw new Error("expected republish");
+    expect(republish.plan.liveSyncAction).toBe("republish");
+    expect(republish.plan.steps).toContain("create_repository");
+
+    const sync = planGenericPaidFunnelPublish(pkg, settings, profile, {
+      hasLiveDeploy: true,
+      action: "sync-integrations",
+    });
+    expect(sync.ok).toBe(true);
+    if (!sync.ok || !sync.plan) throw new Error("expected sync");
+    expect(sync.plan.liveSyncAction).toBe("sync-integrations");
+    expect(sync.plan.steps).toEqual([
+      "validate_readiness",
+      "patch_runtime_secrets",
+      "published",
+    ]);
+  });
+
+  it("resolves the profile by clientId and maps bindings without logging values", () => {
+    const { pkg, settings, profile } = readyContext();
+    const secrets = buildReadyPaidFunnelSecrets();
+    const resolver = memoryProfileResolver([
+      { clientId: settings.clientId, dto: profile, secrets },
+    ]);
+    const planned = planGenericPaidFunnelPublish(pkg, settings, undefined, {
+      resolver,
+    });
+    expect(planned.ok).toBe(true);
+    if (!planned.ok || !planned.plan) throw new Error("expected a plan");
+    expect(planned.plan.clientId).toBe(5);
+
+    const mapped = mapGenericPaidFunnelProfileBindings({
+      clientId: settings.clientId,
+      package: pkg,
+      resolver,
+    });
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) throw new Error(mapped.error);
+    expect(mapped.bindings.env.GHL_LOCATION_ID).toBe("location-123");
+    expect(mapped.bindings.secrets.GHL_API_KEY).toBe("ghl-live-api-key-AAA");
+    expect(JSON.stringify(planned)).not.toContain("ghl-live-api-key-AAA");
   });
 });

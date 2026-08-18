@@ -3,6 +3,7 @@ import {
   buildGenericPaidFunnelPackageFixture,
   buildGenericPaidFunnelSettingsFixture,
 } from "../../../shared/studio/paidFunnelPackage";
+import { buildReadyPaidFunnelProfileDto } from "./profileMapping";
 import {
   PAID_FUNNEL_READINESS_KEYS,
   buildPaidFunnelReadiness,
@@ -16,10 +17,11 @@ function sectionMissing(
 }
 
 describe("paid-funnel readiness", () => {
-  it("is ready for the generic QA fixture", () => {
+  it("is ready for the generic QA fixture against one client profile", () => {
     const pkg = buildGenericPaidFunnelPackageFixture();
     const settings = buildGenericPaidFunnelSettingsFixture(pkg);
-    const readiness = buildPaidFunnelReadiness(pkg, settings);
+    const profile = buildReadyPaidFunnelProfileDto(settings.clientId);
+    const readiness = buildPaidFunnelReadiness(pkg, settings, profile);
     expect(readiness.sections.map(section => section.key)).toEqual([
       ...PAID_FUNNEL_READINESS_KEYS,
     ]);
@@ -30,7 +32,8 @@ describe("paid-funnel readiness", () => {
   it("fail-closes every check when the package is invalid", () => {
     const readiness = buildPaidFunnelReadiness(
       { kind: "website" },
-      buildGenericPaidFunnelSettingsFixture()
+      buildGenericPaidFunnelSettingsFixture(),
+      buildReadyPaidFunnelProfileDto()
     );
     expect(readiness.configurationReady).toBe(false);
     expect(
@@ -46,7 +49,11 @@ describe("paid-funnel readiness", () => {
         ? { ...state, previewReady: false, publishReady: false }
         : state
     );
-    const readiness = buildPaidFunnelReadiness(pkg, settings);
+    const readiness = buildPaidFunnelReadiness(
+      pkg,
+      settings,
+      buildReadyPaidFunnelProfileDto(settings.clientId)
+    );
     expect(readiness.configurationReady).toBe(false);
     expect(sectionMissing(readiness, "steps")).toEqual(
       expect.arrayContaining([
@@ -64,9 +71,11 @@ describe("paid-funnel readiness", () => {
       joinKey: "leadUuid",
       fieldBindings: [{ leadField: "firstName", formField: "first-name" }],
     };
+    const settings = buildGenericPaidFunnelSettingsFixture(pkg);
     const readiness = buildPaidFunnelReadiness(
       pkg,
-      buildGenericPaidFunnelSettingsFixture(pkg)
+      settings,
+      buildReadyPaidFunnelProfileDto(settings.clientId)
     );
     expect(readiness.configurationReady).toBe(false);
     expect(sectionMissing(readiness, "formMapping")).toEqual(
@@ -85,7 +94,11 @@ describe("paid-funnel readiness", () => {
     landing.nextStep = "missing-step";
     const settings = buildGenericPaidFunnelSettingsFixture(pkg);
     settings.navigationTargets = ["also-missing"];
-    const readiness = buildPaidFunnelReadiness(pkg, settings);
+    const readiness = buildPaidFunnelReadiness(
+      pkg,
+      settings,
+      buildReadyPaidFunnelProfileDto(settings.clientId)
+    );
     expect(readiness.configurationReady).toBe(false);
     expect(sectionMissing(readiness, "navigation")).toEqual(
       expect.arrayContaining([
@@ -95,12 +108,13 @@ describe("paid-funnel readiness", () => {
     );
   });
 
-  it("blocks missing GHL and Sheets integration names", () => {
+  it("blocks missing GHL and Sheets identifiers on the client profile", () => {
     const pkg = buildGenericPaidFunnelPackageFixture();
     const settings = buildGenericPaidFunnelSettingsFixture(pkg);
-    settings.integrations.ghlLocationId = "";
-    settings.integrations.googleSheetsId = null;
-    const readiness = buildPaidFunnelReadiness(pkg, settings);
+    const profile = buildReadyPaidFunnelProfileDto(settings.clientId);
+    profile.identifiers.GHL_LOCATION_ID = "";
+    profile.identifiers.GOOGLE_SHEETS_ID = null;
+    const readiness = buildPaidFunnelReadiness(pkg, settings, profile);
     expect(readiness.configurationReady).toBe(false);
     expect(sectionMissing(readiness, "integration")).toEqual([
       "GHL Location ID",
@@ -113,9 +127,10 @@ describe("paid-funnel readiness", () => {
     const settings = buildGenericPaidFunnelSettingsFixture(pkg);
     settings.tracking.preserveUtm = false;
     settings.tracking.preserveClickIds = false;
-    settings.tracking.metaPixelId = "";
-    settings.tracking.metaCapiPresent = false;
-    const readiness = buildPaidFunnelReadiness(pkg, settings);
+    const profile = buildReadyPaidFunnelProfileDto(settings.clientId);
+    profile.identifiers.META_PIXEL_ID = "";
+    profile.secretPresence.META_CAPI_ACCESS_TOKEN = "NOT SET";
+    const readiness = buildPaidFunnelReadiness(pkg, settings, profile);
     expect(readiness.configurationReady).toBe(false);
     expect(sectionMissing(readiness, "tracking")).toEqual([
       "UTM preservation",
@@ -125,25 +140,52 @@ describe("paid-funnel readiness", () => {
     ]);
   });
 
-  it("blocks when a required runtime secret is not present", () => {
+  it("requires secret names from package plus profile subset, not per-funnel collection", () => {
     const pkg = buildGenericPaidFunnelPackageFixture();
     const settings = buildGenericPaidFunnelSettingsFixture(pkg);
-    settings.secretPresence.STAGE_WEBHOOK_SECRET = false;
-    const readiness = buildPaidFunnelReadiness(pkg, settings);
+    expect(settings).not.toHaveProperty("secretPresence");
+    const profile = buildReadyPaidFunnelProfileDto(settings.clientId);
+    profile.secretPresence.STAGE_WEBHOOK_SECRET = "NOT SET";
+    const readiness = buildPaidFunnelReadiness(pkg, settings, profile);
     expect(readiness.configurationReady).toBe(false);
     expect(sectionMissing(readiness, "secrets")).toEqual([
       "STAGE_WEBHOOK_SECRET",
     ]);
-    expect(JSON.stringify(readiness)).not.toMatch(/server-only|secret-value/i);
+    expect(JSON.stringify(readiness)).not.toMatch(/server-only|secret-value|ghl-live-api-key/i);
+  });
+
+  it("fail-closes when the client profile is missing or conflicted", () => {
+    const pkg = buildGenericPaidFunnelPackageFixture();
+    const settings = buildGenericPaidFunnelSettingsFixture(pkg);
+    const missing = buildPaidFunnelReadiness(pkg, settings);
+    expect(missing.configurationReady).toBe(false);
+    expect(sectionMissing(missing, "secrets")).toEqual([
+      "Client integration profile",
+    ]);
+
+    const conflicted = buildReadyPaidFunnelProfileDto(settings.clientId);
+    conflicted.reconciliationStatus = "conflict";
+    conflicted.conflictedKeys = ["GHL_API_KEY"];
+    const readiness = buildPaidFunnelReadiness(pkg, settings, conflicted);
+    expect(readiness.configurationReady).toBe(false);
+    expect(sectionMissing(readiness, "secrets")).toEqual(
+      expect.arrayContaining([
+        "Integration profile conflict",
+        "GHL_API_KEY",
+      ])
+    );
+    expect(JSON.stringify(readiness)).not.toContain("ghl-live-api-key");
   });
 
   it("blocks a missing build command or output directory", () => {
     const pkg = buildGenericPaidFunnelPackageFixture();
     pkg.build.command = "   ";
     pkg.build.outputDir = "";
+    const settings = buildGenericPaidFunnelSettingsFixture(pkg);
     const readiness = buildPaidFunnelReadiness(
       pkg,
-      buildGenericPaidFunnelSettingsFixture(pkg)
+      settings,
+      buildReadyPaidFunnelProfileDto(settings.clientId)
     );
     expect(readiness.configurationReady).toBe(false);
     expect(sectionMissing(readiness, "build")).toEqual([
@@ -158,7 +200,11 @@ describe("paid-funnel readiness", () => {
     });
     const settings = buildGenericPaidFunnelSettingsFixture(pkg);
     settings.clientKey = "sun-pool";
-    const readiness = buildPaidFunnelReadiness(pkg, settings);
+    const readiness = buildPaidFunnelReadiness(
+      pkg,
+      settings,
+      buildReadyPaidFunnelProfileDto(settings.clientId)
+    );
     expect(readiness.configurationReady).toBe(false);
     expect(sectionMissing(readiness, "adapter")).toEqual(
       expect.arrayContaining([
