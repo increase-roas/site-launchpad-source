@@ -31,6 +31,7 @@ import {
 } from "../shared/paidFunnel/persist";
 import { ingestPaidFunnelZip } from "../shared/paidFunnelZip";
 import { getClientById, getDb } from "./db";
+import { isUndefinedRelationError } from "../shared/safePublicError";
 import { requireSinglePositiveId, withUpdatedAt } from "./postgresPersistence";
 import { UpdateConflictError, assertWritableVersion } from "./trpcErrors";
 
@@ -66,12 +67,13 @@ const PAID_FUNNEL_REGISTRY_TABLES = [
 ] as const;
 
 export function isPaidFunnelRegistryUnavailable(error: unknown): boolean {
+  if (isUndefinedRelationError(error)) return true;
   const code =
     error && typeof error === "object" && "code" in error
       ? String((error as { code: unknown }).code)
       : "";
   const message = error instanceof Error ? error.message : String(error ?? "");
-  if (code === "42P01" || code === "DATABASE_OPERATION_TIMEOUT") return true;
+  if (code === "DATABASE_OPERATION_TIMEOUT") return true;
   if (/Database is not available/i.test(message)) return true;
   return PAID_FUNNEL_REGISTRY_TABLES.some(table =>
     new RegExp(`relation ["']?${table}["']? does not exist`, "i").test(message)
@@ -324,6 +326,20 @@ async function insertFunnelFromPackage(
 }
 
 export async function createPaidFunnelFromTemplate(
+  clientId: number,
+  templateKey: string
+) {
+  try {
+    return await createPaidFunnelFromTemplateUnsafe(clientId, templateKey);
+  } catch (error) {
+    if (isPaidFunnelRegistryUnavailable(error)) {
+      throw new Error("Paid funnel could not be created from the template.");
+    }
+    throw error;
+  }
+}
+
+async function createPaidFunnelFromTemplateUnsafe(
   clientId: number,
   templateKey: string
 ) {

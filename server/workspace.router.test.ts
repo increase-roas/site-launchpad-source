@@ -121,4 +121,18 @@ describe("complete selected-client workspace", () => {
       message: "Client not found.",
     });
   });
+
+  it("maps retryable database failures on workspace.get to INTERNAL_SERVER_ERROR", async () => {
+    clientMocks.getClientView.mockRejectedValue(
+      Object.assign(new Error("The database is temporarily unavailable. Please try again."), {
+        name: "RetryableDatabaseError",
+        code: "RETRYABLE_DATABASE_ERROR",
+      }),
+    );
+    const caller = workspaceRouter.createCaller(context());
+    await expect(caller.get({ clientId: 5 })).rejects.toMatchObject({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "The database is temporarily unavailable. Please try again.",
+    });
+  });
 });

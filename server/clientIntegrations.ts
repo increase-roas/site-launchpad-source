@@ -34,6 +34,7 @@ import {
   hasProtectedValue,
 } from "./clientSecurity";
 import { getDb } from "./db";
+import { isUndefinedRelationError } from "../shared/safePublicError";
 import { postgresConflictTargets, withUpdatedAt } from "./postgresPersistence";
 import type {
   ClientIntegrationProfileResolver,
@@ -325,13 +326,20 @@ export function cloneClientIntegrationProfile(input: {
 }
 
 export async function getClientIntegrationProfile(clientId: number): Promise<ClientIntegrationProfileDto> {
-  const db = await requireDb();
-  const rows = await db
-    .select()
-    .from(clientIntegrationProfiles)
-    .where(eq(clientIntegrationProfiles.clientId, clientId))
-    .limit(1);
-  return toProfileDto(rows[0], clientId);
+  try {
+    const db = await requireDb();
+    const rows = await db
+      .select()
+      .from(clientIntegrationProfiles)
+      .where(eq(clientIntegrationProfiles.clientId, clientId))
+      .limit(1);
+    return toProfileDto(rows[0], clientId);
+  } catch (error) {
+    if (isUndefinedRelationError(error)) {
+      return toProfileDto(undefined, clientId);
+    }
+    throw error;
+  }
 }
 
 export async function saveClientIntegrationProfile(

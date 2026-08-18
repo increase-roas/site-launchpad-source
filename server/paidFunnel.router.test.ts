@@ -103,6 +103,29 @@ describe("paid funnel registry procedures", () => {
     expect(created).toEqual({ alreadyExists: false, funnelId: 21 });
   });
 
+  it("maps createFromTemplate connection failures to a public 500 without SQL", async () => {
+    mocks.createPaidFunnelFromTemplate.mockRejectedValueOnce(
+      Object.assign(
+        new Error('Failed query: insert into paid_funnels ("slug") values ($1)'),
+        {
+          cause: Object.assign(new Error("CONNECTION_CLOSED"), {
+            code: "CONNECTION_CLOSED",
+          }),
+        },
+      ),
+    );
+    const caller = paidFunnelRouter.createCaller(context());
+    await expect(
+      caller.createFromTemplate({
+        clientId: 5,
+        templateKey: "generic-paid-funnel",
+      }),
+    ).rejects.toMatchObject({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "The database is temporarily unavailable. Please try again.",
+    });
+  });
+
   it("imports zip intake and returns exact unsupported-region errors", async () => {
     const caller = paidFunnelRouter.createCaller(context());
     const result = await caller.importZip({

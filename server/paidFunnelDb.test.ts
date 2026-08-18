@@ -166,6 +166,21 @@ describe("paid funnel registry persistence", () => {
     expect(isPaidFunnelRegistryUnavailable(missing)).toBe(true);
   });
 
+  it("does not leak SQL when creating from template against a missing registry", async () => {
+    const missing = Object.assign(
+      new Error('relation "paid_funnels" does not exist'),
+      { code: "42P01" },
+    );
+    dbMocks.getDb.mockResolvedValue({
+      select: () => {
+        throw missing;
+      },
+    });
+    await expect(createPaidFunnelFromTemplate(5, "generic-paid-funnel")).rejects.toThrow(
+      "Paid funnel could not be created from the template.",
+    );
+  });
+
   it("creates the complete generic multi-step fixture funnel", async () => {
     const created = await createPaidFunnelFromTemplate(
       5,

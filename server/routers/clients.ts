@@ -28,7 +28,7 @@ import { getClientIntegrationProfile } from "../clientIntegrations";
 import { encryptSetupValue, hasProtectedValue } from "../clientSecurity";
 import { observeRuntimeOperation } from "../_core/operationTelemetry";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
-import { UpdateConflictError, isDuplicateKeyError } from "../trpcErrors";
+import { UpdateConflictError, isDuplicateKeyError, mapRouterError } from "../trpcErrors";
 import type { Client, ClientAsset } from "../../drizzle/schema";
 
 const secretColumnByField = {
@@ -110,9 +110,13 @@ export const clientsRouter = router({
   getIntegrationProfile: protectedProcedure
     .input(z.object({ clientId: z.number().int().positive() }))
     .query(async ({ input }) => {
-      const existing = await getClientById(input.clientId);
-      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Client not found." });
-      return getClientIntegrationProfile(input.clientId);
+      try {
+        const existing = await getClientById(input.clientId);
+        if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Client not found." });
+        return await getClientIntegrationProfile(input.clientId);
+      } catch (error) {
+        throw mapRouterError(error, "Integrations could not be loaded.");
+      }
     }),
 
   create: protectedProcedure

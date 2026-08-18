@@ -17,6 +17,51 @@ describe("router error mapping", () => {
     const mapped = mapRouterError(new Error("Invalid slug."), "fallback");
     expect(mapped).toMatchObject({ code: "BAD_REQUEST", message: "Invalid slug." });
   });
+
+  it("maps retryable database failures to INTERNAL_SERVER_ERROR without changing the public message", () => {
+    const retryable = Object.assign(
+      new Error("The database is temporarily unavailable. Please try again."),
+      { name: "RetryableDatabaseError", code: "RETRYABLE_DATABASE_ERROR" },
+    );
+    expect(mapRouterError(retryable, "fallback")).toMatchObject({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "The database is temporarily unavailable. Please try again.",
+    });
+  });
+
+  it("maps nested connection failures to the public retryable message without SQL", () => {
+    const wrapped = Object.assign(
+      new Error(
+        'Failed query: insert into paid_funnels ("clientId") values ($1)\\nparams: 7',
+      ),
+      {
+        cause: Object.assign(new Error("write CONNECTION_CLOSED"), {
+          code: "CONNECTION_CLOSED",
+        }),
+      },
+    );
+    const mapped = mapRouterError(
+      wrapped,
+      "Paid funnel could not be created from the template.",
+    );
+    expect(mapped).toMatchObject({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "The database is temporarily unavailable. Please try again.",
+    });
+    expect(mapped.message).not.toMatch(/Failed query|paid_funnels|params:/);
+  });
+
+  it("replaces leaked SQL on missing client_integration_profiles with the fallback", () => {
+    const leaked = new Error(
+      'Failed query: select \"clientId\" from client_integration_profiles',
+    );
+    const mapped = mapRouterError(leaked, "Integrations could not be loaded.");
+    expect(mapped).toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Integrations could not be loaded.",
+    });
+    expect(mapped.message).not.toContain("client_integration_profiles");
+  });
 });
 
 describe("optimistic client writes", () => {

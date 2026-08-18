@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { integrationsRoute } from "@/lib/workspaceNavigation";
+import { publicErrorMessage } from "@shared/safePublicError";
 import { trpc } from "@/lib/trpc";
 import { integrationPresenceRows } from "@shared/paidFunnel/integrationPresence";
 import { AlertCircle, ArrowLeft, Loader2, PlugZap } from "lucide-react";
@@ -23,7 +24,7 @@ export default function ClientIntegrationsPage({ clientId }: { clientId: number 
       <div className="mx-auto max-w-xl rounded-3xl border border-red-400/20 bg-red-400/[0.05] p-8 text-center">
         <AlertCircle className="mx-auto h-9 w-9 text-red-300" />
         <h1 className="mt-4 text-2xl font-extrabold">Integrations could not be loaded</h1>
-        <p className="mt-2 text-muted-foreground">{query.error?.message ?? "Try again."}</p>
+        <p className="mt-2 text-muted-foreground">{publicErrorMessage(query.error?.message, "Try again. If this keeps happening, ask Alex for help.")}</p>
       </div>
     );
   }
