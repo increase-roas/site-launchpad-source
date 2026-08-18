@@ -47,7 +47,7 @@ function FunnelCardView({ funnel, onEdit }: { funnel: FunnelCard; onEdit: () => 
   return (
     <button type="button" onClick={onEdit} className="group text-left">
       <Card className="h-full overflow-hidden border-white/8 bg-card/70 p-0 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-cyan-300/25 group-hover:shadow-[0_20px_45px_rgba(0,0,0,0.24)]">
-        <div className="border-b border-white/8 bg-[radial-gradient(circle_at_90%_0%,rgba(34,211,238,0.12),transparent_42%),rgba(9,17,27,0.6)] p-5">
+        <div className="launchpad-feature-surface border-b p-5">
           <div className="flex items-start justify-between gap-4">
             <span className="grid h-11 w-11 place-items-center rounded-2xl bg-cyan-400/10 text-cyan-300 ring-1 ring-cyan-300/12">
               <Route className="h-5 w-5" />

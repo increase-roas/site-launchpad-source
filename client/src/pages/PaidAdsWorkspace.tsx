@@ -60,7 +60,7 @@ function StepCard({ step, onEdit }: { step: Step; onEdit: () => void }) {
     <button
       type="button"
       onClick={onEdit}
-      className="group min-h-[220px] w-[210px] shrink-0 rounded-2xl border border-white/9 bg-[#0c1622] p-4 text-left shadow-[0_12px_30px_rgba(0,0,0,0.18)] hover:border-cyan-300/35 hover:bg-cyan-400/[0.035]"
+      className="group min-h-[220px] w-[210px] shrink-0 rounded-2xl border border-border bg-card p-4 text-left shadow-[0_12px_30px_rgba(0,0,0,0.12)] hover:border-cyan-500/35 hover:bg-cyan-400/[0.035]"
     >
       <div className="flex items-start justify-between gap-3">
         <span className="grid h-10 w-10 place-items-center rounded-xl bg-cyan-400/10 text-cyan-300 ring-1 ring-cyan-300/12">
@@ -231,7 +231,7 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
 
   return (
     <div className="mx-auto w-full max-w-[1580px] space-y-7">
-      <section className="flex flex-col gap-5 rounded-3xl border border-white/8 bg-[radial-gradient(circle_at_88%_-10%,rgba(34,211,238,0.14),transparent_35%),rgba(17,26,37,0.88)] p-5 sm:p-7 lg:flex-row lg:items-end lg:justify-between">
+      <section className="launchpad-feature-surface flex flex-col gap-5 rounded-3xl border p-5 sm:p-7 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-300">Paid Ads workspace</p>
           <h1 className="mt-2 text-3xl font-extrabold tracking-[-0.03em] sm:text-4xl">

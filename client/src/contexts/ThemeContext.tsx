@@ -2,6 +2,12 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 
 type Theme = "light" | "dark";
 
+const THEME_STORAGE_KEY = "site-launchpad-theme";
+
+export function resolveStoredTheme(stored: string | null, defaultTheme: Theme): Theme {
+  return stored === "light" || stored === "dark" ? stored : defaultTheme;
+}
+
 interface ThemeContextType {
   theme: Theme;
   toggleTheme?: () => void;
@@ -22,9 +28,8 @@ export function ThemeProvider({
   switchable = false,
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(() => {
-    if (switchable) {
-      const stored = localStorage.getItem("theme");
-      return (stored as Theme) || defaultTheme;
+    if (switchable && typeof window !== "undefined") {
+      return resolveStoredTheme(window.localStorage.getItem(THEME_STORAGE_KEY), defaultTheme);
     }
     return defaultTheme;
   });
@@ -38,7 +43,7 @@ export function ThemeProvider({
     }
 
     if (switchable) {
-      localStorage.setItem("theme", theme);
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
     }
   }, [theme, switchable]);
 

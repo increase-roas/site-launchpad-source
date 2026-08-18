@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { WorkspaceProvider, useWorkspace } from "@/contexts/WorkspaceContext";
+import { useTheme } from "@/contexts/ThemeContext";
 import {
   getWorkspaceArea,
   workspaceRoute,
@@ -8,10 +9,12 @@ import {
 import {
   Eye,
   Images,
+  Moon,
   PanelsTopLeft,
   Rocket,
   Route,
   Settings,
+  Sun,
   UsersRound,
 } from "lucide-react";
 import { ReactNode } from "react";
@@ -38,6 +41,7 @@ type DashboardShellProps = {
 
 function DashboardShell({ children }: DashboardShellProps) {
   const { selectedClientId, selectedClient, selectClient } = useWorkspace();
+  const { theme, toggleTheme } = useTheme();
   const [location, setLocation] = useLocation();
   const area = getWorkspaceArea(location);
 
@@ -75,8 +79,8 @@ function DashboardShell({ children }: DashboardShellProps) {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <aside className="fixed inset-y-0 left-0 z-50 hidden w-72 flex-col border-r border-white/8 bg-[linear-gradient(180deg,rgba(10,18,28,0.99),rgba(7,13,21,0.99))] lg:flex">
-        <div className="flex h-20 items-center gap-3 border-b border-white/8 px-5">
+      <aside className="launchpad-sidebar fixed inset-y-0 left-0 z-50 hidden w-72 flex-col border-r lg:flex">
+        <div className="flex h-20 items-center gap-3 border-b border-border px-5">
           <div className="grid h-10 w-10 place-items-center rounded-2xl bg-cyan-400 text-slate-950 shadow-[0_8px_24px_rgba(34,211,238,0.22)]">
             <Rocket className="h-5 w-5" />
           </div>
@@ -86,7 +90,7 @@ function DashboardShell({ children }: DashboardShellProps) {
           </div>
         </div>
 
-        <div className="border-b border-white/8 p-4">
+        <div className="border-b border-border p-4">
           <ClientSwitcher
             onSelect={handleClientSelect}
             onAddClient={() => setLocation("/clients/new")}
@@ -140,6 +144,17 @@ function DashboardShell({ children }: DashboardShellProps) {
             <Button
               type="button"
               variant="outline"
+              size="icon"
+              onClick={toggleTheme}
+              className="h-10 w-10 rounded-xl border-border bg-card"
+              aria-label={theme === "light" ? "Use dark theme" : "Use light theme"}
+              title={theme === "light" ? "Use dark theme" : "Use light theme"}
+            >
+              {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
               size="sm"
               disabled={!selectedClientId}
               onClick={preview}
@@ -166,7 +181,7 @@ function DashboardShell({ children }: DashboardShellProps) {
         </main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-white/10 bg-[rgba(8,15,24,0.97)] px-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-xl lg:hidden" aria-label="Mobile navigation">
+      <nav className="launchpad-mobile-nav fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t px-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-xl lg:hidden" aria-label="Mobile navigation">
         {navItems.map(item => {
           const active = area === item.area;
           const disabled = item.area !== "clients" && !selectedClientId;

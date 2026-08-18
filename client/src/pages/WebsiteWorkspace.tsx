@@ -39,7 +39,7 @@ type SectionDraft = {
 };
 
 function PageThumbnail({ type }: { type: SitePageType }) {
-  const shell = "h-full w-full rounded-xl border border-white/8 bg-[#09111b] p-3";
+  const shell = "h-full w-full rounded-xl border border-border bg-muted p-3";
 
   if (type === "homepage") {
     return (
@@ -305,7 +305,7 @@ export default function WebsiteWorkspace({ clientId }: { clientId: number }) {
 
   return (
     <div className="mx-auto w-full max-w-[1500px] space-y-7">
-      <section className="flex flex-col gap-5 rounded-3xl border border-white/8 bg-[radial-gradient(circle_at_88%_-10%,rgba(34,211,238,0.14),transparent_35%),rgba(17,26,37,0.88)] p-5 sm:p-7 lg:flex-row lg:items-end lg:justify-between">
+      <section className="launchpad-feature-surface flex flex-col gap-5 rounded-3xl border p-5 sm:p-7 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-300">Website workspace</p>
           <h1 className="mt-2 text-3xl font-extrabold tracking-[-0.03em] sm:text-4xl">
@@ -419,7 +419,7 @@ export default function WebsiteWorkspace({ clientId }: { clientId: number }) {
             ))}
           </div>
 
-          <aside className="rounded-2xl border border-white/8 bg-[#09111b] p-4 xl:sticky xl:top-24">
+          <aside className="rounded-2xl border border-border bg-muted/70 p-4 xl:sticky xl:top-24">
             <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-cyan-300">Visual preview</p>
             <h3 className="mt-2 text-lg font-extrabold">Customer scroll order</h3>
             <div className="mt-4 space-y-2">

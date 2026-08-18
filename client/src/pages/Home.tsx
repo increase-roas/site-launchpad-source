@@ -18,7 +18,7 @@ export default function Home() {
 
   return (
     <div className="mx-auto w-full max-w-[1480px] space-y-7 pb-10 sm:space-y-9 sm:p-2 lg:p-5">
-      <header className="relative overflow-hidden rounded-3xl border border-white/8 bg-[radial-gradient(circle_at_75%_-20%,rgba(34,211,238,0.18),transparent_36%),linear-gradient(135deg,rgba(20,31,43,0.96),rgba(12,19,28,0.96))] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.28)] sm:p-8 lg:p-10">
+      <header className="launchpad-feature-surface relative overflow-hidden rounded-3xl border p-6 sm:p-8 lg:p-10">
         <div className="relative z-10 flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-cyan-400/10 px-3 py-1.5 text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-300 ring-1 ring-cyan-300/15">
