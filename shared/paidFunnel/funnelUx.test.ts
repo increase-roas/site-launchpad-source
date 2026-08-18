@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { flattenCanvas, renderFunnelCanvas } from "./canvas";
-import { CANONICAL_OFFLINE_CONVERSION_CONTRACT, findNode, migratePaidFunnelGraph, stepHasLeadForm } from "./graph";
+import { CANONICAL_OFFLINE_CONVERSION_CONTRACT, LIGHT_FUNNEL_THEME_PRESET, findNode, migratePaidFunnelGraph, stepHasLeadForm } from "./graph";
 import { inspectorModel } from "./inspector";
 import { applyGlobalStyles, nextStepKey, saveReusableSection, setInlineText, setResponsiveSpacing } from "./ops";
 import { createGenericPaidFunnelFixture, GENERIC_PAID_FUNNEL_PACKAGE } from "./fixture";
@@ -64,6 +64,29 @@ describe("generic multi-step paid funnel UX", () => {
     const withPad = setResponsiveSpacing(restyled, section.id, "padding", "mobile", { top: 12, right: 10, bottom: 12, left: 10 });
     const mobile = renderFunnelCanvas(withPad, { stepKey: "landing", breakpoint: "mobile" });
     expect(String(mobile?.children[0]?.style.padding)).toContain("12px");
+  });
+
+  it("applies a readable light theme without replacing block-level overrides", () => {
+    const graph = createGenericPaidFunnelFixture();
+    const section = graph.pages.landing.sections[0]!;
+    const heading = section.rows[0]!.columns[0]!.elements.find(element => element.type === "heading")!;
+    section.background = { kind: "color", color: "#fff7ed" };
+    heading.styles.color = "#7c2d12";
+
+    const themed = applyGlobalStyles(graph, {
+      colors: { ...LIGHT_FUNNEL_THEME_PRESET.colors },
+      button: { ...graph.globalStyles.button, ...LIGHT_FUNNEL_THEME_PRESET.button },
+    });
+    const canvas = renderFunnelCanvas(themed, { stepKey: "landing", breakpoint: "desktop" });
+    const headingBox = flattenCanvas(canvas).find(box => box.id === heading.id);
+
+    expect(themed.globalStyles.colors).toMatchObject({
+      background: "#ffffff",
+      heading: "#0f172a",
+      text: "#1e293b",
+    });
+    expect(canvas?.children[0]?.style.background).toBe("#fff7ed");
+    expect(headingBox?.style.color).toBe("#7c2d12");
   });
 
   it("autosaves, detects revision conflicts, and undoes structural plus property edits", () => {

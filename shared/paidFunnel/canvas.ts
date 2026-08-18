@@ -140,7 +140,7 @@ function renderElement(
       fontFamily: element.styles.fontFamily ?? (element.type === "heading" ? styles.fonts.heading : styles.fonts.body),
       fontSize: pickResponsive(element.styles.fontSize, breakpoint) ?? 16,
       fontWeight: element.styles.fontWeight ?? (isButton ? styles.button.fontWeight : 500),
-      color: element.styles.color ?? (isButton ? styles.button.color : styles.colors.text),
+      color: element.styles.color ?? (isButton ? styles.button.color : element.type === "heading" ? styles.colors.heading : styles.colors.text),
       textAlign: pickResponsive(element.styles.textAlign, breakpoint) ?? "left",
       padding: spacingCss(pickResponsive(element.styles.padding, breakpoint)) ?? (isButton ? `${styles.button.paddingY}px ${styles.button.paddingX}px` : "0"),
       background: backgroundCss(element.styles.background, isButton ? styles.button.background : "transparent"),

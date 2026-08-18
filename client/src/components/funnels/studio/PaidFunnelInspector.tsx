@@ -3,7 +3,14 @@ import { Input } from "@/components/ui/input";
 import { ImageUploadCard } from "@/components/ImageUploadCard";
 import { uploadAssetDirectly } from "@/lib/assetUpload";
 import { trpc } from "@/lib/trpc";
-import type { Background, BoxSpacing, ButtonAction, DeviceVisibility, Overlay } from "@shared/paidFunnel/graph";
+import {
+  LIGHT_FUNNEL_THEME_PRESET,
+  type Background,
+  type BoxSpacing,
+  type ButtonAction,
+  type DeviceVisibility,
+  type Overlay,
+} from "@shared/paidFunnel/graph";
 import { BUTTON_ACTION_TYPES, currentSpacing, inspectorModel } from "@shared/paidFunnel/inspector";
 import { integrationPresenceRows } from "@shared/paidFunnel/integrationPresence";
 import type { ClientIntegrationProfileDto } from "@shared/clientIntegrationProfile";
@@ -54,6 +61,36 @@ function NumberField({
         onChange={event => onChange(Number(event.target.value) || 0)}
         className="h-10 rounded-lg border-slate-200 bg-white"
       />
+    </Field>
+  );
+}
+
+function ColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const pickerValue = /^#[0-9a-f]{6}$/i.test(value) ? value : "#000000";
+  return (
+    <Field label={label}>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={pickerValue}
+          onChange={event => onChange(event.target.value)}
+          className="h-10 w-12 cursor-pointer rounded-lg border border-slate-200 bg-white p-1"
+          aria-label={`${label} picker`}
+        />
+        <Input
+          value={value}
+          onChange={event => onChange(event.target.value)}
+          className="h-10 flex-1 rounded-lg border-slate-200 bg-white font-mono text-xs"
+        />
+      </div>
     </Field>
   );
 }
@@ -634,16 +671,37 @@ export function PaidFunnelInspector({
       )}
 
       <div className="space-y-3 border-t border-slate-200 pt-4">
-        <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-blue-600">Global funnel styles</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-blue-600">Global funnel styles</p>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-8 border-slate-200 bg-white px-2.5 text-xs font-extrabold"
+            onClick={() => commit(patchGlobalStyles(state, {
+              colors: { ...LIGHT_FUNNEL_THEME_PRESET.colors },
+              button: { ...globals.button, ...LIGHT_FUNNEL_THEME_PRESET.button },
+            }))}
+          >
+            Light / white
+          </Button>
+        </div>
+        <p className="text-xs text-slate-500">Changes the funnel defaults. Block-level colors still override these settings.</p>
         <Field label="Heading font">
           <Input value={globals.fonts.heading} onChange={event => commit(patchGlobalStyles(state, { fonts: { ...globals.fonts, heading: event.target.value } }))} className="h-10 rounded-xl border-white/10 bg-white/[0.03]" />
         </Field>
         <Field label="Body font">
           <Input value={globals.fonts.body} onChange={event => commit(patchGlobalStyles(state, { fonts: { ...globals.fonts, body: event.target.value } }))} className="h-10 rounded-xl border-white/10 bg-white/[0.03]" />
         </Field>
-        <Field label="Primary color">
-          <Input value={globals.colors.primary} onChange={event => commit(patchGlobalStyles(state, { colors: { ...globals.colors, primary: event.target.value } }))} className="h-10 rounded-xl border-white/10 bg-white/[0.03]" />
-        </Field>
+        <ColorField label="Overall background" value={globals.colors.background} onChange={background => commit(patchGlobalStyles(state, { colors: { ...globals.colors, background } }))} />
+        <ColorField label="Surface" value={globals.colors.surface} onChange={surface => commit(patchGlobalStyles(state, { colors: { ...globals.colors, surface } }))} />
+        <ColorField label="Heading text" value={globals.colors.heading} onChange={heading => commit(patchGlobalStyles(state, { colors: { ...globals.colors, heading } }))} />
+        <ColorField label="Body text" value={globals.colors.text} onChange={text => commit(patchGlobalStyles(state, { colors: { ...globals.colors, text } }))} />
+        <ColorField label="Muted text" value={globals.colors.muted} onChange={muted => commit(patchGlobalStyles(state, { colors: { ...globals.colors, muted } }))} />
+        <ColorField label="Primary" value={globals.colors.primary} onChange={primary => commit(patchGlobalStyles(state, { colors: { ...globals.colors, primary } }))} />
+        <ColorField label="Primary text" value={globals.colors.primaryText} onChange={primaryText => commit(patchGlobalStyles(state, { colors: { ...globals.colors, primaryText } }))} />
+        <ColorField label="Button background" value={globals.button.background} onChange={background => commit(patchGlobalStyles(state, { button: { ...globals.button, background } }))} />
+        <ColorField label="Button text" value={globals.button.color} onChange={color => commit(patchGlobalStyles(state, { button: { ...globals.button, color } }))} />
+        <ColorField label="Border" value={globals.colors.border} onChange={border => commit(patchGlobalStyles(state, { colors: { ...globals.colors, border } }))} />
         <NumberField label="Boxed max width" value={globals.containers.boxedMaxWidth} onChange={boxedMaxWidth => commit(patchGlobalStyles(state, { containers: { ...globals.containers, boxedMaxWidth } }))} />
       </div>
 

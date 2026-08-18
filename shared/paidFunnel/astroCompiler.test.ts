@@ -23,6 +23,11 @@ describe("paid funnel Astro compiler", () => {
     expect(astroConfig).toContain("session: false");
     expect(astroConfig).toContain('imageService: "compile"');
     expect(packageJson.devDependencies?.wrangler).toBe("4.120.0");
+    const css = files.find(file => file.path === "src/styles/funnel.css")?.contents ?? "";
+    expect(css).toContain("--heading-text:#0f172a");
+    expect(css).toContain("h1,h2,h3{color:var(--heading-text)");
+    expect(css).toContain("p{color:var(--text)");
+    expect(css).toContain("color:var(--muted)");
   });
 
   it("preserves attribution and reuses one event id for Pixel and CAPI deduplication", () => {

@@ -6,6 +6,7 @@ import {
   defaultElementStyles,
   defaultVisibility,
   emptySpacing,
+  normalizeGlobalFunnelStyles,
   type FunnelColumn,
   type FunnelElement,
   type FunnelPage,
@@ -415,7 +416,7 @@ export function migratePaidFunnelGraph(input: unknown): PaidFunnelGraph {
     graph.name = record.name;
   }
   if (isRecord(record.globalStyles)) {
-    graph.globalStyles = record.globalStyles as GlobalFunnelStyles;
+    graph.globalStyles = normalizeGlobalFunnelStyles(record.globalStyles);
   }
   if (Array.isArray(record.reusableSections)) {
     graph.reusableSections = record.reusableSections as ReusableSection[];

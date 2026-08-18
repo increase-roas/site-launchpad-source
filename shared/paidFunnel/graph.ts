@@ -233,6 +233,7 @@ export type GlobalFunnelStyles = {
   colors: {
     background: string;
     surface: string;
+    heading: string;
     text: string;
     muted: string;
     primary: string;
@@ -286,6 +287,7 @@ export function defaultGlobalStyles(): GlobalFunnelStyles {
     colors: {
       background: "#ffffff",
       surface: "#f8fafc",
+      heading: "#0f172a",
       text: "#172033",
       muted: "#64748b",
       primary: "#1463f3",
@@ -302,6 +304,45 @@ export function defaultGlobalStyles(): GlobalFunnelStyles {
     },
     containers: { boxedMaxWidth: 1120, fullMaxWidth: 1440 },
     mobile: { sectionPadding: emptySpacing(20), rowGap: 12 },
+  };
+}
+
+export const LIGHT_FUNNEL_THEME_PRESET = {
+  colors: {
+    background: "#ffffff",
+    surface: "#f8fafc",
+    heading: "#0f172a",
+    text: "#1e293b",
+    muted: "#64748b",
+    primary: "#2563eb",
+    primaryText: "#ffffff",
+    border: "#cbd5e1",
+  },
+  button: {
+    background: "#2563eb",
+    color: "#ffffff",
+  },
+} as const;
+
+export function normalizeGlobalFunnelStyles(input: unknown): GlobalFunnelStyles {
+  const defaults = defaultGlobalStyles();
+  if (!input || typeof input !== "object" || Array.isArray(input)) return defaults;
+  const raw = input as Partial<GlobalFunnelStyles>;
+  const fonts: Partial<GlobalFunnelStyles["fonts"]> = raw.fonts && typeof raw.fonts === "object" ? raw.fonts : {};
+  const colors: Partial<GlobalFunnelStyles["colors"]> = raw.colors && typeof raw.colors === "object" ? raw.colors : {};
+  const button: Partial<GlobalFunnelStyles["button"]> = raw.button && typeof raw.button === "object" ? raw.button : {};
+  const containers: Partial<GlobalFunnelStyles["containers"]> = raw.containers && typeof raw.containers === "object" ? raw.containers : {};
+  const mobile: Partial<GlobalFunnelStyles["mobile"]> = raw.mobile && typeof raw.mobile === "object" ? raw.mobile : {};
+  const mergedColors = { ...defaults.colors, ...colors };
+  if (!("heading" in colors) || typeof colors.heading !== "string") {
+    mergedColors.heading = typeof colors.text === "string" ? colors.text : defaults.colors.heading;
+  }
+  return {
+    fonts: { ...defaults.fonts, ...fonts },
+    colors: mergedColors,
+    button: { ...defaults.button, ...button },
+    containers: { ...defaults.containers, ...containers },
+    mobile: { ...defaults.mobile, ...mobile },
   };
 }
 
@@ -608,6 +649,7 @@ export function migratePaidFunnelGraph(input: unknown): PaidFunnelGraph {
     schemaVersion: PAID_FUNNEL_GRAPH_SCHEMA_VERSION,
     kind: PAID_FUNNEL_KIND,
   });
+  parsed.globalStyles = normalizeGlobalFunnelStyles(parsed.globalStyles);
   for (const step of parsed.steps) {
     if (!parsed.pages[step.key]) {
       throw new Error(`Funnel step "${step.key}" is missing its page graph.`);

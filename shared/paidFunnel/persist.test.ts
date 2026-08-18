@@ -65,6 +65,19 @@ describe("paid funnel graph persist adapter", () => {
     });
   });
 
+  it("backfills heading text color from the existing body color", () => {
+    const studio = createGenericPaidFunnelFixture(createIdFactory("legacy-theme"));
+    const storage = studioToStorageGraph(studio);
+    const legacyColors = storage.globalStyles?.colors as Record<string, string>;
+    delete legacyColors.heading;
+    legacyColors.text = "#e2e8f0";
+
+    const migrated = migratePaidFunnelGraph(storage);
+
+    expect(migrated.globalStyles?.colors.heading).toBe("#e2e8f0");
+    expect(migrated.globalStyles?.colors.text).toBe("#e2e8f0");
+  });
+
   it("assembles per-step registry graphs into one studio graph", () => {
     const fixture = createGenericPaidFunnelFixture(createIdFactory("as"));
     const storage = studioToStorageGraph(fixture);
