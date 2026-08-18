@@ -28,6 +28,7 @@ import {
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PaidAdsFunnelLibrary } from "@/components/funnels/studio/PaidAdsFunnelLibrary";
+import { resolveRegistryTemplates } from "@/lib/studio/funnelLibrary";
 import { PaidFunnelBuilder } from "@/components/funnels/studio/PaidFunnelBuilder";
 import {
   commitAutosave,
@@ -180,8 +181,13 @@ function StepEditor({
 export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
   const utils = trpc.useUtils();
   const workspaceQuery = trpc.workspace.get.useQuery({ clientId });
-  const templatesQuery = trpc.paidFunnel.listTemplates.useQuery({ clientId });
-  const registryFunnelsQuery = trpc.paidFunnel.listFunnels.useQuery({ clientId });
+  const templatesQuery = trpc.paidFunnel.listTemplates.useQuery({ clientId }, { retry: 1 });
+  const registryFunnelsQuery = trpc.paidFunnel.listFunnels.useQuery({ clientId }, { retry: 1 });
+  const resolvedTemplates = resolveRegistryTemplates({
+    remote: templatesQuery.data,
+    isLoading: templatesQuery.isLoading,
+    errorMessage: templatesQuery.error?.message ?? null,
+  });
   const [selectedStep, setSelectedStep] = useState<Step | null>(null);
   const [selectedFunnelId, setSelectedFunnelId] = useState<number | null>(null);
   const parsedSearch = parsePaidAdsFunnelSearch(typeof window === "undefined" ? "" : window.location.search);
@@ -380,10 +386,11 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
           <PaidAdsFunnelLibrary
             tab={libraryTab}
             creating={createFromTemplateMutation.isPending}
-            templates={templatesQuery.data ?? []}
-            templatesLoading={templatesQuery.isLoading}
+            templates={resolvedTemplates.templates}
+            templatesLoading={resolvedTemplates.templatesLoading}
+            templatesError={resolvedTemplates.errorMessage}
             funnels={registryFunnelsQuery.data ?? []}
-            funnelsLoading={registryFunnelsQuery.isLoading}
+            funnelsLoading={registryFunnelsQuery.isLoading && !registryFunnelsQuery.isError}
             onTabChange={tab => {
               setLibraryTab(tab);
               window.history.replaceState(null, "", `${window.location.pathname}?tab=${tab}`);

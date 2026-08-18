@@ -59,46 +59,101 @@ function publicTemplate(
   };
 }
 
+const PAID_FUNNEL_REGISTRY_TABLES = [
+  "paid_funnel_templates",
+  "paid_funnel_template_versions",
+  "paid_funnels",
+] as const;
+
+export function isPaidFunnelRegistryUnavailable(error: unknown): boolean {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? String((error as { code: unknown }).code)
+      : "";
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (code === "42P01" || code === "DATABASE_OPERATION_TIMEOUT") return true;
+  if (/Database is not available/i.test(message)) return true;
+  return PAID_FUNNEL_REGISTRY_TABLES.some(table =>
+    new RegExp(`relation ["']?${table}["']? does not exist`, "i").test(message)
+  );
+}
+
+function fixtureTemplate(existingFunnelId: number | null = null) {
+  return publicTemplate(GENERIC_PAID_FUNNEL_PACKAGE, {
+    source: "fixture",
+    status: "ready",
+    existingFunnelId,
+  });
+}
+
 export async function listPaidFunnelTemplates(clientId: number) {
-  const db = await requireDb();
-  const rows = await db
-    .select({
-      template: paidFunnelTemplates,
-      version: paidFunnelTemplateVersions,
-    })
-    .from(paidFunnelTemplates)
-    .leftJoin(
-      paidFunnelTemplateVersions,
-      eq(paidFunnelTemplateVersions.templateId, paidFunnelTemplates.id)
-    )
-    .where(eq(paidFunnelTemplates.active, 1));
+  const fallback = [fixtureTemplate(null)];
+  try {
+    const db = await requireDb();
+    const rows = await db
+      .select({
+        template: paidFunnelTemplates,
+        version: paidFunnelTemplateVersions,
+      })
+      .from(paidFunnelTemplates)
+      .leftJoin(
+        paidFunnelTemplateVersions,
+        eq(paidFunnelTemplateVersions.templateId, paidFunnelTemplates.id)
+      )
+      .where(eq(paidFunnelTemplates.active, 1))
+      .limit(50);
 
-  const imported = rows
-    .filter(row => row.version)
-    .map(row => {
-      const pkg = parsePaidFunnelPackage(row.version!.packageJson);
-      return publicTemplate(pkg, {
-        source: "zip",
-        status: row.version!.status,
-        existingFunnelId: null,
+    const hasGeneric = rows.some(
+      row => row.template.templateKey === GENERIC_PAID_FUNNEL_TEMPLATE_KEY
+    );
+    if (!hasGeneric) {
+      try {
+        await ensureTemplateVersion(
+          db,
+          GENERIC_PAID_FUNNEL_PACKAGE,
+          "ready",
+          []
+        );
+      } catch (error) {
+        if (!isPaidFunnelRegistryUnavailable(error)) throw error;
+      }
+    }
+
+    const imported = rows
+      .filter(row => row.version)
+      .flatMap(row => {
+        try {
+          const pkg = parsePaidFunnelPackage(row.version!.packageJson);
+          return [
+            publicTemplate(pkg, {
+              source: "zip",
+              status: row.version!.status,
+              existingFunnelId: null,
+            }),
+          ];
+        } catch {
+          return [];
+        }
       });
-    });
 
-  const existing = await db
-    .select({ id: paidFunnels.id })
-    .from(paidFunnels)
-    .where(eq(paidFunnels.clientId, clientId));
+    const existing = await db
+      .select({ id: paidFunnels.id })
+      .from(paidFunnels)
+      .where(eq(paidFunnels.clientId, clientId))
+      .limit(1);
 
-  return [
-    publicTemplate(GENERIC_PAID_FUNNEL_PACKAGE, {
-      source: "fixture",
-      status: "ready",
-      existingFunnelId: existing[0]?.id ?? null,
-    }),
-    ...imported.filter(
-      item => item.templateKey !== GENERIC_PAID_FUNNEL_TEMPLATE_KEY
-    ),
-  ];
+    return [
+      fixtureTemplate(existing[0]?.id ?? null),
+      ...imported.filter(
+        item => item.templateKey !== GENERIC_PAID_FUNNEL_TEMPLATE_KEY
+      ),
+    ];
+  } catch (error) {
+    if (isPaidFunnelRegistryUnavailable(error)) {
+      return fallback;
+    }
+    throw error;
+  }
 }
 
 async function ensureTemplateVersion(
@@ -168,6 +223,16 @@ async function ensureTemplateVersion(
   return requireSinglePositiveId(
     insertedVersion,
     "Template version could not be created."
+  );
+}
+
+export async function ensureGenericPaidFunnelTemplate() {
+  const db = await requireDb();
+  return ensureTemplateVersion(
+    db,
+    GENERIC_PAID_FUNNEL_PACKAGE,
+    "ready",
+    []
   );
 }
 
@@ -374,12 +439,20 @@ export async function importPaidFunnelZip(input: {
 }
 
 export async function listPaidFunnels(clientId: number) {
-  const db = await requireDb();
-  return db
-    .select()
-    .from(paidFunnels)
-    .where(eq(paidFunnels.clientId, clientId))
-    .orderBy(desc(paidFunnels.updatedAt));
+  try {
+    const db = await requireDb();
+    return db
+      .select()
+      .from(paidFunnels)
+      .where(eq(paidFunnels.clientId, clientId))
+      .orderBy(desc(paidFunnels.updatedAt))
+      .limit(100);
+  } catch (error) {
+    if (isPaidFunnelRegistryUnavailable(error)) {
+      return [];
+    }
+    throw error;
+  }
 }
 
 export async function getPaidFunnelDetail(clientId: number, funnelId: number) {

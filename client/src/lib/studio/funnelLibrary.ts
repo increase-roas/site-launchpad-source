@@ -46,6 +46,38 @@ export function libraryTemplates() {
   return [GENERIC_PAID_FUNNEL_LIBRARY_CARD];
 }
 
+export function fixtureLibraryTemplate() {
+  return {
+    templateKey: GENERIC_PAID_FUNNEL_LIBRARY_CARD.templateKey,
+    name: GENERIC_PAID_FUNNEL_LIBRARY_CARD.name,
+    source: "fixture" as const,
+    status: "ready" as const,
+    stepCount: 5,
+    framework: "static-html" as const,
+    existingFunnelId: null as number | null,
+  };
+}
+
+export function resolveRegistryTemplates<T extends { templateKey: string }>(input: {
+  remote: T[] | undefined;
+  isLoading: boolean;
+  errorMessage?: string | null;
+}): {
+  templates: Array<T | ReturnType<typeof fixtureLibraryTemplate>>;
+  templatesLoading: boolean;
+  errorMessage: string | null;
+} {
+  const fixture = fixtureLibraryTemplate();
+  const errorMessage = input.errorMessage?.trim() ? input.errorMessage.trim() : null;
+  const remote = input.remote ?? [];
+  const hasFixture = remote.some(item => item.templateKey === fixture.templateKey);
+  return {
+    templates: hasFixture ? remote : [fixture, ...remote],
+    templatesLoading: false,
+    errorMessage,
+  };
+}
+
 export function createDraftFromFixture(clientId: number, now = new Date().toISOString()): {
   draft: LocalPaidFunnelDraft;
   graph: ReturnType<typeof createGenericPaidFunnelFixture>;

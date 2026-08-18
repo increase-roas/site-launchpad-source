@@ -22,6 +22,7 @@ import {
   createPaidFunnelFromTemplate,
   getPaidFunnelDetail,
   importPaidFunnelZip,
+  isPaidFunnelRegistryUnavailable,
   listPaidFunnelTemplates,
   savePaidFunnelGraph,
 } from "./paidFunnelDb";
@@ -141,6 +142,28 @@ describe("paid funnel registry persistence", () => {
     expect(templates[0]?.requiredRuntimeSecrets).toContain(
       "STAGE_WEBHOOK_SECRET"
     );
+    expect(
+      (db.tables.get(paidFunnelTemplates) ?? []).some(
+        row => row.templateKey === "generic-paid-funnel"
+      )
+    ).toBe(true);
+  });
+
+  it("returns the generic fixture when the registry table is missing", async () => {
+    const missing = Object.assign(
+      new Error('relation "paid_funnel_templates" does not exist'),
+      { code: "42P01" }
+    );
+    dbMocks.getDb.mockResolvedValue({
+      select: () => {
+        throw missing;
+      },
+    });
+    const templates = await listPaidFunnelTemplates(5);
+    expect(templates).toHaveLength(1);
+    expect(templates[0]?.templateKey).toBe("generic-paid-funnel");
+    expect(templates[0]?.source).toBe("fixture");
+    expect(isPaidFunnelRegistryUnavailable(missing)).toBe(true);
   });
 
   it("creates the complete generic multi-step fixture funnel", async () => {

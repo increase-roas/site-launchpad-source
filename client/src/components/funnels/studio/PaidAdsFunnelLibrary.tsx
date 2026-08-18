@@ -31,6 +31,7 @@ export function PaidAdsFunnelLibrary({
   creating,
   templates,
   templatesLoading,
+  templatesError,
   funnels,
   funnelsLoading,
 }: {
@@ -41,6 +42,7 @@ export function PaidAdsFunnelLibrary({
   creating: boolean;
   templates: LibraryTemplate[];
   templatesLoading: boolean;
+  templatesError?: string | null;
   funnels: LibraryFunnel[];
   funnelsLoading: boolean;
 }) {
@@ -70,12 +72,20 @@ export function PaidAdsFunnelLibrary({
 
       {tab === "templates" ? (
         <div className="grid gap-4 lg:grid-cols-2">
-          {templatesLoading ? (
+          {templatesError ? (
+            <Card className="border-red-400/20 bg-red-400/[0.05] p-5 font-bold text-red-200">
+              {templatesError}
+              <p className="mt-2 text-sm font-medium text-muted-foreground">
+                The generic paid-funnel fixture is still available so you can create a 5-step funnel.
+              </p>
+            </Card>
+          ) : templatesLoading && templates.length === 0 ? (
             <Card className="border-white/8 bg-card/70 p-8 text-center font-bold text-muted-foreground">
               <Loader2 className="mx-auto h-6 w-6 animate-spin text-cyan-300" />
               Loading registry templates…
             </Card>
-          ) : templates.length ? (
+          ) : null}
+          {templates.length ? (
             templates.map(template => (
               <Card key={template.templateKey} className="border-white/8 bg-card/70 p-5">
                 <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-300">

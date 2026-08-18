@@ -7,6 +7,7 @@ import {
   libraryFromRegistry,
   libraryTemplates,
   paidAdsFunnelsPath,
+  resolveRegistryTemplates,
   parseFunnelWorkspaceView,
 } from "./funnelLibrary";
 
@@ -45,5 +46,27 @@ describe("paid ads funnel library navigation", () => {
     ]);
     expect(listed.funnels.map(item => item.id)).toEqual([21]);
     expect(listed.templates).not.toEqual([libraryTemplates()[0]]);
+  });
+
+  it("keeps the generic fixture visible when registry loading fails", () => {
+    const failed = resolveRegistryTemplates({
+      remote: undefined,
+      isLoading: true,
+      errorMessage: "Templates could not be loaded.",
+    });
+    expect(failed.templatesLoading).toBe(false);
+    expect(failed.errorMessage).toBe("Templates could not be loaded.");
+    expect(failed.templates[0]?.templateKey).toBe("generic-paid-funnel");
+    expect(failed.templates[0]?.stepCount).toBe(5);
+  });
+
+  it("does not hide Create behind a spinner when the registry is still pending", () => {
+    const pending = resolveRegistryTemplates({
+      remote: undefined,
+      isLoading: true,
+      errorMessage: null,
+    });
+    expect(pending.templatesLoading).toBe(false);
+    expect(pending.templates.map(item => item.templateKey)).toEqual(["generic-paid-funnel"]);
   });
 });
