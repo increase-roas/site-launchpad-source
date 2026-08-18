@@ -11,7 +11,11 @@ import {
   type DeviceVisibility,
   type Overlay,
 } from "@shared/paidFunnel/graph";
-import { BUTTON_ACTION_TYPES, currentSpacing, inspectorModel } from "@shared/paidFunnel/inspector";
+import {
+  BUTTON_ACTION_TYPES,
+  currentSpacing,
+  inspectorModel,
+} from "@shared/paidFunnel/inspector";
 import { integrationPresenceRows } from "@shared/paidFunnel/integrationPresence";
 import type { ClientIntegrationProfileDto } from "@shared/clientIntegrationProfile";
 import {
@@ -132,13 +136,19 @@ function SpacingFields({
   value: BoxSpacing;
   onChange: (value: BoxSpacing) => void;
 }) {
-  const set = (key: keyof BoxSpacing, next: number) => onChange({ ...value, [key]: next });
+  const set = (key: keyof BoxSpacing, next: number) =>
+    onChange({ ...value, [key]: next });
   return (
     <div className="space-y-2">
       <p className="text-sm font-bold">{label}</p>
       <div className="grid grid-cols-2 gap-2">
         {(["top", "right", "bottom", "left"] as const).map(side => (
-          <NumberField key={side} label={side} value={value[side]} onChange={next => set(side, next)} />
+          <NumberField
+            key={side}
+            label={side}
+            value={value[side]}
+            onChange={next => set(side, next)}
+          />
         ))}
       </div>
     </div>
@@ -166,30 +176,70 @@ function BackgroundFields({
         ]}
         onChange={next => {
           if (next === "none") onChange({ kind: "none" });
-          else if (next === "color") onChange({ kind: "color", color: kind === "color" ? value.color : "#0b1c2b" });
-          else if (next === "gradient") onChange({ kind: "gradient", from: "#082f49", to: "#022c22", angle: 135 });
-          else onChange({ kind: "image", url: "", size: "cover", position: "center" });
+          else if (next === "color")
+            onChange({
+              kind: "color",
+              color: kind === "color" ? value.color : "#0b1c2b",
+            });
+          else if (next === "gradient")
+            onChange({
+              kind: "gradient",
+              from: "#082f49",
+              to: "#022c22",
+              angle: 135,
+            });
+          else
+            onChange({
+              kind: "image",
+              url: "",
+              size: "cover",
+              position: "center",
+            });
         }}
       />
       {kind === "color" ? (
         <Field label="Color">
-          <Input value={value.color} onChange={event => onChange({ kind: "color", color: event.target.value })} className="h-10 rounded-xl border-white/10 bg-white/[0.03]" />
+          <Input
+            value={value.color}
+            onChange={event =>
+              onChange({ kind: "color", color: event.target.value })
+            }
+            className="h-10 rounded-xl border-white/10 bg-white/[0.03]"
+          />
         </Field>
       ) : null}
       {kind === "gradient" ? (
         <>
           <Field label="From">
-            <Input value={value.from} onChange={event => onChange({ ...value, from: event.target.value })} className="h-10 rounded-xl border-white/10 bg-white/[0.03]" />
+            <Input
+              value={value.from}
+              onChange={event =>
+                onChange({ ...value, from: event.target.value })
+              }
+              className="h-10 rounded-xl border-white/10 bg-white/[0.03]"
+            />
           </Field>
           <Field label="To">
-            <Input value={value.to} onChange={event => onChange({ ...value, to: event.target.value })} className="h-10 rounded-xl border-white/10 bg-white/[0.03]" />
+            <Input
+              value={value.to}
+              onChange={event => onChange({ ...value, to: event.target.value })}
+              className="h-10 rounded-xl border-white/10 bg-white/[0.03]"
+            />
           </Field>
-          <NumberField label="Angle" value={value.angle} onChange={angle => onChange({ ...value, angle })} />
+          <NumberField
+            label="Angle"
+            value={value.angle}
+            onChange={angle => onChange({ ...value, angle })}
+          />
         </>
       ) : null}
       {kind === "image" ? (
         <Field label="Image URL">
-          <Input value={value.url} onChange={event => onChange({ ...value, url: event.target.value })} className="h-10 rounded-xl border-white/10 bg-white/[0.03]" />
+          <Input
+            value={value.url}
+            onChange={event => onChange({ ...value, url: event.target.value })}
+            className="h-10 rounded-xl border-white/10 bg-white/[0.03]"
+          />
         </Field>
       ) : null}
     </div>
@@ -207,12 +257,17 @@ function VisibilityFields({
     <div className="space-y-2">
       <p className="text-sm font-bold">Visibility</p>
       {(["desktop", "tablet", "mobile"] as const).map(device => (
-        <label key={device} className="flex items-center justify-between text-sm font-bold capitalize">
+        <label
+          key={device}
+          className="flex items-center justify-between text-sm font-bold capitalize"
+        >
           {device}
           <input
             type="checkbox"
             checked={value[device]}
-            onChange={event => onChange({ ...value, [device]: event.target.checked })}
+            onChange={event =>
+              onChange({ ...value, [device]: event.target.checked })
+            }
           />
         </label>
       ))}
@@ -233,20 +288,41 @@ export function PaidFunnelInspector({
 }) {
   const requestUpload = trpc.assets.requestUpload.useMutation();
   const completeUpload = trpc.assets.completeUpload.useMutation();
-  const inspector = inspectorModel(state.document.graph, state.selectedId, state.device);
+  const inspector = inspectorModel(
+    state.document.graph,
+    state.selectedId,
+    state.device
+  );
   const commit = (next: StudioState) => onChange(next);
   const presence = integrationPresenceRows(profile);
   const globals = state.document.graph.globalStyles;
-  const currentStep = state.document.graph.steps.find(step => step.key === state.stepKey);
-  const otherSteps = state.document.graph.steps.filter(step => step.key !== state.stepKey);
+  const currentStep = state.document.graph.steps.find(
+    step => step.key === state.stepKey
+  );
+  const otherSteps = state.document.graph.steps.filter(
+    step => step.key !== state.stepKey
+  );
 
   return (
     <aside className="space-y-4 overflow-y-auto border-l border-slate-200 bg-white p-4 text-slate-900">
-      <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-blue-600">Page settings</p>
+      <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-blue-600">
+        Page settings
+      </p>
       {currentStep ? (
         <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
           <Field label="Page name">
-            <Input value={currentStep.title} onChange={event => commit(updateStudioStep(state, { title: event.target.value, seo: { ...currentStep.seo, title: event.target.value } }))} className="h-10 rounded-lg border-slate-200 bg-white" />
+            <Input
+              value={currentStep.title}
+              onChange={event =>
+                commit(
+                  updateStudioStep(state, {
+                    title: event.target.value,
+                    seo: { ...currentStep.seo, title: event.target.value },
+                  })
+                )
+              }
+              className="h-10 rounded-lg border-slate-200 bg-white"
+            />
           </Field>
           <Field label="Astro page URL">
             <Input
@@ -258,74 +334,204 @@ export function PaidFunnelInspector({
               className="h-10 rounded-lg border-slate-200 bg-white font-mono text-xs"
             />
           </Field>
-          <p className="text-xs text-slate-500">Every survey question uses its own crawlable Astro route.</p>
+          <p className="text-xs text-slate-500">
+            Every survey question uses its own crawlable Astro route.
+          </p>
           <SelectField
             label="After completion"
             value={currentStep.nextStep.type}
-            options={[{ value: "step", label: "Go to a funnel page" }, { value: "redirect", label: "External URL" }, { value: "none", label: "Stop here" }]}
+            options={[
+              { value: "step", label: "Go to a funnel page" },
+              { value: "redirect", label: "External URL" },
+              { value: "none", label: "Stop here" },
+            ]}
             onChange={type => {
-              if (type === "redirect") commit(updateStudioStep(state, { nextStep: { type: "redirect", url: "https://" } }));
-              else if (type === "none") commit(updateStudioStep(state, { nextStep: { type: "none" } }));
-              else commit(updateStudioStep(state, { nextStep: { type: "step", stepKey: otherSteps[0]?.key ?? state.stepKey } }));
+              if (type === "redirect")
+                commit(
+                  updateStudioStep(state, {
+                    nextStep: { type: "redirect", url: "https://" },
+                  })
+                );
+              else if (type === "none")
+                commit(updateStudioStep(state, { nextStep: { type: "none" } }));
+              else
+                commit(
+                  updateStudioStep(state, {
+                    nextStep: {
+                      type: "step",
+                      stepKey: otherSteps[0]?.key ?? state.stepKey,
+                    },
+                  })
+                );
             }}
           />
           {currentStep.nextStep.type === "step" ? (
             <SelectField
               label="Destination page"
               value={currentStep.nextStep.stepKey}
-              options={otherSteps.map(step => ({ value: step.key, label: `${step.title} · ${step.slug}` }))}
-              onChange={stepKey => commit(updateStudioStep(state, { nextStep: { type: "step", stepKey } }))}
+              options={otherSteps.map(step => ({
+                value: step.key,
+                label: `${step.title} · ${step.slug}`,
+              }))}
+              onChange={stepKey =>
+                commit(
+                  updateStudioStep(state, {
+                    nextStep: { type: "step", stepKey },
+                  })
+                )
+              }
             />
           ) : null}
           {currentStep.nextStep.type === "redirect" ? (
             <Field label="Redirect URL">
-              <Input value={currentStep.nextStep.url} onChange={event => commit(updateStudioStep(state, { nextStep: { type: "redirect", url: event.target.value } }))} className="h-10 rounded-lg border-slate-200 bg-white" />
+              <Input
+                value={currentStep.nextStep.url}
+                onChange={event =>
+                  commit(
+                    updateStudioStep(state, {
+                      nextStep: { type: "redirect", url: event.target.value },
+                    })
+                  )
+                }
+                className="h-10 rounded-lg border-slate-200 bg-white"
+              />
             </Field>
           ) : null}
           {currentStep.type === "survey" ? (
             <div className="space-y-2 border-t border-slate-200 pt-3">
-              <p className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Meta events</p>
+              <p className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
+                Meta events
+              </p>
               <Field label="Browser event">
-                <Input value={currentStep.tracking?.browserEvent ?? "ViewContent"} onChange={event => commit(updateStudioStep(state, { tracking: { browserEvent: event.target.value, serverEvent: currentStep.tracking?.serverEvent ?? "LeadSurveyAnswer", answerField: currentStep.tracking?.answerField } }))} className="h-10 rounded-lg border-slate-200 bg-white" />
+                <Input
+                  value={currentStep.tracking?.browserEvent ?? "ViewContent"}
+                  onChange={event =>
+                    commit(
+                      updateStudioStep(state, {
+                        tracking: {
+                          browserEvent: event.target.value,
+                          serverEvent:
+                            currentStep.tracking?.serverEvent ??
+                            "LeadSurveyAnswer",
+                          answerField: currentStep.tracking?.answerField,
+                        },
+                      })
+                    )
+                  }
+                  className="h-10 rounded-lg border-slate-200 bg-white"
+                />
               </Field>
               <Field label="Server / CAPI event">
-                <Input value={currentStep.tracking?.serverEvent ?? "LeadSurveyAnswer"} onChange={event => commit(updateStudioStep(state, { tracking: { browserEvent: currentStep.tracking?.browserEvent ?? "ViewContent", serverEvent: event.target.value, answerField: currentStep.tracking?.answerField } }))} className="h-10 rounded-lg border-slate-200 bg-white" />
+                <Input
+                  value={
+                    currentStep.tracking?.serverEvent ?? "LeadSurveyAnswer"
+                  }
+                  onChange={event =>
+                    commit(
+                      updateStudioStep(state, {
+                        tracking: {
+                          browserEvent:
+                            currentStep.tracking?.browserEvent ?? "ViewContent",
+                          serverEvent: event.target.value,
+                          answerField: currentStep.tracking?.answerField,
+                        },
+                      })
+                    )
+                  }
+                  className="h-10 rounded-lg border-slate-200 bg-white"
+                />
               </Field>
               <Field label="Answer field">
-                <Input value={currentStep.tracking?.answerField ?? ""} onChange={event => commit(updateStudioStep(state, { tracking: { browserEvent: currentStep.tracking?.browserEvent ?? "ViewContent", serverEvent: currentStep.tracking?.serverEvent ?? "LeadSurveyAnswer", answerField: event.target.value } }))} className="h-10 rounded-lg border-slate-200 bg-white" />
+                <Input
+                  value={currentStep.tracking?.answerField ?? ""}
+                  onChange={event =>
+                    commit(
+                      updateStudioStep(state, {
+                        tracking: {
+                          browserEvent:
+                            currentStep.tracking?.browserEvent ?? "ViewContent",
+                          serverEvent:
+                            currentStep.tracking?.serverEvent ??
+                            "LeadSurveyAnswer",
+                          answerField: event.target.value,
+                        },
+                      })
+                    )
+                  }
+                  className="h-10 rounded-lg border-slate-200 bg-white"
+                />
               </Field>
             </div>
           ) : null}
         </div>
       ) : null}
-      <p className="border-t border-slate-200 pt-4 text-xs font-extrabold uppercase tracking-[0.16em] text-blue-600">Block inspector</p>
+      <p className="border-t border-slate-200 pt-4 text-xs font-extrabold uppercase tracking-[0.16em] text-blue-600">
+        Block inspector
+      </p>
       {inspector ? (
         <div className="space-y-3">
           <h3 className="text-lg font-extrabold">{inspector.title}</h3>
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{inspector.kind} · {inspector.breakpoint}</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            {inspector.kind} · {inspector.breakpoint}
+          </p>
 
           {inspector.controls.includes("layout") ? (
             <SelectField
               label="Layout"
               value={String(inspector.values.layout ?? "boxed")}
-              options={[{ value: "full", label: "Full width" }, { value: "boxed", label: "Boxed" }]}
+              options={[
+                { value: "full", label: "Full width" },
+                { value: "boxed", label: "Boxed" },
+              ]}
               onChange={layout => commit(applySelectedPatch(state, { layout }))}
             />
           ) : null}
           {inspector.controls.includes("maxWidth") ? (
-            <NumberField label="Max width" value={Number(inspector.values.maxWidth ?? 1120)} onChange={maxWidth => commit(applySelectedPatch(state, { maxWidth }))} />
+            <NumberField
+              label="Max width"
+              value={Number(inspector.values.maxWidth ?? 1120)}
+              onChange={maxWidth =>
+                commit(applySelectedPatch(state, { maxWidth }))
+              }
+            />
           ) : null}
           {inspector.controls.includes("minHeight") ? (
-            <NumberField label="Min height" value={Number(inspector.values.minHeight ?? 0)} onChange={minHeight => commit(applySelectedPatch(state, { minHeight }))} />
+            <NumberField
+              label="Min height"
+              value={Number(inspector.values.minHeight ?? 0)}
+              onChange={minHeight =>
+                commit(applySelectedPatch(state, { minHeight }))
+              }
+            />
           ) : null}
           {inspector.controls.includes("alignment") ? (
             <SelectField
               label="Alignment"
-              value={String((inspector.values.alignment as string | undefined) ?? (inspector.kind === "element" ? (inspector.values.styles as { textAlign?: { desktop?: string } } | undefined)?.textAlign?.desktop : "left") ?? "left")}
-              options={[{ value: "left", label: "Left" }, { value: "center", label: "Center" }, { value: "right", label: "Right" }]}
+              value={String(
+                (inspector.values.alignment as string | undefined) ??
+                  (inspector.kind === "element"
+                    ? (
+                        inspector.values.styles as
+                          | { textAlign?: { desktop?: string } }
+                          | undefined
+                      )?.textAlign?.desktop
+                    : "left") ??
+                  "left"
+              )}
+              options={[
+                { value: "left", label: "Left" },
+                { value: "center", label: "Center" },
+                { value: "right", label: "Right" },
+              ]}
               onChange={alignment => {
                 if (inspector.kind === "element") {
-                  const styles = { ...(inspector.values.styles as Record<string, unknown>), textAlign: { desktop: alignment, [state.device]: alignment } };
+                  const styles = {
+                    ...(inspector.values.styles as Record<string, unknown>),
+                    textAlign: {
+                      desktop: alignment,
+                      [state.device]: alignment,
+                    },
+                  };
                   commit(applySelectedPatch(state, { styles }));
                 } else {
                   commit(applySelectedPatch(state, { alignment }));
@@ -334,40 +540,86 @@ export function PaidFunnelInspector({
             />
           ) : null}
           {inspector.controls.includes("gap") ? (
-            <NumberField label="Gap" value={Number(inspector.values.gap ?? 16)} onChange={gap => commit(applySelectedPatch(state, { gap }))} />
+            <NumberField
+              label="Gap"
+              value={Number(inspector.values.gap ?? 16)}
+              onChange={gap => commit(applySelectedPatch(state, { gap }))}
+            />
           ) : null}
           {inspector.controls.includes("valign") ? (
             <SelectField
               label="Vertical align"
               value={String(inspector.values.valign ?? "top")}
-              options={[{ value: "top", label: "Top" }, { value: "center", label: "Center" }, { value: "bottom", label: "Bottom" }]}
+              options={[
+                { value: "top", label: "Top" },
+                { value: "center", label: "Center" },
+                { value: "bottom", label: "Bottom" },
+              ]}
               onChange={valign => commit(applySelectedPatch(state, { valign }))}
             />
           ) : null}
           {inspector.controls.includes("wrap") ? (
             <label className="flex items-center justify-between text-sm font-bold">
               Wrap
-              <input type="checkbox" checked={Boolean(inspector.values.wrap)} onChange={event => commit(applySelectedPatch(state, { wrap: event.target.checked }))} />
+              <input
+                type="checkbox"
+                checked={Boolean(inspector.values.wrap)}
+                onChange={event =>
+                  commit(
+                    applySelectedPatch(state, { wrap: event.target.checked })
+                  )
+                }
+              />
             </label>
           ) : null}
           {inspector.controls.includes("sticky") ? (
             <label className="flex items-center justify-between text-sm font-bold">
               Sticky
-              <input type="checkbox" checked={Boolean(inspector.values.sticky)} onChange={event => commit(applySelectedPatch(state, { sticky: event.target.checked }))} />
+              <input
+                type="checkbox"
+                checked={Boolean(inspector.values.sticky)}
+                onChange={event =>
+                  commit(
+                    applySelectedPatch(state, { sticky: event.target.checked })
+                  )
+                }
+              />
             </label>
           ) : null}
-          {inspector.controls.includes("padding") || inspector.controls.includes("spacing") ? (
+          {inspector.controls.includes("padding") ||
+          inspector.controls.includes("spacing") ? (
             <SpacingFields
               label={`Padding (${state.device})`}
               value={
                 inspector.kind === "element"
-                  ? currentSpacing((inspector.values.styles as { padding?: Parameters<typeof currentSpacing>[0] } | undefined)?.padding, state.device)
-                  : currentSpacing(inspector.values.padding as Parameters<typeof currentSpacing>[0], state.device)
+                  ? currentSpacing(
+                      (
+                        inspector.values.styles as
+                          | { padding?: Parameters<typeof currentSpacing>[0] }
+                          | undefined
+                      )?.padding,
+                      state.device
+                    )
+                  : currentSpacing(
+                      inspector.values.padding as Parameters<
+                        typeof currentSpacing
+                      >[0],
+                      state.device
+                    )
               }
               onChange={padding => {
                 if (inspector.kind === "element") {
-                  const styles = inspector.values.styles as { padding?: Record<string, BoxSpacing> };
-                  commit(applySelectedPatch(state, { styles: { ...styles, padding: { ...styles.padding, [state.device]: padding } } }));
+                  const styles = inspector.values.styles as {
+                    padding?: Record<string, BoxSpacing>;
+                  };
+                  commit(
+                    applySelectedPatch(state, {
+                      styles: {
+                        ...styles,
+                        padding: { ...styles.padding, [state.device]: padding },
+                      },
+                    })
+                  );
                 } else {
                   commit(setSelectedSpacing(state, "padding", padding));
                 }
@@ -377,16 +629,44 @@ export function PaidFunnelInspector({
           {inspector.controls.includes("margin") ? (
             <SpacingFields
               label={`Margin (${state.device})`}
-              value={currentSpacing(inspector.values.margin as Parameters<typeof currentSpacing>[0], state.device)}
-              onChange={margin => commit(setSelectedSpacing(state, "margin", margin))}
+              value={
+                inspector.kind === "element"
+                  ? currentSpacing(
+                      (
+                        inspector.values.styles as
+                          | { margin?: Parameters<typeof currentSpacing>[0] }
+                          | undefined
+                      )?.margin,
+                      state.device
+                    )
+                  : currentSpacing(
+                      inspector.values.margin as Parameters<
+                        typeof currentSpacing
+                      >[0],
+                      state.device
+                    )
+              }
+              onChange={margin =>
+                commit(setSelectedSpacing(state, "margin", margin))
+              }
             />
           ) : null}
           {inspector.controls.includes("background") ? (
             <BackgroundFields
-              value={(inspector.kind === "element" ? (inspector.values.styles as { background?: Background })?.background : inspector.values.background) as Background ?? { kind: "none" }}
+              value={
+                ((inspector.kind === "element"
+                  ? (inspector.values.styles as { background?: Background })
+                      ?.background
+                  : inspector.values.background) as Background) ?? {
+                  kind: "none",
+                }
+              }
               onChange={background => {
                 if (inspector.kind === "element") {
-                  const styles = { ...(inspector.values.styles as Record<string, unknown>), background };
+                  const styles = {
+                    ...(inspector.values.styles as Record<string, unknown>),
+                    background,
+                  };
                   commit(applySelectedPatch(state, { styles }));
                 } else {
                   commit(applySelectedPatch(state, { background }));
@@ -398,15 +678,42 @@ export function PaidFunnelInspector({
             <div className="space-y-2">
               <Field label="Overlay color">
                 <Input
-                  value={((inspector.values.overlay as Overlay | null)?.color) ?? "#020617"}
-                  onChange={event => commit(applySelectedPatch(state, { overlay: { color: event.target.value, opacity: (inspector.values.overlay as Overlay | null)?.opacity ?? 0.25 } }))}
+                  value={
+                    (inspector.values.overlay as Overlay | null)?.color ??
+                    "#020617"
+                  }
+                  onChange={event =>
+                    commit(
+                      applySelectedPatch(state, {
+                        overlay: {
+                          color: event.target.value,
+                          opacity:
+                            (inspector.values.overlay as Overlay | null)
+                              ?.opacity ?? 0.25,
+                        },
+                      })
+                    )
+                  }
                   className="h-10 rounded-xl border-white/10 bg-white/[0.03]"
                 />
               </Field>
               <NumberField
                 label="Overlay opacity"
-                value={(inspector.values.overlay as Overlay | null)?.opacity ?? 0}
-                onChange={opacity => commit(applySelectedPatch(state, { overlay: { color: (inspector.values.overlay as Overlay | null)?.color ?? "#020617", opacity } }))}
+                value={
+                  (inspector.values.overlay as Overlay | null)?.opacity ?? 0
+                }
+                onChange={opacity =>
+                  commit(
+                    applySelectedPatch(state, {
+                      overlay: {
+                        color:
+                          (inspector.values.overlay as Overlay | null)?.color ??
+                          "#020617",
+                        opacity,
+                      },
+                    })
+                  )
+                }
               />
             </div>
           ) : null}
@@ -414,12 +721,31 @@ export function PaidFunnelInspector({
             <>
               <Field label="Border color">
                 <Input
-                  value={String(inspector.values.borderColor ?? (inspector.values.styles as { borderColor?: string } | undefined)?.borderColor ?? "transparent")}
+                  value={String(
+                    inspector.values.borderColor ??
+                      (
+                        inspector.values.styles as
+                          | { borderColor?: string }
+                          | undefined
+                      )?.borderColor ??
+                      "transparent"
+                  )}
                   onChange={event => {
                     if (inspector.kind === "element") {
-                      commit(applySelectedPatch(state, { styles: { ...(inspector.values.styles as object), borderColor: event.target.value } }));
+                      commit(
+                        applySelectedPatch(state, {
+                          styles: {
+                            ...(inspector.values.styles as object),
+                            borderColor: event.target.value,
+                          },
+                        })
+                      );
                     } else {
-                      commit(applySelectedPatch(state, { borderColor: event.target.value }));
+                      commit(
+                        applySelectedPatch(state, {
+                          borderColor: event.target.value,
+                        })
+                      );
                     }
                   }}
                   className="h-10 rounded-xl border-white/10 bg-white/[0.03]"
@@ -427,10 +753,25 @@ export function PaidFunnelInspector({
               </Field>
               <NumberField
                 label="Border width"
-                value={Number(inspector.values.borderWidth ?? (inspector.values.styles as { borderWidth?: number } | undefined)?.borderWidth ?? 0)}
+                value={Number(
+                  inspector.values.borderWidth ??
+                    (
+                      inspector.values.styles as
+                        | { borderWidth?: number }
+                        | undefined
+                    )?.borderWidth ??
+                    0
+                )}
                 onChange={borderWidth => {
                   if (inspector.kind === "element") {
-                    commit(applySelectedPatch(state, { styles: { ...(inspector.values.styles as object), borderWidth } }));
+                    commit(
+                      applySelectedPatch(state, {
+                        styles: {
+                          ...(inspector.values.styles as object),
+                          borderWidth,
+                        },
+                      })
+                    );
                   } else {
                     commit(applySelectedPatch(state, { borderWidth }));
                   }
@@ -439,37 +780,113 @@ export function PaidFunnelInspector({
             </>
           ) : null}
           {inspector.controls.includes("radius") ? (
-            <NumberField label="Radius" value={Number(inspector.values.radius ?? 0)} onChange={borderRadius => commit(applySelectedPatch(state, { borderRadius }))} />
+            <NumberField
+              label="Radius"
+              value={Number(
+                inspector.kind === "element"
+                  ? ((inspector.values.styles as { borderRadius?: number })
+                      .borderRadius ?? 0)
+                  : (inspector.values.radius ?? 0)
+              )}
+              onChange={borderRadius => {
+                if (inspector.kind === "element") {
+                  commit(
+                    applySelectedPatch(state, {
+                      styles: {
+                        ...(inspector.values.styles as object),
+                        borderRadius,
+                      },
+                    })
+                  );
+                } else {
+                  commit(applySelectedPatch(state, { borderRadius }));
+                }
+              }}
+            />
           ) : null}
           {inspector.controls.includes("shadow") ? (
             <Field label="Shadow">
-              <Input value={String(inspector.values.shadow ?? "none")} onChange={event => commit(applySelectedPatch(state, { shadow: event.target.value }))} className="h-10 rounded-xl border-white/10 bg-white/[0.03]" />
+              <Input
+                value={String(
+                  inspector.kind === "element"
+                    ? ((inspector.values.styles as { shadow?: string })
+                        .shadow ?? "none")
+                    : (inspector.values.shadow ?? "none")
+                )}
+                onChange={event => {
+                  if (inspector.kind === "element") {
+                    commit(
+                      applySelectedPatch(state, {
+                        styles: {
+                          ...(inspector.values.styles as object),
+                          shadow: event.target.value,
+                        },
+                      })
+                    );
+                  } else {
+                    commit(
+                      applySelectedPatch(state, { shadow: event.target.value })
+                    );
+                  }
+                }}
+                className="h-10 rounded-xl border-white/10 bg-white/[0.03]"
+              />
             </Field>
           ) : null}
           {inspector.controls.includes("anchor") ? (
             <Field label="Anchor">
-              <Input value={String(inspector.values.anchor ?? "")} onChange={event => commit(applySelectedPatch(state, { anchor: event.target.value }))} className="h-10 rounded-xl border-white/10 bg-white/[0.03]" />
+              <Input
+                value={String(inspector.values.anchor ?? "")}
+                onChange={event =>
+                  commit(
+                    applySelectedPatch(state, { anchor: event.target.value })
+                  )
+                }
+                className="h-10 rounded-xl border-white/10 bg-white/[0.03]"
+              />
             </Field>
           ) : null}
           {inspector.controls.includes("className") ? (
             <Field label="Class">
-              <Input value={String(inspector.values.className ?? "")} onChange={event => commit(applySelectedPatch(state, { className: event.target.value }))} className="h-10 rounded-xl border-white/10 bg-white/[0.03]" />
+              <Input
+                value={String(inspector.values.className ?? "")}
+                onChange={event =>
+                  commit(
+                    applySelectedPatch(state, { className: event.target.value })
+                  )
+                }
+                className="h-10 rounded-xl border-white/10 bg-white/[0.03]"
+              />
             </Field>
           ) : null}
-          {inspector.controls.includes("width") && inspector.kind === "column" ? (
+          {inspector.controls.includes("width") &&
+          inspector.kind === "column" ? (
             <NumberField
               label={`${state.device} width %`}
-              value={Number((inspector.values.width as Record<string, number>)[state.device] ?? 100)}
+              value={Number(
+                (inspector.values.width as Record<string, number>)[
+                  state.device
+                ] ?? 100
+              )}
               onChange={width => {
                 const parent = state.document.graph.pages[state.stepKey];
-                const row = parent?.sections.flatMap(section => section.rows).find(row => row.columns.some(column => column.id === inspector.id));
+                const row = parent?.sections
+                  .flatMap(section => section.rows)
+                  .find(row =>
+                    row.columns.some(column => column.id === inspector.id)
+                  );
                 if (!row) return;
-                const widths = row.columns.map(column => (column.id === inspector.id ? width : column.widths[state.device]));
+                const widths = row.columns.map(column =>
+                  column.id === inspector.id
+                    ? width
+                    : column.widths[state.device]
+                );
                 commit(resizeSelectedRow(state, row.id, widths));
               }}
             />
           ) : null}
-          {inspector.controls.includes("columns") && inspector.kind === "row" ? (
+          {inspector.controls.includes("columns") &&
+          inspector.kind === "row" ? (
             <div className="space-y-2">
               <p className="text-sm font-bold">Column widths</p>
               {(inspector.values.columns as number[]).map((width, index) => (
@@ -486,81 +903,439 @@ export function PaidFunnelInspector({
               ))}
             </div>
           ) : null}
-          {inspector.controls.includes("elementOrder") && inspector.kind === "column" ? (
+          {inspector.controls.includes("elementOrder") &&
+          inspector.kind === "column" ? (
             <div className="space-y-2">
               <p className="text-sm font-bold">Element order</p>
               {(inspector.values.elementOrder as string[]).map((id, index) => (
                 <div key={id} className="flex items-center gap-2">
-                  <span className="flex-1 truncate text-xs font-bold text-muted-foreground">{id}</span>
-                  <Button type="button" variant="outline" className="h-8 px-2" disabled={index === 0} onClick={() => commit(reorderSelectedChild(state, id, index - 1))}>Up</Button>
-                  <Button type="button" variant="outline" className="h-8 px-2" disabled={index === (inspector.values.elementOrder as string[]).length - 1} onClick={() => commit(reorderSelectedChild(state, id, index + 1))}>Down</Button>
+                  <span className="flex-1 truncate text-xs font-bold text-muted-foreground">
+                    {id}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 px-2"
+                    disabled={index === 0}
+                    onClick={() =>
+                      commit(reorderSelectedChild(state, id, index - 1))
+                    }
+                  >
+                    Up
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 px-2"
+                    disabled={
+                      index ===
+                      (inspector.values.elementOrder as string[]).length - 1
+                    }
+                    onClick={() =>
+                      commit(reorderSelectedChild(state, id, index + 1))
+                    }
+                  >
+                    Down
+                  </Button>
                 </div>
               ))}
             </div>
           ) : null}
-          {inspector.kind === "element" && ["heading", "text", "button", "phoneCta", "testimonial", "multipleChoice", "shortAnswer"].includes(String(inspector.values.type)) ? (
-            <Field label={inspector.values.type === "multipleChoice" || inspector.values.type === "shortAnswer" ? "Question" : "Inline text"}>
+          {inspector.kind === "element" &&
+          [
+            "heading",
+            "text",
+            "button",
+            "phoneCta",
+            "testimonial",
+            "multipleChoice",
+            "shortAnswer",
+          ].includes(String(inspector.values.type)) ? (
+            <Field
+              label={
+                inspector.values.type === "multipleChoice" ||
+                inspector.values.type === "shortAnswer"
+                  ? "Question"
+                  : "Inline text"
+              }
+            >
               <Input
-                value={String((inspector.values.props as { text?: string; label?: string; quote?: string; question?: string }).text ?? (inspector.values.props as { label?: string }).label ?? (inspector.values.props as { quote?: string }).quote ?? (inspector.values.props as { question?: string }).question ?? "")}
-                onChange={event => commit(setSelectedText(state, event.target.value))}
+                value={String(
+                  (
+                    inspector.values.props as {
+                      text?: string;
+                      label?: string;
+                      quote?: string;
+                      question?: string;
+                    }
+                  ).text ??
+                    (inspector.values.props as { label?: string }).label ??
+                    (inspector.values.props as { quote?: string }).quote ??
+                    (inspector.values.props as { question?: string })
+                      .question ??
+                    ""
+                )}
+                onChange={event =>
+                  commit(setSelectedText(state, event.target.value))
+                }
                 className="h-10 rounded-lg border-slate-200 bg-white"
               />
             </Field>
           ) : null}
-          {inspector.kind === "element" && inspector.values.type === "multipleChoice" ? (
+          {inspector.kind === "element" &&
+          inspector.values.type === "multipleChoice" ? (
             <>
               <Field label="Answer field">
                 <Input
-                  value={String((inspector.values.props as { field?: string }).field ?? "")}
-                  onChange={event => commit(applySelectedPatch(state, { props: { ...(inspector.values.props as object), field: event.target.value } }))}
+                  value={String(
+                    (inspector.values.props as { field?: string }).field ?? ""
+                  )}
+                  onChange={event =>
+                    commit(
+                      applySelectedPatch(state, {
+                        props: {
+                          ...(inspector.values.props as object),
+                          field: event.target.value,
+                        },
+                      })
+                    )
+                  }
                   className="h-10 rounded-lg border-slate-200 bg-white"
                 />
               </Field>
               <Field label="Choices (one per line)">
                 <textarea
-                  value={((inspector.values.props as { options?: string[] }).options ?? []).join("\n")}
-                  onChange={event => commit(applySelectedPatch(state, { props: { ...(inspector.values.props as object), options: event.target.value.split("\n").map(value => value.trim()).filter(Boolean) } }))}
+                  value={(
+                    (inspector.values.props as { options?: string[] })
+                      .options ?? []
+                  ).join("\n")}
+                  onChange={event =>
+                    commit(
+                      applySelectedPatch(state, {
+                        props: {
+                          ...(inspector.values.props as object),
+                          options: event.target.value
+                            .split("\n")
+                            .map(value => value.trim())
+                            .filter(Boolean),
+                        },
+                      })
+                    )
+                  }
                   className="min-h-28 w-full rounded-lg border border-slate-200 bg-white p-3 text-sm"
                 />
               </Field>
               <label className="flex items-center justify-between text-sm font-bold">
                 Continue after answer
-                <input type="checkbox" checked={Boolean((inspector.values.props as { autoAdvance?: boolean }).autoAdvance)} onChange={event => commit(applySelectedPatch(state, { props: { ...(inspector.values.props as object), autoAdvance: event.target.checked } }))} />
+                <input
+                  type="checkbox"
+                  checked={Boolean(
+                    (inspector.values.props as { autoAdvance?: boolean })
+                      .autoAdvance
+                  )}
+                  onChange={event =>
+                    commit(
+                      applySelectedPatch(state, {
+                        props: {
+                          ...(inspector.values.props as object),
+                          autoAdvance: event.target.checked,
+                        },
+                      })
+                    )
+                  }
+                />
               </label>
+              <div className="grid grid-cols-2 gap-2">
+                <NumberField
+                  label="Button columns"
+                  value={Number(
+                    (inspector.values.props as { columns?: number }).columns ??
+                      1
+                  )}
+                  onChange={columns =>
+                    commit(
+                      applySelectedPatch(state, {
+                        props: {
+                          ...(inspector.values.props as object),
+                          columns: Math.max(
+                            1,
+                            Math.min(4, Math.round(columns))
+                          ),
+                        },
+                      })
+                    )
+                  }
+                />
+                <NumberField
+                  label="Button gap"
+                  value={Number(
+                    (inspector.values.props as { gap?: number }).gap ?? 12
+                  )}
+                  onChange={gap =>
+                    commit(
+                      applySelectedPatch(state, {
+                        props: { ...(inspector.values.props as object), gap },
+                      })
+                    )
+                  }
+                />
+              </div>
+              <ColorField
+                label="Choice background"
+                value={String(
+                  (inspector.values.props as { buttonBackground?: string })
+                    .buttonBackground ?? "#2563eb"
+                )}
+                onChange={buttonBackground =>
+                  commit(
+                    applySelectedPatch(state, {
+                      props: {
+                        ...(inspector.values.props as object),
+                        buttonBackground,
+                      },
+                    })
+                  )
+                }
+              />
+              <ColorField
+                label="Choice text"
+                value={String(
+                  (inspector.values.props as { buttonColor?: string })
+                    .buttonColor ?? "#ffffff"
+                )}
+                onChange={buttonColor =>
+                  commit(
+                    applySelectedPatch(state, {
+                      props: {
+                        ...(inspector.values.props as object),
+                        buttonColor,
+                      },
+                    })
+                  )
+                }
+              />
+              <NumberField
+                label="Choice radius"
+                value={Number(
+                  (inspector.values.props as { buttonRadius?: number })
+                    .buttonRadius ?? 8
+                )}
+                onChange={buttonRadius =>
+                  commit(
+                    applySelectedPatch(state, {
+                      props: {
+                        ...(inspector.values.props as object),
+                        buttonRadius,
+                      },
+                    })
+                  )
+                }
+              />
             </>
           ) : null}
-          {inspector.controls.includes("typography") && inspector.kind === "element" ? (
+          {inspector.controls.includes("elementSize") &&
+          inspector.kind === "element" ? (
+            <div className="grid grid-cols-2 gap-2">
+              <NumberField
+                label={`Width % (${state.device})`}
+                value={Number(
+                  ((
+                    inspector.values.styles as {
+                      width?: Record<string, number>;
+                    }
+                  ).width ?? {})[state.device] ?? 100
+                )}
+                onChange={width => {
+                  const styles = inspector.values.styles as {
+                    width?: Record<string, number>;
+                  };
+                  commit(
+                    applySelectedPatch(state, {
+                      styles: {
+                        ...styles,
+                        width: {
+                          ...styles.width,
+                          [state.device]: Math.max(1, Math.min(100, width)),
+                        },
+                      },
+                    })
+                  );
+                }}
+              />
+              <NumberField
+                label={`Max width px (${state.device})`}
+                value={Number(
+                  ((
+                    inspector.values.styles as {
+                      maxWidth?: Record<string, number>;
+                    }
+                  ).maxWidth ?? {})[state.device] ?? 1120
+                )}
+                onChange={maxWidth => {
+                  const styles = inspector.values.styles as {
+                    maxWidth?: Record<string, number>;
+                  };
+                  commit(
+                    applySelectedPatch(state, {
+                      styles: {
+                        ...styles,
+                        maxWidth: {
+                          ...styles.maxWidth,
+                          [state.device]: Math.max(1, maxWidth),
+                        },
+                      },
+                    })
+                  );
+                }}
+              />
+            </div>
+          ) : null}
+          {inspector.controls.includes("typography") &&
+          inspector.kind === "element" ? (
             <>
+              <Field label="Font family">
+                <Input
+                  value={String(
+                    (inspector.values.styles as { fontFamily?: string })
+                      .fontFamily ?? ""
+                  )}
+                  placeholder="Use global font"
+                  onChange={event =>
+                    commit(
+                      applySelectedPatch(state, {
+                        styles: {
+                          ...(inspector.values.styles as object),
+                          fontFamily: event.target.value,
+                        },
+                      })
+                    )
+                  }
+                  className="h-10 rounded-lg border-slate-200 bg-white"
+                />
+              </Field>
               <NumberField
                 label="Font size"
-                value={Number(((inspector.values.styles as { fontSize?: Record<string, number> }).fontSize ?? {})[state.device] ?? (inspector.values.styles as { fontSize?: { desktop?: number } }).fontSize?.desktop ?? 16)}
+                value={Number(
+                  ((
+                    inspector.values.styles as {
+                      fontSize?: Record<string, number>;
+                    }
+                  ).fontSize ?? {})[state.device] ??
+                    (
+                      inspector.values.styles as {
+                        fontSize?: { desktop?: number };
+                      }
+                    ).fontSize?.desktop ??
+                    16
+                )}
                 onChange={fontSize => {
-                  const styles = inspector.values.styles as { fontSize?: Record<string, number> };
-                  commit(applySelectedPatch(state, { styles: { ...styles, fontSize: { ...styles.fontSize, [state.device]: fontSize } } }));
+                  const styles = inspector.values.styles as {
+                    fontSize?: Record<string, number>;
+                  };
+                  commit(
+                    applySelectedPatch(state, {
+                      styles: {
+                        ...styles,
+                        fontSize: {
+                          ...styles.fontSize,
+                          [state.device]: fontSize,
+                        },
+                      },
+                    })
+                  );
                 }}
               />
               <NumberField
                 label="Font weight"
-                value={Number((inspector.values.styles as { fontWeight?: number }).fontWeight ?? 500)}
-                onChange={fontWeight => commit(applySelectedPatch(state, { styles: { ...(inspector.values.styles as object), fontWeight } }))}
+                value={Number(
+                  (inspector.values.styles as { fontWeight?: number })
+                    .fontWeight ?? 500
+                )}
+                onChange={fontWeight =>
+                  commit(
+                    applySelectedPatch(state, {
+                      styles: {
+                        ...(inspector.values.styles as object),
+                        fontWeight,
+                      },
+                    })
+                  )
+                }
               />
+              <div className="grid grid-cols-2 gap-2">
+                <NumberField
+                  label="Line height"
+                  value={Number(
+                    (inspector.values.styles as { lineHeight?: number })
+                      .lineHeight ?? 1.5
+                  )}
+                  onChange={lineHeight =>
+                    commit(
+                      applySelectedPatch(state, {
+                        styles: {
+                          ...(inspector.values.styles as object),
+                          lineHeight,
+                        },
+                      })
+                    )
+                  }
+                />
+                <NumberField
+                  label="Letter spacing"
+                  value={Number(
+                    (inspector.values.styles as { letterSpacing?: number })
+                      .letterSpacing ?? 0
+                  )}
+                  onChange={letterSpacing =>
+                    commit(
+                      applySelectedPatch(state, {
+                        styles: {
+                          ...(inspector.values.styles as object),
+                          letterSpacing,
+                        },
+                      })
+                    )
+                  }
+                />
+              </div>
             </>
           ) : null}
-          {inspector.controls.includes("color") && inspector.kind === "element" ? (
+          {inspector.controls.includes("color") &&
+          inspector.kind === "element" ? (
             <Field label="Color">
               <Input
-                value={String((inspector.values.styles as { color?: string }).color ?? "")}
-                onChange={event => commit(applySelectedPatch(state, { styles: { ...(inspector.values.styles as object), color: event.target.value } }))}
+                value={String(
+                  (inspector.values.styles as { color?: string }).color ?? ""
+                )}
+                onChange={event =>
+                  commit(
+                    applySelectedPatch(state, {
+                      styles: {
+                        ...(inspector.values.styles as object),
+                        color: event.target.value,
+                      },
+                    })
+                  )
+                }
                 className="h-10 rounded-xl border-white/10 bg-white/[0.03]"
               />
             </Field>
           ) : null}
-          {inspector.controls.includes("action") && inspector.kind === "element" && (inspector.values.type === "button" || inspector.values.type === "phoneCta") ? (
+          {inspector.controls.includes("action") &&
+          inspector.kind === "element" &&
+          (inspector.values.type === "button" ||
+            inspector.values.type === "phoneCta") ? (
             <>
               <SelectField
                 label="Button action"
-                value={String((inspector.values.action as ButtonAction | undefined)?.type ?? "nextStep")}
-                options={BUTTON_ACTION_TYPES.map(type => ({ value: type, label: type }))}
+                value={String(
+                  (inspector.values.action as ButtonAction | undefined)?.type ??
+                    "nextStep"
+                )}
+                options={BUTTON_ACTION_TYPES.map(type => ({
+                  value: type,
+                  label: type,
+                }))}
                 onChange={type => {
                   const action: ButtonAction =
                     type === "url"
@@ -572,42 +1347,80 @@ export function PaidFunnelInspector({
                           : type === "booking"
                             ? { type: "booking" }
                             : type === "step"
-                              ? { type: "step", stepKey: otherSteps[0]?.key ?? state.stepKey }
+                              ? {
+                                  type: "step",
+                                  stepKey: otherSteps[0]?.key ?? state.stepKey,
+                                }
                               : type === "conditional"
-                                ? { type: "conditional", rules: [], fallbackStepKey: otherSteps[0]?.key }
-                            : { type: "nextStep" };
+                                ? {
+                                    type: "conditional",
+                                    rules: [],
+                                    fallbackStepKey: otherSteps[0]?.key,
+                                  }
+                                : { type: "nextStep" };
                   commit(setSelectedAction(state, action));
                 }}
               />
-              {(inspector.values.action as ButtonAction | undefined)?.type === "url" ? (
+              {(inspector.values.action as ButtonAction | undefined)?.type ===
+              "url" ? (
                 <Field label="URL">
                   <Input
-                    value={(inspector.values.action as { href?: string }).href ?? ""}
-                    onChange={event => commit(setSelectedAction(state, { type: "url", href: event.target.value, openInNewTab: true }))}
+                    value={
+                      (inspector.values.action as { href?: string }).href ?? ""
+                    }
+                    onChange={event =>
+                      commit(
+                        setSelectedAction(state, {
+                          type: "url",
+                          href: event.target.value,
+                          openInNewTab: true,
+                        })
+                      )
+                    }
                     className="h-10 rounded-xl border-white/10 bg-white/[0.03]"
                   />
                 </Field>
               ) : null}
-              {(inspector.values.action as ButtonAction | undefined)?.type === "phone" ? (
+              {(inspector.values.action as ButtonAction | undefined)?.type ===
+              "phone" ? (
                 <Field label="Phone">
                   <Input
-                    value={(inspector.values.action as { tel?: string }).tel ?? ""}
-                    onChange={event => commit(setSelectedAction(state, { type: "phone", tel: event.target.value }))}
+                    value={
+                      (inspector.values.action as { tel?: string }).tel ?? ""
+                    }
+                    onChange={event =>
+                      commit(
+                        setSelectedAction(state, {
+                          type: "phone",
+                          tel: event.target.value,
+                        })
+                      )
+                    }
                     className="h-10 rounded-xl border-white/10 bg-white/[0.03]"
                   />
                 </Field>
               ) : null}
-              {(inspector.values.action as ButtonAction | undefined)?.type === "step" ? (
+              {(inspector.values.action as ButtonAction | undefined)?.type ===
+              "step" ? (
                 <SelectField
                   label="Destination page"
-                  value={(inspector.values.action as { stepKey?: string }).stepKey ?? ""}
-                  options={otherSteps.map(step => ({ value: step.key, label: `${step.title} · ${step.slug}` }))}
-                  onChange={stepKey => commit(setSelectedAction(state, { type: "step", stepKey }))}
+                  value={
+                    (inspector.values.action as { stepKey?: string }).stepKey ??
+                    ""
+                  }
+                  options={otherSteps.map(step => ({
+                    value: step.key,
+                    label: `${step.title} · ${step.slug}`,
+                  }))}
+                  onChange={stepKey =>
+                    commit(setSelectedAction(state, { type: "step", stepKey }))
+                  }
                 />
               ) : null}
             </>
           ) : null}
-          {inspector.kind === "element" && (inspector.values.type as string) === "image" ? (
+          {inspector.kind === "element" &&
+          (inspector.values.type as string) === "image" ? (
             <div className="space-y-3">
               <ImageUploadCard
                 label="Image"
@@ -615,43 +1428,98 @@ export function PaidFunnelInspector({
                 specification={MEDIA_SPECIFICATIONS.hero}
                 busy={requestUpload.isPending || completeUpload.isPending}
                 onFile={file => {
-                void uploadAssetDirectly(file, { clientId, assetKind: "client", slot: "product" }, {
-                  requestUpload: input => requestUpload.mutateAsync({
-                    clientId: input.clientId,
-                    assetKind: "client",
-                    slot: "product",
-                    originalFilename: input.originalFilename,
-                    mimeType: input.mimeType,
-                    sizeBytes: input.sizeBytes,
-                  }),
-                  completeUpload: input => completeUpload.mutateAsync(input),
-                  fetchFn: fetch,
-                }).then(result => {
-                  commit(attachSelectedMedia(state, {
-                    url: (result as { storageUrl?: string }).storageUrl ?? "",
-                    filename: file.name,
-                    assetId: (result as { assetId?: string }).assetId,
-                  }));
-                });
+                  void uploadAssetDirectly(
+                    file,
+                    { clientId, assetKind: "client", slot: "product" },
+                    {
+                      requestUpload: input =>
+                        requestUpload.mutateAsync({
+                          clientId: input.clientId,
+                          assetKind: "client",
+                          slot: "product",
+                          originalFilename: input.originalFilename,
+                          mimeType: input.mimeType,
+                          sizeBytes: input.sizeBytes,
+                        }),
+                      completeUpload: input =>
+                        completeUpload.mutateAsync(input),
+                      fetchFn: fetch,
+                    }
+                  ).then(result => {
+                    commit(
+                      attachSelectedMedia(state, {
+                        url:
+                          (result as { storageUrl?: string }).storageUrl ?? "",
+                        filename: file.name,
+                        assetId: (result as { assetId?: string }).assetId,
+                      })
+                    );
+                  });
                 }}
               />
+              <Field label="Image URL">
+                <Input
+                  value={String(
+                    (inspector.values.props as { src?: string }).src ?? ""
+                  )}
+                  onChange={event =>
+                    commit(
+                      applySelectedPatch(state, {
+                        props: {
+                          ...(inspector.values.props as object),
+                          src: event.target.value,
+                        },
+                      })
+                    )
+                  }
+                  className="h-10 rounded-lg border-slate-200 bg-white"
+                />
+              </Field>
               <Field label="Alt text">
-                <Input value={String((inspector.values.props as { alt?: string }).alt ?? "")} onChange={event => commit(applySelectedPatch(state, { props: { ...(inspector.values.props as object), alt: event.target.value } }))} className="h-10 rounded-lg border-slate-200 bg-white" />
+                <Input
+                  value={String(
+                    (inspector.values.props as { alt?: string }).alt ?? ""
+                  )}
+                  onChange={event =>
+                    commit(
+                      applySelectedPatch(state, {
+                        props: {
+                          ...(inspector.values.props as object),
+                          alt: event.target.value,
+                        },
+                      })
+                    )
+                  }
+                  className="h-10 rounded-lg border-slate-200 bg-white"
+                />
               </Field>
             </div>
           ) : null}
-          {inspector.controls.includes("visibility") && inspector.values.visibility ? (
+          {inspector.controls.includes("visibility") &&
+          inspector.values.visibility ? (
             <VisibilityFields
               value={inspector.values.visibility as DeviceVisibility}
-              onChange={visibility => commit(setSelectedVisibility(state, visibility))}
+              onChange={visibility =>
+                commit(setSelectedVisibility(state, visibility))
+              }
             />
           ) : null}
           <div className="flex gap-2">
-            <Button type="button" variant="outline" className="flex-1" onClick={() => commit(studioHotkey(state, "d", { meta: true }))}>
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={() => commit(studioHotkey(state, "d", { meta: true }))}
+            >
               <Copy className="h-4 w-4" />
               Duplicate
             </Button>
-            <Button type="button" variant="outline" className="flex-1" onClick={() => commit(studioHotkey(state, "Delete", {}))}>
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={() => commit(studioHotkey(state, "Delete", {}))}
+            >
               <Trash2 className="h-4 w-4" />
               Delete
             </Button>
@@ -660,64 +1528,256 @@ export function PaidFunnelInspector({
             <Button
               type="button"
               className="w-full rounded-xl bg-cyan-400 font-extrabold text-slate-950"
-              onClick={() => commit(saveSelectedReusable(state, "Reusable section"))}
+              onClick={() =>
+                commit(saveSelectedReusable(state, "Reusable section"))
+              }
             >
               Save reusable
             </Button>
           ) : null}
         </div>
       ) : (
-        <p className="text-sm font-medium text-muted-foreground">Select a section, row, column, or element.</p>
+        <p className="text-sm font-medium text-muted-foreground">
+          Select a section, row, column, or element.
+        </p>
       )}
 
       <div className="space-y-3 border-t border-slate-200 pt-4">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-blue-600">Global funnel styles</p>
+          <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-blue-600">
+            Global funnel styles
+          </p>
           <Button
             type="button"
             variant="outline"
             className="h-8 border-slate-200 bg-white px-2.5 text-xs font-extrabold"
-            onClick={() => commit(patchGlobalStyles(state, {
-              colors: { ...LIGHT_FUNNEL_THEME_PRESET.colors },
-              button: { ...globals.button, ...LIGHT_FUNNEL_THEME_PRESET.button },
-            }))}
+            onClick={() =>
+              commit(
+                patchGlobalStyles(state, {
+                  colors: { ...LIGHT_FUNNEL_THEME_PRESET.colors },
+                  button: {
+                    ...globals.button,
+                    ...LIGHT_FUNNEL_THEME_PRESET.button,
+                  },
+                })
+              )
+            }
           >
             Light / white
           </Button>
         </div>
-        <p className="text-xs text-slate-500">Changes the funnel defaults. Block-level colors still override these settings.</p>
+        <p className="text-xs text-slate-500">
+          Changes the funnel defaults. Block-level colors still override these
+          settings.
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            {
+              label: "Modern",
+              heading: "Inter, ui-sans-serif",
+              body: "Inter, ui-sans-serif",
+            },
+            {
+              label: "Rounded",
+              heading: "ui-rounded, Avenir Next",
+              body: "Inter, ui-sans-serif",
+            },
+            {
+              label: "Bold",
+              heading: "Arial Black, ui-sans-serif",
+              body: "Inter, ui-sans-serif",
+            },
+          ].map(font => (
+            <Button
+              key={font.label}
+              type="button"
+              variant="outline"
+              className="h-9 px-2 text-xs font-extrabold"
+              onClick={() =>
+                commit(
+                  patchGlobalStyles(state, {
+                    fonts: { heading: font.heading, body: font.body },
+                  })
+                )
+              }
+            >
+              {font.label}
+            </Button>
+          ))}
+        </div>
         <Field label="Heading font">
-          <Input value={globals.fonts.heading} onChange={event => commit(patchGlobalStyles(state, { fonts: { ...globals.fonts, heading: event.target.value } }))} className="h-10 rounded-xl border-white/10 bg-white/[0.03]" />
+          <Input
+            value={globals.fonts.heading}
+            onChange={event =>
+              commit(
+                patchGlobalStyles(state, {
+                  fonts: { ...globals.fonts, heading: event.target.value },
+                })
+              )
+            }
+            className="h-10 rounded-xl border-white/10 bg-white/[0.03]"
+          />
         </Field>
         <Field label="Body font">
-          <Input value={globals.fonts.body} onChange={event => commit(patchGlobalStyles(state, { fonts: { ...globals.fonts, body: event.target.value } }))} className="h-10 rounded-xl border-white/10 bg-white/[0.03]" />
+          <Input
+            value={globals.fonts.body}
+            onChange={event =>
+              commit(
+                patchGlobalStyles(state, {
+                  fonts: { ...globals.fonts, body: event.target.value },
+                })
+              )
+            }
+            className="h-10 rounded-xl border-white/10 bg-white/[0.03]"
+          />
         </Field>
-        <ColorField label="Overall background" value={globals.colors.background} onChange={background => commit(patchGlobalStyles(state, { colors: { ...globals.colors, background } }))} />
-        <ColorField label="Surface" value={globals.colors.surface} onChange={surface => commit(patchGlobalStyles(state, { colors: { ...globals.colors, surface } }))} />
-        <ColorField label="Heading text" value={globals.colors.heading} onChange={heading => commit(patchGlobalStyles(state, { colors: { ...globals.colors, heading } }))} />
-        <ColorField label="Body text" value={globals.colors.text} onChange={text => commit(patchGlobalStyles(state, { colors: { ...globals.colors, text } }))} />
-        <ColorField label="Muted text" value={globals.colors.muted} onChange={muted => commit(patchGlobalStyles(state, { colors: { ...globals.colors, muted } }))} />
-        <ColorField label="Primary" value={globals.colors.primary} onChange={primary => commit(patchGlobalStyles(state, { colors: { ...globals.colors, primary } }))} />
-        <ColorField label="Primary text" value={globals.colors.primaryText} onChange={primaryText => commit(patchGlobalStyles(state, { colors: { ...globals.colors, primaryText } }))} />
-        <ColorField label="Button background" value={globals.button.background} onChange={background => commit(patchGlobalStyles(state, { button: { ...globals.button, background } }))} />
-        <ColorField label="Button text" value={globals.button.color} onChange={color => commit(patchGlobalStyles(state, { button: { ...globals.button, color } }))} />
-        <ColorField label="Border" value={globals.colors.border} onChange={border => commit(patchGlobalStyles(state, { colors: { ...globals.colors, border } }))} />
-        <NumberField label="Boxed max width" value={globals.containers.boxedMaxWidth} onChange={boxedMaxWidth => commit(patchGlobalStyles(state, { containers: { ...globals.containers, boxedMaxWidth } }))} />
+        <ColorField
+          label="Overall background"
+          value={globals.colors.background}
+          onChange={background =>
+            commit(
+              patchGlobalStyles(state, {
+                colors: { ...globals.colors, background },
+              })
+            )
+          }
+        />
+        <ColorField
+          label="Surface"
+          value={globals.colors.surface}
+          onChange={surface =>
+            commit(
+              patchGlobalStyles(state, {
+                colors: { ...globals.colors, surface },
+              })
+            )
+          }
+        />
+        <ColorField
+          label="Heading text"
+          value={globals.colors.heading}
+          onChange={heading =>
+            commit(
+              patchGlobalStyles(state, {
+                colors: { ...globals.colors, heading },
+              })
+            )
+          }
+        />
+        <ColorField
+          label="Body text"
+          value={globals.colors.text}
+          onChange={text =>
+            commit(
+              patchGlobalStyles(state, { colors: { ...globals.colors, text } })
+            )
+          }
+        />
+        <ColorField
+          label="Muted text"
+          value={globals.colors.muted}
+          onChange={muted =>
+            commit(
+              patchGlobalStyles(state, { colors: { ...globals.colors, muted } })
+            )
+          }
+        />
+        <ColorField
+          label="Primary"
+          value={globals.colors.primary}
+          onChange={primary =>
+            commit(
+              patchGlobalStyles(state, {
+                colors: { ...globals.colors, primary },
+              })
+            )
+          }
+        />
+        <ColorField
+          label="Primary text"
+          value={globals.colors.primaryText}
+          onChange={primaryText =>
+            commit(
+              patchGlobalStyles(state, {
+                colors: { ...globals.colors, primaryText },
+              })
+            )
+          }
+        />
+        <ColorField
+          label="Button background"
+          value={globals.button.background}
+          onChange={background =>
+            commit(
+              patchGlobalStyles(state, {
+                button: { ...globals.button, background },
+              })
+            )
+          }
+        />
+        <ColorField
+          label="Button text"
+          value={globals.button.color}
+          onChange={color =>
+            commit(
+              patchGlobalStyles(state, { button: { ...globals.button, color } })
+            )
+          }
+        />
+        <ColorField
+          label="Border"
+          value={globals.colors.border}
+          onChange={border =>
+            commit(
+              patchGlobalStyles(state, {
+                colors: { ...globals.colors, border },
+              })
+            )
+          }
+        />
+        <NumberField
+          label="Boxed max width"
+          value={globals.containers.boxedMaxWidth}
+          onChange={boxedMaxWidth =>
+            commit(
+              patchGlobalStyles(state, {
+                containers: { ...globals.containers, boxedMaxWidth },
+              })
+            )
+          }
+        />
       </div>
 
       <div className="space-y-3 border-t border-slate-200 pt-4">
-        <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-blue-600">Client integrations</p>
+        <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-blue-600">
+          Client integrations
+        </p>
         <p className="text-xs font-medium text-muted-foreground">
-          Presence from ClientIntegrationProfile for client {clientId}. Entered on Clients → Integrations. No secret values here.
+          Presence from ClientIntegrationProfile for client {clientId}. Entered
+          on Clients → Integrations. No secret values here.
         </p>
         {presence.map(group => (
-          <div key={group.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div
+            key={group.id}
+            className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+          >
             <p className="text-sm font-extrabold">{group.label}</p>
             <ul className="mt-2 space-y-1">
               {group.fields.map(field => (
-                <li key={field.key} className="flex items-center justify-between text-xs font-bold">
+                <li
+                  key={field.key}
+                  className="flex items-center justify-between text-xs font-bold"
+                >
                   <span>{field.key}</span>
-                  <span className={field.presence === "SET" ? "text-emerald-600" : "text-muted-foreground"}>{field.presence}</span>
+                  <span
+                    className={
+                      field.presence === "SET"
+                        ? "text-emerald-600"
+                        : "text-muted-foreground"
+                    }
+                  >
+                    {field.presence}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -727,7 +1787,10 @@ export function PaidFunnelInspector({
           Funnel ready: {profile.readiness.funnelReady ? "yes" : "no"}
         </p>
       </div>
-      <p className="sr-only">Graph revision {state.document.graph.version} undo {String(canRedoStudio(state))}</p>
+      <p className="sr-only">
+        Graph revision {state.document.graph.version} undo{" "}
+        {String(canRedoStudio(state))}
+      </p>
     </aside>
   );
 }

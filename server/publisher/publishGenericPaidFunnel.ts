@@ -42,6 +42,32 @@ export { PublisherProvenNoEffectError } from "./repositoryReconciliation";
 
 export type GenericPaidFunnelPublishJob = GenericPaidFunnelPublish;
 
+const SAFE_PUBLISH_FAILURE_MESSAGES = new Set([
+  "At least one file is required for a publisher commit.",
+  "Publisher commit file paths must be unique.",
+  "Publisher commit file paths must be repository-relative.",
+  "Publisher deletion paths must be unique.",
+  "Publisher deletion paths must be distinct repository-relative paths.",
+  "Protected paid funnel material snapshot is missing.",
+  "Protected paid funnel material snapshot is invalid.",
+  "Provisioned paid funnel resources are missing or do not match the publish job.",
+  "Published repository is missing.",
+  "Published repository branch is missing.",
+  "Publisher external operation timed out.",
+]);
+
+export function safeGenericPaidFunnelPublishFailure(error: unknown): string {
+  if (error instanceof PublisherManualAttentionError) return error.message;
+  if (error instanceof GitHubApiError) return error.message;
+  if (
+    error instanceof Error &&
+    SAFE_PUBLISH_FAILURE_MESSAGES.has(error.message)
+  ) {
+    return error.message;
+  }
+  return "Paid funnel publish step failed. Retry to resume.";
+}
+
 export type GenericPaidFunnelPublishStepValues = Partial<
   Pick<
     GenericPaidFunnelPublishJob,
@@ -241,11 +267,7 @@ export async function preflightGeneratedRepositoryActionsSecrets(input: {
       }
       throw error;
     }
-    if (
-      !secret ||
-      secret.name !== secretName ||
-      secret.visibility !== "all"
-    ) {
+    if (!secret || secret.name !== secretName || secret.visibility !== "all") {
       throw new PublisherManualAttentionError(
         `GitHub Actions credential ${secretName} is not available to all generated repositories; manual attention is required.`
       );
@@ -759,10 +781,7 @@ export async function advanceGenericPaidFunnelPublish(
     const failed = await deps.store.fail({
       jobId: job.id,
       leaseToken,
-      message:
-        error instanceof PublisherManualAttentionError
-          ? error.message
-          : "Paid funnel publish step failed. Retry to resume.",
+      message: safeGenericPaidFunnelPublishFailure(error),
       now: deps.now(),
       ...recovery,
     });

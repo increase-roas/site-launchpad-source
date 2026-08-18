@@ -42,6 +42,8 @@ export const PAID_FUNNEL_SECTION_PRESETS = [
   "full-width",
   "boxed",
   "hero",
+  "image-choice-hero",
+  "numbered-steps",
   "two-column",
   "three-column",
   "form",
@@ -51,16 +53,28 @@ export const PAID_FUNNEL_SECTION_PRESETS = [
   "pricing",
   "footer",
 ] as const;
-export type PaidFunnelSectionPreset = (typeof PAID_FUNNEL_SECTION_PRESETS)[number];
+export type PaidFunnelSectionPreset =
+  (typeof PAID_FUNNEL_SECTION_PRESETS)[number];
 
 export const PAID_FUNNEL_BREAKPOINTS = ["desktop", "tablet", "mobile"] as const;
 export type PaidFunnelBreakpoint = (typeof PAID_FUNNEL_BREAKPOINTS)[number];
 
-export const PAID_FUNNEL_NODE_KINDS = ["page", "section", "row", "column", "element"] as const;
+export const PAID_FUNNEL_NODE_KINDS = [
+  "page",
+  "section",
+  "row",
+  "column",
+  "element",
+] as const;
 export type PaidFunnelNodeKind = (typeof PAID_FUNNEL_NODE_KINDS)[number];
 
-export const PAID_FUNNEL_STEP_STATE_VALUES = ["draft", "preview", "published"] as const;
-export type PaidFunnelStepState = (typeof PAID_FUNNEL_STEP_STATE_VALUES)[number];
+export const PAID_FUNNEL_STEP_STATE_VALUES = [
+  "draft",
+  "preview",
+  "published",
+] as const;
+export type PaidFunnelStepState =
+  (typeof PAID_FUNNEL_STEP_STATE_VALUES)[number];
 
 export type BoxSpacing = {
   top: number;
@@ -124,6 +138,8 @@ export type ElementStyles = {
   fontWeight?: number;
   lineHeight?: number;
   letterSpacing?: number;
+  width?: ResponsiveValue<number>;
+  maxWidth?: ResponsiveValue<number>;
   color?: string;
   textAlign?: ResponsiveValue<TextAlign>;
   padding?: ResponsiveValue<BoxSpacing>;
@@ -271,7 +287,12 @@ export type PaidFunnelGraph = {
   reusableSections: ReusableSection[];
 };
 
-export type GraphNode = FunnelPage | FunnelSection | FunnelRow | FunnelColumn | FunnelElement;
+export type GraphNode =
+  | FunnelPage
+  | FunnelSection
+  | FunnelRow
+  | FunnelColumn
+  | FunnelElement;
 
 export function emptySpacing(value = 0): BoxSpacing {
   return { top: value, right: value, bottom: value, left: value };
@@ -283,7 +304,7 @@ export function defaultVisibility(): DeviceVisibility {
 
 export function defaultGlobalStyles(): GlobalFunnelStyles {
   return {
-    fonts: { heading: "Inter", body: "Inter" },
+    fonts: { heading: "Inter, ui-sans-serif", body: "Inter, ui-sans-serif" },
     colors: {
       background: "#ffffff",
       surface: "#f8fafc",
@@ -324,18 +345,27 @@ export const LIGHT_FUNNEL_THEME_PRESET = {
   },
 } as const;
 
-export function normalizeGlobalFunnelStyles(input: unknown): GlobalFunnelStyles {
+export function normalizeGlobalFunnelStyles(
+  input: unknown
+): GlobalFunnelStyles {
   const defaults = defaultGlobalStyles();
-  if (!input || typeof input !== "object" || Array.isArray(input)) return defaults;
+  if (!input || typeof input !== "object" || Array.isArray(input))
+    return defaults;
   const raw = input as Partial<GlobalFunnelStyles>;
-  const fonts: Partial<GlobalFunnelStyles["fonts"]> = raw.fonts && typeof raw.fonts === "object" ? raw.fonts : {};
-  const colors: Partial<GlobalFunnelStyles["colors"]> = raw.colors && typeof raw.colors === "object" ? raw.colors : {};
-  const button: Partial<GlobalFunnelStyles["button"]> = raw.button && typeof raw.button === "object" ? raw.button : {};
-  const containers: Partial<GlobalFunnelStyles["containers"]> = raw.containers && typeof raw.containers === "object" ? raw.containers : {};
-  const mobile: Partial<GlobalFunnelStyles["mobile"]> = raw.mobile && typeof raw.mobile === "object" ? raw.mobile : {};
+  const fonts: Partial<GlobalFunnelStyles["fonts"]> =
+    raw.fonts && typeof raw.fonts === "object" ? raw.fonts : {};
+  const colors: Partial<GlobalFunnelStyles["colors"]> =
+    raw.colors && typeof raw.colors === "object" ? raw.colors : {};
+  const button: Partial<GlobalFunnelStyles["button"]> =
+    raw.button && typeof raw.button === "object" ? raw.button : {};
+  const containers: Partial<GlobalFunnelStyles["containers"]> =
+    raw.containers && typeof raw.containers === "object" ? raw.containers : {};
+  const mobile: Partial<GlobalFunnelStyles["mobile"]> =
+    raw.mobile && typeof raw.mobile === "object" ? raw.mobile : {};
   const mergedColors = { ...defaults.colors, ...colors };
   if (!("heading" in colors) || typeof colors.heading !== "string") {
-    mergedColors.heading = typeof colors.text === "string" ? colors.text : defaults.colors.heading;
+    mergedColors.heading =
+      typeof colors.text === "string" ? colors.text : defaults.colors.heading;
   }
   return {
     fonts: { ...defaults.fonts, ...fonts },
@@ -365,7 +395,9 @@ export function createIdFactory(prefix = "pf"): () => string {
   return () => `${prefix}_${++n}`;
 }
 
-export function defaultColumnWidths(count: number): Record<PaidFunnelBreakpoint, number> {
+export function defaultColumnWidths(
+  count: number
+): Record<PaidFunnelBreakpoint, number> {
   const width = Math.floor((100 / count) * 100) / 100;
   const last = Math.round((100 - width * (count - 1)) * 100) / 100;
   return { desktop: last, tablet: last, mobile: 100 };
@@ -374,7 +406,7 @@ export function defaultColumnWidths(count: number): Record<PaidFunnelBreakpoint,
 export function createColumn(
   nextId: () => string,
   elements: FunnelElement[] = [],
-  count = 1,
+  count = 1
 ): FunnelColumn {
   return {
     id: nextId(),
@@ -391,7 +423,10 @@ export function createColumn(
   };
 }
 
-export function createRow(nextId: () => string, columns: FunnelColumn[]): FunnelRow {
+export function createRow(
+  nextId: () => string,
+  columns: FunnelColumn[]
+): FunnelRow {
   return {
     id: nextId(),
     kind: "row",
@@ -406,7 +441,7 @@ export function createRow(nextId: () => string, columns: FunnelColumn[]): Funnel
 
 export function createSection(
   nextId: () => string,
-  input: Partial<FunnelSection> & { rows: FunnelRow[] },
+  input: Partial<FunnelSection> & { rows: FunnelRow[] }
 ): FunnelSection {
   return {
     id: nextId(),
@@ -436,7 +471,7 @@ export function createElement(
   nextId: () => string,
   type: PaidFunnelElementType,
   props: Record<string, unknown> = {},
-  styles: Partial<ElementStyles> = {},
+  styles: Partial<ElementStyles> = {}
 ): FunnelElement {
   return {
     id: nextId(),
@@ -450,13 +485,16 @@ export function createElement(
 
 export function defaultElementProps(
   type: PaidFunnelElementType,
-  overrides: Record<string, unknown> = {},
+  overrides: Record<string, unknown> = {}
 ): Record<string, unknown> {
   const defaults: Record<PaidFunnelElementType, Record<string, unknown>> = {
     heading: { text: "Headline", tag: "h2" },
     text: { text: "Supporting copy for this paid-ad step." },
     image: { src: "", alt: "", filename: "" },
-    button: { label: "Continue", action: { type: "nextStep" } satisfies ButtonAction },
+    button: {
+      label: "Continue",
+      action: { type: "nextStep" } satisfies ButtonAction,
+    },
     icon: { name: "sparkles" },
     video: { src: "", filename: "" },
     spacer: { height: 24 },
@@ -472,6 +510,11 @@ export function defaultElementProps(
       question: "Choose the answer that fits best.",
       options: ["Option one", "Option two", "Option three"],
       autoAdvance: true,
+      columns: 1,
+      gap: 12,
+      buttonBackground: "",
+      buttonColor: "",
+      buttonRadius: 8,
     },
     shortAnswer: {
       field: "surveyAnswer",
@@ -481,10 +524,18 @@ export function defaultElementProps(
     },
     phoneCta: { label: "Call now", tel: "" },
     countdown: { endsAt: "", label: "Offer ends" },
-    testimonial: { quote: "The process was straightforward and the team followed through.", author: "Jordan", role: "Customer" },
+    testimonial: {
+      quote: "The process was straightforward and the team followed through.",
+      author: "Jordan",
+      role: "Customer",
+    },
     faq: {
       items: [
-        { question: "What happens next?", answer: "A specialist reviews your request and contacts you with the right next step." },
+        {
+          question: "What happens next?",
+          answer:
+            "A specialist reviews your request and contacts you with the right next step.",
+        },
       ],
     },
     inventory: { slots: 5, heading: "Available options" },
@@ -494,7 +545,10 @@ export function defaultElementProps(
   return { ...defaults[type], ...overrides };
 }
 
-export function createEmptyPage(nextId: () => string, stepKey: string): FunnelPage {
+export function createEmptyPage(
+  nextId: () => string,
+  stepKey: string
+): FunnelPage {
   return { id: nextId(), kind: "page", stepKey, sections: [] };
 }
 
@@ -517,7 +571,10 @@ export function createEmptyGraph(input: {
         type: "landing",
         slug: "/",
         title: "Landing",
-        seo: { title: `${input.name} | Offer`, description: "Paid ads landing page." },
+        seo: {
+          title: `${input.name} | Offer`,
+          description: "Paid ads landing page.",
+        },
         nextStep: { type: "none" },
         tracking: {
           browserEvent: "ViewContent",
@@ -539,7 +596,7 @@ export function cloneNode<T>(value: T): T {
 
 export function visitNodes(
   graph: PaidFunnelGraph,
-  visit: (node: GraphNode, parent: GraphNode | null, page: FunnelPage) => void,
+  visit: (node: GraphNode, parent: GraphNode | null, page: FunnelPage) => void
 ): void {
   for (const step of graph.steps) {
     const page = graph.pages[step.key];
@@ -562,9 +619,13 @@ export function visitNodes(
 
 export function findNode(
   graph: PaidFunnelGraph,
-  id: string,
+  id: string
 ): { node: GraphNode; parent: GraphNode | null; page: FunnelPage } | null {
-  let found: { node: GraphNode; parent: GraphNode | null; page: FunnelPage } | null = null;
+  let found: {
+    node: GraphNode;
+    parent: GraphNode | null;
+    page: FunnelPage;
+  } | null = null;
   visitNodes(graph, (node, parent, page) => {
     if (node.id === id) found = { node, parent, page };
   });
@@ -609,14 +670,16 @@ export const paidFunnelGraphSchema: z.ZodType<PaidFunnelGraph> = z.lazy(() =>
           z.object({ type: z.literal("redirect"), url: z.string() }),
           z.object({ type: z.literal("none") }),
         ]),
-        tracking: z.object({
-          browserEvent: z.string().min(1),
-          serverEvent: z.string().min(1),
-          answerField: z.string().min(1).optional(),
-        }).optional(),
+        tracking: z
+          .object({
+            browserEvent: z.string().min(1),
+            serverEvent: z.string().min(1),
+            answerField: z.string().min(1).optional(),
+          })
+          .optional(),
         previewState: z.enum(PAID_FUNNEL_STEP_STATE_VALUES),
         publishState: z.enum(PAID_FUNNEL_STEP_STATE_VALUES),
-      }),
+      })
     ),
     pages: z.record(
       z.string(),
@@ -625,11 +688,11 @@ export const paidFunnelGraphSchema: z.ZodType<PaidFunnelGraph> = z.lazy(() =>
         kind: z.literal("page"),
         stepKey: z.string(),
         sections: z.array(z.any()),
-      }),
+      })
     ),
     globalStyles: z.any(),
     reusableSections: z.array(z.any()),
-  }),
+  })
 ) as z.ZodType<PaidFunnelGraph>;
 
 export function migratePaidFunnelGraph(input: unknown): PaidFunnelGraph {
@@ -639,7 +702,9 @@ export function migratePaidFunnelGraph(input: unknown): PaidFunnelGraph {
   const raw = input as Record<string, unknown>;
   const version = raw.schemaVersion ?? 0;
   if (version === 0 && raw.blocks) {
-    throw new Error("Flat website block lists cannot migrate into a paid-funnel graph.");
+    throw new Error(
+      "Flat website block lists cannot migrate into a paid-funnel graph."
+    );
   }
   if (raw.kind && raw.kind !== PAID_FUNNEL_KIND) {
     throw new Error("Only paid-funnel graphs can be opened in this builder.");
@@ -658,16 +723,26 @@ export function migratePaidFunnelGraph(input: unknown): PaidFunnelGraph {
   return parsed;
 }
 
-export function stepHasLeadForm(graph: PaidFunnelGraph, stepKey: string): boolean {
+export function stepHasLeadForm(
+  graph: PaidFunnelGraph,
+  stepKey: string
+): boolean {
   const page = graph.pages[stepKey];
   if (!page) return false;
   let found = false;
-  visitNodes({ ...graph, steps: graph.steps.filter(step => step.key === stepKey) }, node => {
-    if (node.kind === "element" && (node.type === "form" || node.type === "phoneCta")) {
-      found = true;
+  visitNodes(
+    { ...graph, steps: graph.steps.filter(step => step.key === stepKey) },
+    node => {
+      if (
+        node.kind === "element" &&
+        (node.type === "form" || node.type === "phoneCta")
+      ) {
+        found = true;
+      }
     }
-  });
+  );
   return found;
 }
 
-export const CANONICAL_OFFLINE_CONVERSION_CONTRACT = SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT;
+export const CANONICAL_OFFLINE_CONVERSION_CONTRACT =
+  SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT;

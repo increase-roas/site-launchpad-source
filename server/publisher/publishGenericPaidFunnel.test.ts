@@ -8,6 +8,7 @@ import {
   advanceGenericPaidFunnelPublish,
   genericPaidFunnelManagedFilePlan,
   preflightGeneratedRepositoryActionsSecrets,
+  safeGenericPaidFunnelPublishFailure,
   startGenericPaidFunnelPublish,
 } from "./publishGenericPaidFunnel";
 import { GitHubApiError } from "./githubApi";
@@ -197,6 +198,19 @@ describe("generic Astro paid funnel workflow Retry", () => {
     ).toBe(true);
   });
 
+  it("reports actionable GitHub failures without exposing arbitrary error text", () => {
+    expect(
+      safeGenericPaidFunnelPublishFailure(
+        new GitHubApiError("tree creation", 422)
+      )
+    ).toBe("GitHub tree creation failed with HTTP 422.");
+    expect(
+      safeGenericPaidFunnelPublishFailure(
+        new Error("secret-shaped upstream response")
+      )
+    ).toBe("Paid funnel publish step failed. Retry to resume.");
+  });
+
   it("defers organization-secret verification when a repository token cannot read org metadata", async () => {
     const getOrganizationActionsSecret = vi
       .fn()
@@ -292,7 +306,8 @@ describe("generic Astro paid funnel workflow Retry", () => {
     expect(result).toMatchObject({
       status: "failed",
       step: "commit_source",
-      error: "Paid funnel publish step failed. Retry to resume.",
+      error:
+        "Provisioned paid funnel resources are missing or do not match the publish job.",
     });
     expect(harness.deps.loadMaterial).not.toHaveBeenCalled();
     expect(harness.deps.external.commitSource).not.toHaveBeenCalled();

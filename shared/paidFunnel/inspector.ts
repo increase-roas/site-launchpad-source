@@ -1,4 +1,12 @@
-import { emptySpacing, findNode, type BoxSpacing, type GraphNode, type PaidFunnelBreakpoint, type PaidFunnelGraph, type ResponsiveValue } from "./graph";
+import {
+  emptySpacing,
+  findNode,
+  type BoxSpacing,
+  type GraphNode,
+  type PaidFunnelBreakpoint,
+  type PaidFunnelGraph,
+  type ResponsiveValue,
+} from "./graph";
 
 export type InspectorControl =
   | "layout"
@@ -30,16 +38,67 @@ export type InspectorControl =
   | "color"
   | "link"
   | "action"
-  | "responsive";
+  | "responsive"
+  | "elementSize";
 
 const SECTION_CONTROLS: InspectorControl[] = [
-  "layout", "maxWidth", "minHeight", "alignment", "padding", "margin", "background", "overlay",
-  "border", "radius", "shadow", "sticky", "anchor", "className", "visibility", "duplicate", "saveReusable", "delete",
+  "layout",
+  "maxWidth",
+  "minHeight",
+  "alignment",
+  "padding",
+  "margin",
+  "background",
+  "overlay",
+  "border",
+  "radius",
+  "shadow",
+  "sticky",
+  "anchor",
+  "className",
+  "visibility",
+  "duplicate",
+  "saveReusable",
+  "delete",
 ];
-const ROW_CONTROLS: InspectorControl[] = ["gap", "valign", "wrap", "background", "padding", "columns", "duplicate", "delete"];
-const COLUMN_CONTROLS: InspectorControl[] = ["width", "alignment", "padding", "background", "border", "visibility", "elementOrder", "duplicate", "delete"];
+const ROW_CONTROLS: InspectorControl[] = [
+  "gap",
+  "valign",
+  "wrap",
+  "background",
+  "padding",
+  "columns",
+  "duplicate",
+  "delete",
+];
+const COLUMN_CONTROLS: InspectorControl[] = [
+  "width",
+  "alignment",
+  "padding",
+  "background",
+  "border",
+  "visibility",
+  "elementOrder",
+  "duplicate",
+  "delete",
+];
 const ELEMENT_CONTROLS: InspectorControl[] = [
-  "typography", "spacing", "color", "border", "alignment", "link", "action", "responsive", "visibility", "duplicate", "delete",
+  "typography",
+  "elementSize",
+  "spacing",
+  "margin",
+  "background",
+  "color",
+  "border",
+  "radius",
+  "shadow",
+  "alignment",
+  "link",
+  "action",
+  "responsive",
+  "visibility",
+  "duplicate",
+  "delete",
 ];
 
 export type InspectorModel = {
@@ -54,7 +113,7 @@ export type InspectorModel = {
 export function inspectorModel(
   graph: PaidFunnelGraph,
   selectedId: string | null,
-  breakpoint: PaidFunnelBreakpoint,
+  breakpoint: PaidFunnelBreakpoint
 ): InspectorModel | null {
   if (!selectedId) return null;
   const found = findNode(graph, selectedId);
@@ -148,13 +207,23 @@ export function inspectorModel(
   };
 }
 
-export const BUTTON_ACTION_TYPES = ["nextStep", "step", "url", "phone", "formSubmit", "booking", "conditional"] as const;
+export const BUTTON_ACTION_TYPES = [
+  "nextStep",
+  "step",
+  "url",
+  "phone",
+  "formSubmit",
+  "booking",
+  "conditional",
+] as const;
 
 export function currentSpacing(
   value: ResponsiveValue<BoxSpacing> | undefined,
-  breakpoint: PaidFunnelBreakpoint,
+  breakpoint: PaidFunnelBreakpoint
 ): BoxSpacing {
-  if (breakpoint === "mobile") return value?.mobile ?? value?.tablet ?? value?.desktop ?? emptySpacing();
-  if (breakpoint === "tablet") return value?.tablet ?? value?.desktop ?? emptySpacing();
+  if (breakpoint === "mobile")
+    return value?.mobile ?? value?.tablet ?? value?.desktop ?? emptySpacing();
+  if (breakpoint === "tablet")
+    return value?.tablet ?? value?.desktop ?? emptySpacing();
   return value?.desktop ?? emptySpacing();
 }

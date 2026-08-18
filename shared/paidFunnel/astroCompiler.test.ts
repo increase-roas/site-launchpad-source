@@ -111,6 +111,44 @@ describe("paid funnel Astro compiler", () => {
     expect(runtime).toContain('document.querySelectorAll("[data-countdown]")');
   });
 
+  it("publishes configurable choice grids and responsive element sizing", () => {
+    const graph = createGenericPaidFunnelFixture(createIdFactory("choices"));
+    const choice = Object.values(graph.pages)
+      .flatMap(page => page.sections)
+      .flatMap(section => section.rows)
+      .flatMap(row => row.columns)
+      .flatMap(column => column.elements)
+      .find(element => element.type === "multipleChoice");
+    expect(choice).toBeDefined();
+    if (!choice) return;
+    choice.props = {
+      ...choice.props,
+      question: "New or used?",
+      options: ["New", "Used"],
+      columns: 2,
+      gap: 18,
+      buttonBackground: "#2ba4ee",
+      buttonColor: "#ffffff",
+      buttonRadius: 6,
+    };
+    choice.styles.width = { desktop: 90, mobile: 100 };
+    choice.styles.maxWidth = { desktop: 640, mobile: 560 };
+    const files = compilePaidFunnelToAstro(graph);
+    const pages = files
+      .filter(file => file.path.endsWith(".astro"))
+      .map(file => file.contents)
+      .join("\n");
+    const css =
+      files.find(file => file.path === "src/styles/funnel.css")?.contents ?? "";
+    expect(pages).toContain('class="survey-question-label">New or used?</p>');
+    expect(pages).toContain("--choice-columns:2");
+    expect(pages).toContain("--choice-background:#2ba4ee");
+    expect(css).toContain("width:90%");
+    expect(css).toContain("max-width:640px");
+    expect(css).toContain("width:100%");
+    expect(css).toContain("max-width:560px");
+  });
+
   it("preserves attribution and reuses one event id for Pixel and CAPI deduplication", () => {
     const graph = createGenericPaidFunnelFixture(createIdFactory("meta"));
     const files = compilePaidFunnelToAstro(graph);
