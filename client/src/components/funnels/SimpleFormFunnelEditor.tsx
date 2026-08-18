@@ -878,7 +878,10 @@ export function SimpleFormFunnelEditor({
 
   const saveMutation = trpc.simpleForm.save.useMutation({
     onSuccess: async view => {
-      await utils.simpleForm.get.invalidate({ clientId, funnelId });
+      await Promise.all([
+        utils.simpleForm.get.invalidate({ clientId, funnelId }),
+        utils.clients.list.invalidate(),
+      ]);
       setRecord(view.record);
       toast.success("Funnel settings saved.");
     },
@@ -887,7 +890,10 @@ export function SimpleFormFunnelEditor({
   const startPublishMutation = trpc.simpleForm.startPublish.useMutation({
     onSuccess: async status => {
       setActivePublish({ clientId, funnelId, value: status });
-      await utils.simpleForm.publishStatus.invalidate({ clientId, funnelId });
+      await Promise.all([
+        utils.simpleForm.publishStatus.invalidate({ clientId, funnelId }),
+        utils.clients.list.invalidate(),
+      ]);
     },
     onError: error => toast.error(error.message),
   });
@@ -895,7 +901,10 @@ export function SimpleFormFunnelEditor({
     onSuccess: async status => {
       publishAdvanceController.observeSuccessfulStatus(status);
       setActivePublish({ clientId, funnelId, value: status });
-      await utils.simpleForm.publishStatus.invalidate({ clientId, funnelId });
+      await Promise.all([
+        utils.simpleForm.publishStatus.invalidate({ clientId, funnelId }),
+        utils.clients.list.invalidate(),
+      ]);
     },
     onError: error => {
       publishAdvanceController.completeError();

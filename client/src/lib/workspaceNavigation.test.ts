@@ -3,6 +3,7 @@ import {
   getClientIdFromWorkspacePath,
   getWorkspaceArea,
   integrationsRoute,
+  publisherDestination,
   settingsRedirectFromLegacyClientPath,
   workspaceRoute,
 } from "./workspaceNavigation";
@@ -53,5 +54,26 @@ describe("Client integrations destination", () => {
     expect(integrationsRoute(9)).toBe("/workspace/9/integrations");
     expect(getWorkspaceArea("/workspace/9/integrations")).toBe("settings");
     expect(getClientIdFromWorkspacePath("/workspace/9/integrations")).toBe(9);
+  });
+});
+
+describe("real publisher destinations", () => {
+  it("routes header Publish to the website or selected funnel publisher", () => {
+    expect(publisherDestination({ clientId: 9, area: "pages" })).toBe(
+      "/workspace/9/settings",
+    );
+    expect(publisherDestination({ clientId: 9, area: "settings" })).toBe(
+      "/workspace/9/settings",
+    );
+    expect(
+      publisherDestination({ clientId: 9, area: "funnels", search: "?funnel=12" }),
+    ).toBe("/workspace/9/funnels?funnel=12");
+    expect(
+      publisherDestination({
+        clientId: 9,
+        area: "funnels",
+        search: "?studio=generic-paid-funnel",
+      }),
+    ).toBe("/workspace/9/funnels?studio=generic-paid-funnel");
   });
 });

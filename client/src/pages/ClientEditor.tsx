@@ -10,6 +10,9 @@ import {
 import { ReadinessChecklist } from "@/components/ReadinessChecklist";
 import { StatusDot } from "@/components/StatusDot";
 import { Button } from "@/components/ui/button";
+import {
+  websitePublisherRoute,
+} from "@/lib/workspaceNavigation";
 import { uploadAssetDirectly } from "@/lib/assetUpload";
 import { trpc } from "@/lib/trpc";
 import {
@@ -28,7 +31,7 @@ import {
   type SecretField,
   type SecretStatus,
 } from "@shared/client";
-import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, Rocket, Save } from "lucide-react";
+import { AlertCircle, ArrowLeft, Loader2, Rocket, Save } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -97,19 +100,6 @@ export default function ClientEditor({ clientId }: { clientId?: number }) {
 
   const requestUploadMutation = trpc.assets.requestUpload.useMutation();
   const completeUploadMutation = trpc.assets.completeUpload.useMutation();
-
-  const launchMutation = trpc.clients.launch.useMutation({
-    onSuccess: async view => {
-      await Promise.all([
-        utils.clients.list.invalidate(),
-        utils.clients.get.invalidate({ clientId: view.client.id }),
-      ]);
-      toast.success("Client is ready for deployment.", {
-        description: "The site was not deployed. Alex can handle that next.",
-      });
-    },
-    onError: error => toast.error(error.message),
-  });
 
   const parsedDetails = clientInputSchema.safeParse({
     ...details,
@@ -273,17 +263,18 @@ export default function ClientEditor({ clientId }: { clientId?: number }) {
             {!isNew && clientQuery.data ? (
               <StatusDot
                 good={
-                  (clientQuery.data.client.status === "ready" ||
-                    clientQuery.data.client.status === "live") &&
-                  clientQuery.data.readiness.isComplete
+                  clientQuery.data.operationalSummary.status === "live" ||
+                  clientQuery.data.operationalSummary.status === "ready_to_publish"
                 }
-                label={
-                  clientQuery.data.client.status === "live"
-                    ? "Live"
-                    : clientQuery.data.client.status === "ready"
-                      ? "Ready"
-                      : "Needs items"
+                tone={
+                  clientQuery.data.operationalSummary.status === "issue"
+                    ? "red"
+                    : clientQuery.data.operationalSummary.status === "live" ||
+                        clientQuery.data.operationalSummary.status === "ready_to_publish"
+                      ? "green"
+                      : "yellow"
                 }
+                label={clientQuery.data.operationalSummary.statusLabel}
               />
             ) : null}
           </div>
@@ -325,12 +316,21 @@ export default function ClientEditor({ clientId }: { clientId?: number }) {
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-6">
           <ClientDetailsFields details={details} errors={errors} setDetails={setDetails} />
-          <ClientSecretsFields
-            setup={setup}
-            errors={errors}
-            secretStatus={clientQuery.data?.secretStatus}
-            setSetup={setSetup}
-          />
+          {!isNew ? (
+            <ClientSecretsFields
+              setup={setup}
+              errors={errors}
+              secretStatus={clientQuery.data?.secretStatus}
+              setSetup={setSetup}
+            />
+          ) : (
+            <section className="rounded-3xl border border-cyan-300/12 bg-cyan-400/[0.035] p-5 sm:p-6">
+              <p className="text-lg font-extrabold">Integrations come next</p>
+              <p className="mt-2 text-sm font-medium leading-relaxed text-muted-foreground">
+                After you save this client, enter GHL, Meta, and Google values once on the Integrations page. That profile powers the website and every funnel.
+              </p>
+            </section>
+          )}
           <ClientAssetsFields
             clientId={clientId}
             assetMap={assetMap}
@@ -362,6 +362,9 @@ export default function ClientEditor({ clientId }: { clientId?: number }) {
             completed={shownReadiness.completed}
             total={shownReadiness.total}
             percent={shownReadiness.percent}
+            runtimeConfigurationLabel={
+              clientQuery.data?.operationalSummary.runtimeConfiguration.label
+            }
           />
 
           {clientId ? (
@@ -369,31 +372,30 @@ export default function ClientEditor({ clientId }: { clientId?: number }) {
               <div className="grid h-12 w-12 place-items-center rounded-2xl bg-cyan-400/10 text-cyan-300 ring-1 ring-cyan-300/15">
                 <Rocket className="h-6 w-6" />
               </div>
-              <h2 className="mt-4 text-2xl font-extrabold tracking-tight">Ready to launch?</h2>
+              <h2 className="mt-4 text-2xl font-extrabold tracking-tight">Ready to publish?</h2>
               <p className="mt-2 text-sm font-medium leading-relaxed text-muted-foreground">
-                Finish every checklist item to unlock the button. This only marks the client ready.
+                Use the real website publisher. This does not mark the client ready by itself.
               </p>
+              {clientQuery.data?.operationalSummary.liveUrl ? (
+                <a
+                  href={clientQuery.data.operationalSummary.liveUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-flex text-sm font-extrabold text-emerald-300"
+                >
+                  Open live site
+                </a>
+              ) : null}
               <Button
                 type="button"
                 size="lg"
-                disabled={!clientQuery.data?.readiness.isComplete || launchMutation.isPending || saving}
-                onClick={() => launchMutation.mutate({ clientId })}
+                disabled={saving}
+                onClick={() => setLocation(websitePublisherRoute(clientId))}
                 className="mt-5 h-14 w-full gap-2 rounded-2xl bg-emerald-400 text-base font-extrabold text-emerald-950 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-white/8 disabled:text-muted-foreground"
               >
-                {launchMutation.isPending ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : clientQuery.data?.client.status === "ready" ? (
-                  <CheckCircle2 className="h-5 w-5" />
-                ) : (
-                  <Rocket className="h-5 w-5" />
-                )}
-                {clientQuery.data?.client.status === "ready" ? "Ready for deployment" : "Launch Site"}
+                <Rocket className="h-5 w-5" />
+                Open website publisher
               </Button>
-              {!clientQuery.data?.readiness.isComplete ? (
-                <p className="mt-3 text-center text-xs font-bold text-muted-foreground">
-                  {(clientQuery.data?.readiness.total ?? 0) - (clientQuery.data?.readiness.completed ?? 0)} items left
-                </p>
-              ) : null}
             </section>
           ) : (
             <section className="rounded-3xl border border-cyan-300/12 bg-cyan-400/[0.035] p-5 sm:p-6">

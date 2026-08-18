@@ -3,6 +3,7 @@ import { WorkspaceProvider, useWorkspace } from "@/contexts/WorkspaceContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   getWorkspaceArea,
+  publisherDestination,
   workspaceRoute,
   type WorkspaceArea,
 } from "@/lib/workspaceNavigation";
@@ -67,9 +68,10 @@ function DashboardShell({ children }: DashboardShellProps) {
   ];
 
   const preview = () => {
-    const url = selectedClient?.client.websiteUrl;
+    const liveUrl = selectedClient?.operationalSummary.liveUrl;
+    const url = liveUrl || selectedClient?.client.websiteUrl;
     if (!url) {
-      toast.error("Choose a client with a website address first.");
+      toast.error("Choose a client with a live site or website address first.");
       return;
     }
     window.open(url, "_blank", "noopener,noreferrer");
@@ -80,8 +82,13 @@ function DashboardShell({ children }: DashboardShellProps) {
       toast.error("Choose a client first.");
       return;
     }
-    setLocation(`/workspace/${selectedClientId}/settings`);
-    toast.info("Finish the checklist, then use Launch Site.");
+    setLocation(
+      publisherDestination({
+        clientId: selectedClientId,
+        area,
+        search: typeof window === "undefined" ? "" : window.location.search,
+      }),
+    );
   };
 
   return (

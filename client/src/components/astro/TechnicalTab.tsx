@@ -5,11 +5,11 @@ import { Switch } from "@/components/ui/switch";
 import {
   ASTRO_INTEGRATION_FIELDS,
   ASTRO_INTEGRATION_VALUES,
-  WRANGLER_SECRET_VALUES,
   type AstroClientConfigInput,
   type AstroIntegration,
   type WranglerSecretName,
 } from "@shared/astroConfig";
+import { summarizeRuntimeConfiguration } from "@shared/operationalSummary";
 import { Check, Clipboard, CloudCog, Code2, Download, KeyRound, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -72,7 +72,7 @@ export function TechnicalTab({
     </Card>
 
     <Card className="border-white/8 bg-card/70 p-5 sm:p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div className="flex gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-400/10 text-cyan-300"><KeyRound className="h-5 w-5" /></span><div><h2 className="text-xl font-extrabold">Client integrations</h2><p className="mt-1 text-sm font-medium text-muted-foreground">Enter these values once at the client level. The website and every funnel reuse the same protected profile.</p><p className="mt-2 text-xs font-extrabold text-cyan-200">{Object.values(secretStatus).filter(Boolean).length} of {WRANGLER_SECRET_VALUES.length} values set</p></div></div><Button type="button" onClick={onOpenClientIntegrations} className="h-11 bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300">Open client integrations</Button></div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div className="flex gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-400/10 text-cyan-300"><KeyRound className="h-5 w-5" /></span><div><h2 className="text-xl font-extrabold">Client integrations</h2><p className="mt-1 text-sm font-medium text-muted-foreground">Enter these values once at the client level. The website and every funnel reuse the same protected profile.</p><p className="mt-2 text-xs font-extrabold text-cyan-200">{summarizeRuntimeConfiguration(secretStatus).label}</p></div></div><Button type="button" onClick={onOpenClientIntegrations} className="h-11 bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300">Open client integrations</Button></div>
     </Card>
 
     <Card className="border-white/8 bg-card/70 p-5 sm:p-6">

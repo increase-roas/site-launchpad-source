@@ -17,6 +17,7 @@ import {
   type ClientIntegrationProfileDto,
   type ClientIntegrationSecretKey,
 } from "@shared/clientIntegrationProfile";
+import { integrationPresenceTone } from "@shared/operationalSummary";
 import { AlertCircle, ArrowLeft, Loader2, PlugZap, RefreshCw, Save } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -68,13 +69,17 @@ function IntegrationEditor({ dto }: { dto: ClientIntegrationProfileDto }) {
     return errors;
   }, [identifiers, secrets]);
   const saveMutation = trpc.clients.saveIntegrationProfile.useMutation({
-    onSuccess: saved => {
+    onSuccess: async saved => {
       setIdentifiers(identifierDraftsFrom(saved));
       setBaseUpdatedAt(saved.lastUpdated);
       setSecrets({});
       setClearSecrets([]);
       setRotateStageWebhookSecret(false);
       utils.clients.getIntegrationProfile.setData({ clientId: dto.clientId }, saved);
+      await Promise.all([
+        utils.clients.list.invalidate(),
+        utils.astroConfig.get.invalidate({ clientId: dto.clientId }),
+      ]);
       toast.success("Client integrations saved for the website and every funnel.");
     },
     onError: async error => {
@@ -157,13 +162,25 @@ function IntegrationEditor({ dto }: { dto: ClientIntegrationProfileDto }) {
                 const value = identifierKey
                   ? identifiers[identifierKey]
                   : (secrets[secretKey!] ?? "");
+                const presence =
+                  field.presence ??
+                  (identifierKey && identifiers[identifierKey].trim() ? "SET" : "NOT SET");
+                const tone = integrationPresenceTone(field.key, presence);
                 return (
                   <div key={field.key} className="space-y-2">
                     <label className="block space-y-2">
                       <span className="flex items-center justify-between gap-3 text-xs font-extrabold">
                         <span className="truncate text-slate-700">{CLIENT_INTEGRATION_FIELD_LABELS[field.key as keyof typeof CLIENT_INTEGRATION_FIELD_LABELS]}</span>
-                        <span className={field.presence === "SET" ? "text-emerald-600" : "text-red-600"}>
-                          {field.presence}
+                        <span
+                          className={
+                            tone === "set"
+                              ? "text-emerald-600"
+                              : tone === "optional"
+                                ? "text-muted-foreground"
+                                : "text-red-600"
+                          }
+                        >
+                          {tone === "optional" ? "Optional" : presence}
                         </span>
                       </span>
                       <Input
@@ -173,7 +190,7 @@ function IntegrationEditor({ dto }: { dto: ClientIntegrationProfileDto }) {
                         disabled={Boolean(secretKey && clearSecrets.includes(secretKey))}
                         value={value}
                         placeholder={
-                          secretKey && field.presence === "SET"
+                          secretKey && presence === "SET"
                             ? "Stored — enter a new value to replace"
                             : "Enter value"
                         }
@@ -212,7 +229,7 @@ function IntegrationEditor({ dto }: { dto: ClientIntegrationProfileDto }) {
                         </span>
                       ) : null}
                     </label>
-                    {secretKey && field.presence === "SET" ? (
+                    {secretKey && presence === "SET" ? (
                       <Button
                         type="button"
                         variant="ghost"

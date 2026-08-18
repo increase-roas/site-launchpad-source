@@ -1,3 +1,5 @@
+import { parsePaidAdsFunnelSearch } from "@shared/paidFunnel/library";
+
 export type WorkspaceArea = "clients" | "pages" | "funnels" | "media" | "settings";
 
 export function getWorkspaceArea(location: string): WorkspaceArea {
@@ -24,6 +26,28 @@ export function workspaceRoute(area: WorkspaceArea, clientId?: number): string {
 
 export function integrationsRoute(clientId: number): string {
   return `/workspace/${clientId}/integrations`;
+}
+
+export function websitePublisherRoute(clientId: number): string {
+  return `/workspace/${clientId}/settings`;
+}
+
+export function publisherDestination(input: {
+  clientId: number;
+  area: WorkspaceArea;
+  search?: string;
+}): string {
+  if (input.area === "funnels") {
+    const parsed = parsePaidAdsFunnelSearch(input.search ?? "");
+    if (parsed.funnelId) {
+      return `/workspace/${input.clientId}/funnels?funnel=${parsed.funnelId}`;
+    }
+    if (parsed.studioKey) {
+      return `/workspace/${input.clientId}/funnels?studio=${encodeURIComponent(parsed.studioKey)}`;
+    }
+    return workspaceRoute("funnels", input.clientId);
+  }
+  return websitePublisherRoute(input.clientId);
 }
 
 export function settingsRedirectFromLegacyClientPath(path: string): string | null {

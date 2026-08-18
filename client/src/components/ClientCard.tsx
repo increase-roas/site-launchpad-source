@@ -1,33 +1,31 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowRight, Building2, CheckCircle2 } from "lucide-react";
+import { ArrowRight, Building2, ExternalLink } from "lucide-react";
 import { useLocation } from "wouter";
-import { ReadinessBar } from "./ReadinessBar";
 import { StatusDot } from "./StatusDot";
+import type { OperationalSummary } from "@shared/operationalSummary";
 
 type ClientCardProps = {
   id: number;
   businessName: string;
   shortName: string;
-  status: "draft" | "ready" | "live" | "issue";
-  readiness: {
-    completed: number;
-    total: number;
-    percent: number;
-    isComplete: boolean;
-  };
+  operationalSummary: OperationalSummary;
 };
+
+function toneForStatus(status: OperationalSummary["status"]): "green" | "yellow" | "red" {
+  if (status === "live" || status === "ready_to_publish") return "green";
+  if (status === "issue") return "red";
+  return "yellow";
+}
 
 export function ClientCard({
   id,
   businessName,
   shortName,
-  status,
-  readiness,
+  operationalSummary,
 }: ClientCardProps) {
   const [, setLocation] = useLocation();
-  const good = (status === "ready" || status === "live") && readiness.isComplete;
-  const label = status === "live" ? "Live" : status === "ready" ? "Ready" : "Needs items";
+  const tone = toneForStatus(operationalSummary.status);
 
   return (
     <Card className="group relative overflow-hidden border-white/8 bg-card/90 p-0 shadow-[0_18px_45px_rgba(0,0,0,0.18)] transition-transform duration-200 hover:-translate-y-0.5 hover:border-white/14">
@@ -45,22 +43,35 @@ export function ClientCard({
               <p className="mt-1 truncate text-sm font-semibold text-muted-foreground">{shortName}</p>
             </div>
           </div>
-          <StatusDot good={good} label={label} compact />
-        </div>
-
-        <div className="mt-6">
-          <ReadinessBar
-            percent={readiness.percent}
-            completed={readiness.completed}
-            total={readiness.total}
+          <StatusDot
+            good={tone === "green"}
+            tone={tone}
+            label={operationalSummary.statusLabel}
+            compact
           />
         </div>
 
-        {status === "ready" ? (
-          <div className="mt-5 flex items-center gap-2 rounded-xl bg-emerald-400/8 px-3 py-2.5 text-sm font-bold text-emerald-300 ring-1 ring-emerald-400/15">
-            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-            Flagged for deployment
-          </div>
+        <ul className="mt-6 space-y-2">
+          {operationalSummary.items.map(item => (
+            <li key={item.key} className="flex items-center justify-between gap-3 text-sm">
+              <span className="font-semibold text-foreground">{item.label}</span>
+              <span className={item.complete ? "font-bold text-emerald-300" : "font-bold text-muted-foreground"}>
+                {item.complete ? "Done" : "Open"}
+              </span>
+            </li>
+          ))}
+        </ul>
+
+        {operationalSummary.liveUrl ? (
+          <a
+            href={operationalSummary.liveUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-5 inline-flex items-center gap-2 text-sm font-extrabold text-emerald-300"
+          >
+            Live site
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+          </a>
         ) : null}
 
         <Button

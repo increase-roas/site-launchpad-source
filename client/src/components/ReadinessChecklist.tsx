@@ -1,5 +1,3 @@
-import { ReadinessBar } from "./ReadinessBar";
-
 type ChecklistItem = {
   key: string;
   label: string;
@@ -12,19 +10,18 @@ type ReadinessChecklistProps = {
   completed: number;
   total: number;
   percent: number;
+  runtimeConfigurationLabel?: string;
 };
 
 const groupLabels = {
-  details: "Client details",
+  details: "Website details",
   photos: "Logo and photos",
-  setup: "Technical Setup (ask Alex)",
+  setup: "Runtime configuration",
 };
 
 export function ReadinessChecklist({
   items,
-  completed,
-  total,
-  percent,
+  runtimeConfigurationLabel,
 }: ReadinessChecklistProps) {
   return (
     <section className="rounded-3xl border border-white/8 bg-card/95 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.24)] sm:p-6">
@@ -33,10 +30,9 @@ export function ReadinessChecklist({
           Launch checklist
         </p>
         <h2 className="mt-2 text-2xl font-extrabold tracking-tight">What is left?</h2>
-      </div>
-
-      <div className="mt-5">
-        <ReadinessBar percent={percent} completed={completed} total={total} size="large" />
+        {runtimeConfigurationLabel ? (
+          <p className="mt-2 text-sm font-bold text-cyan-200">{runtimeConfigurationLabel}</p>
+        ) : null}
       </div>
 
       <div className="mt-6 space-y-6">
@@ -45,7 +41,9 @@ export function ReadinessChecklist({
           return (
             <div key={group}>
               <h3 className="mb-2.5 text-sm font-extrabold text-foreground">
-                {groupLabels[group]}
+                {group === "setup" && runtimeConfigurationLabel
+                  ? runtimeConfigurationLabel
+                  : groupLabels[group]}
               </h3>
               <div className="space-y-2">
                 {groupItems.map(item => (
@@ -54,7 +52,7 @@ export function ReadinessChecklist({
                     className="flex items-center gap-3 rounded-xl bg-white/[0.025] px-3 py-2.5"
                   >
                     <span className="text-base" aria-hidden="true">
-                      {item.complete ? "✅" : "❌"}
+                      {item.complete ? "✅" : item.key.includes("ga4") || item.key.includes("clarity") ? "▫️" : "❌"}
                     </span>
                     <span
                       className={
@@ -64,6 +62,9 @@ export function ReadinessChecklist({
                       }
                     >
                       {item.label}
+                      {!item.complete && (item.key.includes("ga4") || item.key.includes("clarity"))
+                        ? " (optional)"
+                        : ""}
                     </span>
                   </div>
                 ))}

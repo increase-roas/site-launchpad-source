@@ -89,6 +89,7 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
   const startPublishMutation = trpc.astroConfig.startPublish.useMutation({
     onSuccess: status => {
       utils.astroConfig.publishStatus.setData(queryInput, status);
+      void utils.clients.list.invalidate();
       toast.success("Website publishing started.");
     },
     onError: error => toast.error(error.message),
@@ -96,6 +97,7 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
   const advancePublishMutation = trpc.astroConfig.advancePublish.useMutation({
     onSuccess: status => {
       utils.astroConfig.publishStatus.setData(queryInput, status);
+      void utils.clients.list.invalidate();
       if (status.status === "published") toast.success("Website published.");
     },
     onError: error => toast.error(error.message),

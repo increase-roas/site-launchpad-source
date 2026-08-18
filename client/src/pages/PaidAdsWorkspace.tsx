@@ -240,6 +240,7 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
   const startPublishMutation = trpc.paidFunnel.startPublish.useMutation({
     onSuccess: status => {
       utils.paidFunnel.publishStatus.setData(publishInput, status);
+      void utils.clients.list.invalidate();
       toast.success(status.step === "commit_source" ? "Paid funnel republish started." : "Paid funnel publishing started.");
     },
     onError: error => toast.error(error.message),
@@ -247,6 +248,7 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
   const advancePublishMutation = trpc.paidFunnel.advancePublish.useMutation({
     onSuccess: status => {
       utils.paidFunnel.publishStatus.setData(publishInput, status);
+      void utils.clients.list.invalidate();
       if (status.status === "published") toast.success("Paid funnel published.");
     },
     onError: error => toast.error(error.message),

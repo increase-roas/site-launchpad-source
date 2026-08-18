@@ -13,10 +13,19 @@ import { cn } from "@/lib/utils";
 import { Building2, Check, ChevronsUpDown, Plus } from "lucide-react";
 import { StatusDot } from "./StatusDot";
 
-function clientState(status: "draft" | "ready" | "live" | "issue") {
+function clientState(view: {
+  client: { status: "draft" | "ready" | "live" | "issue" };
+  operationalSummary?: { status: "setup_needed" | "ready_to_publish" | "publishing" | "live" | "issue"; statusLabel: string };
+}) {
+  const status = view.operationalSummary?.status;
   if (status === "live") return { tone: "green" as const, label: "Live" };
-  if (status === "issue") return { tone: "red" as const, label: "Issues" };
-  return { tone: "yellow" as const, label: "In progress" };
+  if (status === "issue") return { tone: "red" as const, label: "Issue" };
+  if (status === "publishing") return { tone: "yellow" as const, label: "Publishing" };
+  if (status === "ready_to_publish") return { tone: "green" as const, label: "Ready to publish" };
+  if (status === "setup_needed") return { tone: "yellow" as const, label: "Setup needed" };
+  if (view.client.status === "live") return { tone: "green" as const, label: "Live" };
+  if (view.client.status === "issue") return { tone: "red" as const, label: "Issue" };
+  return { tone: "yellow" as const, label: "Setup needed" };
 }
 
 export function ClientSwitcher({
@@ -29,7 +38,7 @@ export function ClientSwitcher({
   onAddClient: () => void;
 }) {
   const { clients, selectedClient, isLoading, isError } = useWorkspace();
-  const selectedState = selectedClient ? clientState(selectedClient.client.status) : null;
+  const selectedState = selectedClient ? clientState(selectedClient) : null;
 
   return (
     <DropdownMenu>
@@ -70,7 +79,7 @@ export function ClientSwitcher({
           Switch client
         </DropdownMenuLabel>
         {clients.map(view => {
-          const state = clientState(view.client.status);
+          const state = clientState(view);
           const selected = selectedClient?.client.id === view.client.id;
           return (
             <DropdownMenuItem

@@ -12,9 +12,13 @@ export default function Home() {
   });
   const clientViews = clientsQuery.data ?? [];
   const readyCount = clientViews.filter(
-    view => view.client.status === "ready" || view.client.status === "live",
+    view =>
+      view.operationalSummary.status === "ready_to_publish" ||
+      view.operationalSummary.status === "live",
   ).length;
-  const needsItemsCount = clientViews.filter(view => !view.readiness.isComplete).length;
+  const needsItemsCount = clientViews.filter(
+    view => view.operationalSummary.status === "setup_needed",
+  ).length;
 
   return (
     <div className="mx-auto w-full space-y-5 pb-10">
@@ -46,7 +50,7 @@ export default function Home() {
         <Card className="gap-2 border-border bg-card p-4 shadow-none">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold text-emerald-300">Ready</p>
+              <p className="text-xs font-semibold text-emerald-300">Ready to publish / Live</p>
               <p className="mt-1 text-2xl font-semibold tabular-nums">{readyCount}</p>
             </div>
             <span className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-400/10 text-emerald-300">
@@ -57,7 +61,7 @@ export default function Home() {
         <Card className="gap-2 border-border bg-card p-4 shadow-none">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold text-red-300">Needs items</p>
+              <p className="text-xs font-semibold text-red-300">Setup needed</p>
               <p className="mt-1 text-2xl font-semibold tabular-nums">{needsItemsCount}</p>
             </div>
             <span className="grid h-11 w-11 place-items-center rounded-2xl bg-red-400/10 text-red-300">
@@ -118,8 +122,7 @@ export default function Home() {
               id={view.client.id}
               businessName={view.client.businessName}
               shortName={view.client.shortName}
-              status={view.client.status}
-              readiness={view.readiness}
+              operationalSummary={view.operationalSummary}
             />
           ))}
         </section>
