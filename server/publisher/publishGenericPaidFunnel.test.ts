@@ -12,6 +12,7 @@ import {
   startGenericPaidFunnelPublish,
 } from "./publishGenericPaidFunnel";
 import { GitHubApiError } from "./githubApi";
+import { CloudflareApiError } from "./cloudflareApi";
 import { samePersistedContractJson } from "./genericPaidFunnelPublishDb";
 import { decryptSetupValue } from "../clientSecurity";
 import { sealGenericPaidFunnelMaterialSnapshot } from "./genericPaidFunnelMaterial";
@@ -209,6 +210,14 @@ describe("generic Astro paid funnel workflow Retry", () => {
         new Error("secret-shaped upstream response")
       )
     ).toBe("Paid funnel publish step failed. Retry to resume.");
+  });
+
+  it("reports actionable Cloudflare failures without exposing response bodies", () => {
+    expect(
+      safeGenericPaidFunnelPublishFailure(
+        new CloudflareApiError("bulk secret update", 403)
+      )
+    ).toBe("Cloudflare bulk secret update failed with HTTP 403.");
   });
 
   it("defers organization-secret verification when a repository token cannot read org metadata", async () => {

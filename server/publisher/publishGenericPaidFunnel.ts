@@ -9,7 +9,10 @@ import {
   type GenericPaidFunnelResourceDefinitions,
 } from "../../shared/genericPaidFunnelPublish";
 import { decryptSetupValue, encryptSetupValue } from "../clientSecurity";
-import { createCloudflareApiClient } from "./cloudflareApi";
+import {
+  CloudflareApiError,
+  createCloudflareApiClient,
+} from "./cloudflareApi";
 import {
   createGitHubApiClient,
   expectedWorkflowDisplayTitle,
@@ -59,6 +62,7 @@ const SAFE_PUBLISH_FAILURE_MESSAGES = new Set([
 export function safeGenericPaidFunnelPublishFailure(error: unknown): string {
   if (error instanceof PublisherManualAttentionError) return error.message;
   if (error instanceof GitHubApiError) return error.message;
+  if (error instanceof CloudflareApiError) return error.message;
   if (
     error instanceof Error &&
     SAFE_PUBLISH_FAILURE_MESSAGES.has(error.message)
