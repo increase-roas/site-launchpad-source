@@ -304,7 +304,10 @@ export function defaultVisibility(): DeviceVisibility {
 
 export function defaultGlobalStyles(): GlobalFunnelStyles {
   return {
-    fonts: { heading: "Inter, ui-sans-serif", body: "Inter, ui-sans-serif" },
+    fonts: {
+      heading: "Inter, Arial, Helvetica, sans-serif",
+      body: "Inter, Arial, Helvetica, sans-serif",
+    },
     colors: {
       background: "#ffffff",
       surface: "#f8fafc",

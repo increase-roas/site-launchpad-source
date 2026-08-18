@@ -1574,18 +1574,18 @@ export function PaidFunnelInspector({
           {[
             {
               label: "Modern",
-              heading: "Inter, ui-sans-serif",
-              body: "Inter, ui-sans-serif",
+              heading: "Inter, Arial, Helvetica, sans-serif",
+              body: "Inter, Arial, Helvetica, sans-serif",
             },
             {
               label: "Rounded",
               heading: "ui-rounded, Avenir Next",
-              body: "Inter, ui-sans-serif",
+              body: "Inter, Arial, Helvetica, sans-serif",
             },
             {
               label: "Bold",
-              heading: "Arial Black, ui-sans-serif",
-              body: "Inter, ui-sans-serif",
+              heading: "Arial Black, Arial, Helvetica, sans-serif",
+              body: "Inter, Arial, Helvetica, sans-serif",
             },
           ].map(font => (
             <Button

@@ -194,9 +194,10 @@ function renderElement(
     selected: selectedId === element.id,
     style: {
       display: visible ? "block" : "none",
-      fontFamily:
+      fontFamily: `${
         element.styles.fontFamily ??
-        (element.type === "heading" ? styles.fonts.heading : styles.fonts.body),
+        (element.type === "heading" ? styles.fonts.heading : styles.fonts.body)
+      }, Arial, Helvetica, sans-serif`,
       fontSize: pickResponsive(element.styles.fontSize, breakpoint) ?? 16,
       fontWeight:
         element.styles.fontWeight ??
