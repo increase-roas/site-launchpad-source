@@ -28,13 +28,24 @@ import {
 
 type SaveState = "idle" | "pending" | "saving" | "saved" | "invalid" | "error";
 
+function isPublishActive(publishState: { status: string } | null | undefined): boolean {
+  return publishState?.status === "pending" || publishState?.status === "running";
+}
+
 export default function AstroClientEditor({ clientId }: { clientId: number }) {
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
   const queryInput = useMemo(() => ({ clientId }), [clientId]);
-  const query = trpc.astroConfig.get.useQuery(queryInput);
+  const query = trpc.astroConfig.get.useQuery(queryInput, {
+    retry: 1,
+    retryDelay: 250,
+  });
   const publishQuery = trpc.astroConfig.publishStatus.useQuery(queryInput, {
-    refetchInterval: 3_000,
+    enabled: query.isSuccess,
+    refetchInterval: state => {
+      const publishState = state.state.data;
+      return isPublishActive(publishState) ? 3_000 : false;
+    },
   });
   const [config, setConfig] = useState<AstroClientConfigInput | null>(null);
   const [assets, setAssets] = useState<Array<{ slot: string; storageUrl: string; filename: string; byteSize: number }>>([]);
@@ -130,11 +141,11 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
 
   const saveMutation = trpc.astroConfig.save.useMutation({
     onMutate: () => setSaveState("saving"),
-    onSuccess: async view => {
+    onSuccess: view => {
       setAssets(view.assets);
       setSecretStatus(view.secretStatus);
       setIssues([]);
-      await Promise.all([utils.clients.list.invalidate(), utils.astroConfig.get.invalidate(queryInput)]);
+      utils.astroConfig.get.setData(queryInput, view);
       const currentPayload = JSON.stringify(configRef.current);
       const needsTrailing =
         trailingSaveRef.current || !shouldClearDirtyAfterSave(inFlightPayloadRef.current, currentPayload);
@@ -147,6 +158,7 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
       }
       dirtyRef.current = false;
       setSaveState("saved");
+      void utils.clients.list.invalidate();
     },
     onError: error => {
       saveInFlightRef.current = false;
@@ -274,7 +286,7 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
     }
   };
 
-  if (query.error) return <div className="mx-auto max-w-xl rounded-3xl border border-red-400/20 bg-red-400/[0.05] p-8 text-center"><AlertCircle className="mx-auto h-9 w-9 text-red-300" /><h1 className="mt-4 text-2xl font-extrabold">Configuration could not be opened</h1><p className="mt-2 text-muted-foreground">{query.error.message}</p></div>;
+  if (query.error) return <div className="mx-auto max-w-xl rounded-3xl border border-red-400/20 bg-red-400/[0.05] p-8 text-center"><AlertCircle className="mx-auto h-9 w-9 text-red-300" /><h1 className="mt-4 text-2xl font-extrabold">Website configuration could not be loaded</h1><p className="mt-2 text-muted-foreground">{query.error.message}</p><Button type="button" variant="outline" className="mt-5" onClick={() => void query.refetch()}>Retry</Button></div>;
   if (query.isLoading || !config || !secretStatus) return <div className="grid min-h-[65vh] place-items-center"><div className="text-center"><Loader2 className="mx-auto h-9 w-9 animate-spin text-cyan-300" /><p className="mt-4 font-bold text-muted-foreground">Opening client configuration…</p></div></div>;
 
   return <div className="mx-auto w-full max-w-[1540px] pb-24 sm:p-2 lg:p-5">

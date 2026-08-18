@@ -8,22 +8,32 @@ function source(relativePath: string): string {
   return readFileSync(path.join(clientRoot, relativePath), "utf8");
 }
 
-describe("active client authentication wiring", () => {
-  it("uses Supabase sessions for tRPC without Manus storage or automatic login redirects", () => {
+describe("direct internal workspace access", () => {
+  it("opens tRPC without a browser session or Google bearer header", () => {
     const mainSource = source("main.tsx");
-    const useAuthSource = source("_core/hooks/useAuth.ts");
 
-    expect(mainSource).toContain("getSupabaseBearerHeaders");
     expect(mainSource).toContain('credentials: "same-origin"');
     expect(mainSource).toContain("API_REQUEST_TIMEOUT_MS");
     expect(mainSource).toContain("fetchWithTimeout");
+    expect(mainSource).toContain("httpLink");
+    expect(mainSource).not.toContain("httpBatchLink");
+    expect(mainSource).not.toContain("getSupabaseBearerHeaders");
+    expect(mainSource).not.toContain("supabase");
     expect(mainSource).not.toContain("sessionStorage");
     expect(mainSource).not.toContain("manus-cookie");
     expect(mainSource).not.toContain("startLogin");
-    expect(useAuthSource).toContain("onAuthStateChange");
-    expect(useAuthSource).toContain("signOutAndClearAuth");
-    expect(useAuthSource).not.toContain("manus-runtime-user-info");
-    expect(useAuthSource).not.toContain("startLogin");
+  });
+
+  it("does not block an Astro save on refetches or poll an idle publisher", () => {
+    const editorSource = source("pages/AstroClientEditor.tsx");
+
+    expect(editorSource).toContain("utils.astroConfig.get.setData(queryInput, view)");
+    expect(editorSource).toContain("void utils.clients.list.invalidate()");
+    expect(editorSource).not.toContain(
+      "await Promise.all([utils.clients.list.invalidate(), utils.astroConfig.get.invalidate(queryInput)])",
+    );
+    expect(editorSource).toContain("return isPublishActive(publishState) ? 3_000 : false");
+    expect(editorSource).toContain("Website configuration could not be loaded");
   });
 
   it("bounds clients.list without automatic retries and preserves the visible retry state", () => {
@@ -37,23 +47,22 @@ describe("active client authentication wiring", () => {
     expect(homeSource).toContain("clientsQuery.refetch()");
   });
 
-  it("routes the explicit callback outside the authenticated dashboard shell", () => {
+  it("has no OAuth callback route", () => {
     const appSource = source("App.tsx");
 
-    expect(appSource).toContain('path="/auth/callback"');
-    expect(appSource.indexOf('path="/auth/callback"')).toBeLessThan(
-      appSource.indexOf("<DashboardLayout>"),
-    );
+    expect(appSource).not.toContain("AuthCallback");
+    expect(appSource).not.toContain('/auth/callback');
   });
 
-  it("shows explicit Google login and unauthorized-account states", () => {
+  it("renders the workspace directly without sign-in or sign-out controls", () => {
     const layoutSource = source("components/DashboardLayout.tsx");
 
-    expect(layoutSource).toContain("Sign in with Google");
-    expect(layoutSource).toContain("UNAPPROVED_ACCOUNT_MESSAGE");
-    expect(layoutSource).toContain("switchGoogleAccount");
-    expect(layoutSource).toContain("logout,");
-    expect(layoutSource).toContain("startLogin,");
+    expect(layoutSource).not.toContain("useAuth");
+    expect(layoutSource).not.toContain("Sign in with Google");
+    expect(layoutSource).not.toContain("UNAPPROVED_ACCOUNT_MESSAGE");
+    expect(layoutSource).not.toContain("switchGoogleAccount");
+    expect(layoutSource).not.toContain("Sign out");
+    expect(layoutSource).toContain("<WorkspaceProvider>");
   });
 
   it("loads public R2 previews directly without protected storage fetches", () => {
