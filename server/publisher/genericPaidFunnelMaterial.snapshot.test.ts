@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   genericPaidFunnelResourceDefinitions,
   openGenericPaidFunnelMaterialSnapshot,
+  runtimeSecretsWithoutPlainBindings,
   sealGenericPaidFunnelMaterialSnapshot,
 } from "./genericPaidFunnelMaterial";
 import { GENERIC_PAID_FUNNEL_PACKAGE } from "../../shared/paidFunnelFixture";
@@ -50,6 +51,28 @@ describe("generic paid funnel material snapshots", () => {
           name: "funnel-example-1-1",
         },
       ],
+    });
+  });
+
+  it("keeps plain Worker bindings out of the secret patch", () => {
+    expect(
+      runtimeSecretsWithoutPlainBindings({
+        runtimeVars: {
+          GHL_LOCATION_ID: "location-123",
+          GOOGLE_SHEETS_ID: "sheet-123",
+          META_PIXEL_ID: "123456789012345",
+        },
+        runtimeSecrets: {
+          GHL_API_KEY: "opaque-ghl-key",
+          GHL_LOCATION_ID: "location-123",
+          GOOGLE_SHEETS_ID: "sheet-123",
+          META_PIXEL_ID: "123456789012345",
+          META_CAPI_ACCESS_TOKEN: "opaque-meta-token",
+        },
+      }),
+    ).toEqual({
+      GHL_API_KEY: "opaque-ghl-key",
+      META_CAPI_ACCESS_TOKEN: "opaque-meta-token",
     });
   });
 });

@@ -417,7 +417,10 @@ describe("generic Astro paid funnel workflow Retry", () => {
       const materialSnapshotEncrypted = sealGenericPaidFunnelMaterialSnapshot({
         files: [{ path: "src/pages/index.astro", content: "release source" }],
         runtimeVars: { META_PIXEL_ID: "123456789012345" },
-        runtimeSecrets: { META_CAPI_ACCESS_TOKEN: "release-secret" },
+        runtimeSecrets: {
+          META_PIXEL_ID: "123456789012345",
+          META_CAPI_ACCESS_TOKEN: "release-secret",
+        },
       });
       const commitHarness = inMemoryDependencies({
         ...jobFixture(),

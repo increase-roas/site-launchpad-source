@@ -32,6 +32,18 @@ export type GenericPaidFunnelMaterialSnapshot = Pick<
   "files" | "runtimeVars" | "runtimeSecrets"
 >;
 
+export function runtimeSecretsWithoutPlainBindings(input: {
+  runtimeVars: Record<string, string>;
+  runtimeSecrets: Record<string, string>;
+}): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(input.runtimeSecrets).filter(
+      ([name]) =>
+        !Object.prototype.hasOwnProperty.call(input.runtimeVars, name),
+    ),
+  );
+}
+
 function stringRecord(value: unknown): Record<string, string> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const entries = Object.entries(value);
@@ -197,11 +209,14 @@ export async function getGenericPaidFunnelPublishMaterial(
           typeof entry[1] === "string" && entry[1].length > 0
       )
     ),
-    runtimeSecrets: Object.fromEntries(
-      Object.entries(bundle.bindings.secrets).filter(
-        (entry): entry is [string, string] =>
-          typeof entry[1] === "string" && entry[1].length > 0
-      )
-    ),
+    runtimeSecrets: runtimeSecretsWithoutPlainBindings({
+      runtimeVars: bundle.runtimeVars,
+      runtimeSecrets: Object.fromEntries(
+        Object.entries(bundle.bindings.secrets).filter(
+          (entry): entry is [string, string] =>
+            typeof entry[1] === "string" && entry[1].length > 0,
+        ),
+      ),
+    }),
   };
 }

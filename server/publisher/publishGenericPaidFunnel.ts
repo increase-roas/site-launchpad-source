@@ -23,6 +23,7 @@ import {
   genericPaidFunnelResourceDefinitions,
   getGenericPaidFunnelPublishMaterial,
   openGenericPaidFunnelMaterialSnapshot,
+  runtimeSecretsWithoutPlainBindings,
   sealGenericPaidFunnelMaterialSnapshot,
   type GenericPaidFunnelPublishMaterial,
 } from "./genericPaidFunnelMaterial";
@@ -681,7 +682,7 @@ async function execute(
       await bounded(deps.externalTimeoutMs, signal =>
         deps.external.patchRuntimeSecrets({
           workerName: job.workerName,
-          runtimeSecrets: material.runtimeSecrets,
+          runtimeSecrets: runtimeSecretsWithoutPlainBindings(material),
           signal,
         })
       );
