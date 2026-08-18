@@ -25,13 +25,11 @@ import {
   Sparkles,
   Zap,
 } from "lucide-react";
-import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PaidAdsFunnelLibrary } from "@/components/funnels/studio/PaidAdsFunnelLibrary";
 import { resolveRegistryTemplates } from "@/lib/studio/funnelLibrary";
 import { PaidFunnelBuilder } from "@/components/funnels/studio/PaidFunnelBuilder";
 import {
-  commitAutosave,
   createDocumentFromPersist,
   createStudioState,
   parsePaidAdsFunnelSearch,
@@ -39,6 +37,18 @@ import {
   type PaidAdsFunnelTab,
   type StudioState,
 } from "@shared/paidFunnel";
+import {
+  autosaveDocumentMatches,
+  autosaveRequestMatches,
+  beginAutosave,
+  createAutosaveFlight,
+  dirtyNavigationMessage,
+  resolveAutosave,
+  shouldStartAutosave,
+  studioHasUnsavedWork,
+  type AutosaveRequest,
+} from "@shared/paidFunnel/autosave";
+import { useEffect, useRef, useState } from "react";
 import { paidAdsWorkspaceErrorCopy, shouldRetryWorkspaceQuery } from "@/lib/queryErrors";
 import { selectedFunnelForClient } from "./editorIsolation";
 
@@ -199,41 +209,36 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
   const [studioFunnelId, setStudioFunnelId] = useState<number | null>(initialStudioId);
   const [libraryTab, setLibraryTab] = useState<PaidAdsFunnelTab>(parsedSearch.tab);
   const [studio, setStudio] = useState<StudioState | null>(null);
+  const integrationProfileQuery = trpc.clients.getIntegrationProfile.useQuery(
+    { clientId },
+    { enabled: studioFunnelId != null, retry: 1 },
+  );
 
   const studioDetailQuery = trpc.paidFunnel.get.useQuery(
     { clientId, funnelId: studioFunnelId ?? 0 },
     { enabled: studioFunnelId != null },
   );
 
-  const saveGraphMutation = trpc.paidFunnel.saveGraph.useMutation({
-    onSuccess: async detail => {
-      await utils.paidFunnel.get.invalidate({ clientId, funnelId: detail.funnel.id });
-      await utils.paidFunnel.listFunnels.invalidate({ clientId });
-      if (!detail.studio) return;
-      setStudio(current => {
-        if (!current) return current;
-        return commitAutosave(current, current.document.revision, {
-          expectedUpdatedAt: new Date(detail.studio!.expectedUpdatedAt).toISOString(),
-          stepId: detail.studio!.stepId,
-        });
-      });
-    },
-    onError: error => {
-      setStudio(current =>
-        current
-          ? {
-              ...current,
-              document: {
-                ...current.document,
-                saveStatus: "error",
-                conflict: /updated elsewhere|conflict/i.test(error.message),
-              },
-            }
-          : current,
-      );
-      toast.error(error.message);
-    },
-  });
+  const autosaveFlight = useRef(createAutosaveFlight());
+  const autosaveSessionId = useRef(1);
+  const saveGraphMutation = trpc.paidFunnel.saveGraph.useMutation();
+
+  const resetAutosaveSession = () => {
+    autosaveSessionId.current += 1;
+    autosaveFlight.current = createAutosaveFlight();
+  };
+
+  const markAutosaveError = (request: AutosaveRequest, conflict: boolean) => {
+    if (autosaveSessionId.current !== request.sessionId) return;
+    setStudio(current =>
+      current && autosaveDocumentMatches(current.document, request)
+        ? {
+            ...current,
+            document: { ...current.document, saveStatus: "error", conflict },
+          }
+        : current,
+    );
+  };
 
   const createFromTemplateMutation = trpc.paidFunnel.createFromTemplate.useMutation({
     onSuccess: async result => {
@@ -246,6 +251,7 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
   });
 
   useEffect(() => {
+    resetAutosaveSession();
     setSelectedStep(null);
     setStudio(null);
     setStudioFunnelId(null);
@@ -281,6 +287,7 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
   }, [clientId, studio, studioFunnelId, studioDetailQuery.data]);
 
   const openFunnel = (funnelId: number) => {
+    resetAutosaveSession();
     setSelectedFunnelId(funnelId);
     setStudio(null);
     setStudioFunnelId(null);
@@ -294,35 +301,122 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
   };
 
   const openStudioFunnel = (funnelId: number) => {
+    resetAutosaveSession();
     setSelectedFunnelId(null);
     setStudioFunnelId(funnelId);
     window.history.replaceState(null, "", `${window.location.pathname}?studio=${funnelId}`);
   };
 
   const closeStudio = () => {
+    if (studio && studioHasUnsavedWork(studio.document) && !window.confirm(dirtyNavigationMessage())) return;
+    resetAutosaveSession();
     setStudio(null);
     setStudioFunnelId(null);
     window.history.replaceState(null, "", `${window.location.pathname}?tab=${libraryTab}`);
   };
 
   useEffect(() => {
-    if (!studio || studio.document.saveStatus !== "saving") return;
-    if (!studio.document.funnelId || !studio.document.stepId || !studio.document.expectedUpdatedAt) return;
-    if (saveGraphMutation.isPending) return;
+    if (!studio) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!studioHasUnsavedWork(studio.document)) return;
+      event.preventDefault();
+      event.returnValue = dirtyNavigationMessage();
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [studio]);
+
+  useEffect(() => {
+    if (!studio) return;
+    if (!shouldStartAutosave({
+      document: studio.document,
+      flight: autosaveFlight.current,
+      isPending: saveGraphMutation.isPending,
+    })) return;
     const snapshot = studio;
     const handle = window.setTimeout(() => {
       if (!snapshot.document.funnelId || !snapshot.document.stepId || !snapshot.document.expectedUpdatedAt) return;
-      saveGraphMutation.mutate({
+      const request: AutosaveRequest = {
+        sessionId: autosaveSessionId.current,
         clientId,
         funnelId: snapshot.document.funnelId,
         stepId: snapshot.document.stepId,
+        editSeq: snapshot.document.editSeq,
+      };
+      autosaveFlight.current = beginAutosave(request);
+      saveGraphMutation.mutate({
+        clientId,
+        funnelId: request.funnelId,
+        stepId: request.stepId,
         expectedUpdatedAt: new Date(snapshot.document.expectedUpdatedAt),
         graph: studioToStorageGraph(snapshot.document.graph),
+      }, {
+        onSuccess: async detail => {
+          const flight = autosaveFlight.current;
+          if (!autosaveRequestMatches(flight, request)) return;
+          autosaveFlight.current = createAutosaveFlight();
+
+          if (!detail.studio || detail.funnel.id !== request.funnelId || detail.studio.stepId !== request.stepId) {
+            markAutosaveError(request, false);
+            toast.error("The saved funnel response did not match the open studio.");
+            return;
+          }
+          const persistedStudio = detail.studio;
+          setStudio(current => {
+            if (!current || !autosaveDocumentMatches(current.document, request)) return current;
+            return resolveAutosave({
+              state: current,
+              flight,
+              savedEditSeq: request.editSeq,
+              persist: {
+                expectedUpdatedAt: new Date(persistedStudio.expectedUpdatedAt).toISOString(),
+                stepId: persistedStudio.stepId,
+              },
+            }).state;
+          });
+          await Promise.allSettled([
+            utils.paidFunnel.get.invalidate({ clientId: request.clientId, funnelId: request.funnelId }),
+            utils.paidFunnel.listFunnels.invalidate({ clientId: request.clientId }),
+          ]);
+        },
+        onError: async error => {
+          if (!autosaveRequestMatches(autosaveFlight.current, request)) return;
+          const conflict = /updated elsewhere|conflict/i.test(error.message);
+          autosaveFlight.current = createAutosaveFlight();
+          markAutosaveError(request, conflict);
+          toast.error(conflict
+            ? "This funnel changed elsewhere. Reload the latest version before editing again."
+            : error.message);
+        },
       });
     }, 450);
     return () => window.clearTimeout(handle);
-    // Key off editSeq so every graph mutation schedules saveGraph.
-  }, [studio?.document.editSeq, studio?.document.saveStatus, clientId]);
+  }, [studio?.document.editSeq, studio?.document.saveStatus, clientId, saveGraphMutation.isPending]);
+
+  const reloadStudioAfterConflict = async () => {
+    if (!studio?.document.conflict || studioFunnelId == null) return;
+    if (!window.confirm("Reload the latest funnel and discard these unsaved conflicting edits?")) return;
+    try {
+      const latest = await studioDetailQuery.refetch();
+      const assembled = latest.data?.studio;
+      if (!assembled) throw new Error("The latest funnel version was unavailable.");
+      resetAutosaveSession();
+      setStudio(
+        createStudioState(
+          createDocumentFromPersist({
+            clientId,
+            funnelId: studioFunnelId,
+            stepId: assembled.stepId,
+            expectedUpdatedAt: assembled.expectedUpdatedAt,
+            graph: assembled.graph,
+          }),
+        ),
+      );
+      toast.success("Latest funnel loaded.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The latest funnel version could not be loaded.");
+    }
+  };
 
   const shapeMutation = trpc.workspace.setFunnelShape.useMutation({
     onSuccess: async () => {
@@ -385,8 +479,24 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
         <WorkspaceModeTabs clientId={clientId} active="paidAds" />
       </section>
 
-      {studio ? (
-        <PaidFunnelBuilder clientId={clientId} state={studio} onChange={setStudio} onBack={closeStudio} />
+      {studio && integrationProfileQuery.data ? (
+        <PaidFunnelBuilder
+          clientId={clientId}
+          profile={integrationProfileQuery.data}
+          state={studio}
+          onChange={setStudio}
+          onBack={closeStudio}
+          onResolveConflict={() => void reloadStudioAfterConflict()}
+        />
+      ) : studio && integrationProfileQuery.isError ? (
+        <div className="rounded-3xl border border-red-400/20 bg-red-400/[0.05] p-8 text-center">
+          <h2 className="text-xl font-extrabold">Client integrations could not be loaded</h2>
+          <p className="mt-2 text-sm font-medium text-muted-foreground">
+            The funnel is unchanged. Retry after the client integration profile is available.
+          </p>
+        </div>
+      ) : studio ? (
+        <div className="grid min-h-[60vh] place-items-center"><Loader2 className="h-8 w-8 animate-spin text-cyan-300" /></div>
       ) : selectedFunnelId ? (
         selectedIsSimpleForm ? (
           <SimpleFormFunnelEditor

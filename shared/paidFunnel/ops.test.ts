@@ -7,6 +7,8 @@ import {
   insertPaletteItem,
   isValidDrop,
   reorderNode,
+  moveNode,
+  rebalanceColumnWidths,
   resizeColumns,
   saveReusableSection,
   setButtonAction,
@@ -96,5 +98,45 @@ describe("paid funnel graph hierarchy", () => {
     const next = saveReusableSection(graph, sectionId, "Hero offer", "2026-08-18T00:00:00.000Z", nextId);
     expect(next.reusableSections[0]?.name).toBe("Hero offer");
     expect(next.reusableSections[0]?.section.preset).toBe("hero");
+  });
+
+  it("rebalances transient column width totals instead of throwing", () => {
+    const { graph, nextId } = seed();
+    let next = insertPaletteItem(graph, { parentId: graph.pages.landing.sections[0]!.id, parentKind: "section", index: 0 }, { source: "row", columns: 2 }, createSectionPreset, nextId);
+    const row = next.pages.landing.sections[0]!.rows[0]!;
+    next = resizeColumns(next, row.id, [80, 80], "desktop");
+    const widths = next.pages.landing.sections[0]!.rows[0]!.columns.map(column => column.widths.desktop);
+    expect(widths.reduce((sum, width) => sum + width, 0)).toBeCloseTo(100, 1);
+    expect(rebalanceColumnWidths([10, 10, 10])).toEqual([33.33, 33.33, 33.34]);
+    expect(rebalanceColumnWidths([60, 50], 0)).toEqual([60, 40]);
+    const beforeBadMove = next;
+    expect(moveNode(next, row.id, { parentId: "missing", parentKind: "section", index: 0 })).toBe(beforeBadMove);
+    expect(moveNode(next, row.id, { parentId: next.pages.landing.id, parentKind: "section", index: 0 })).toBe(beforeBadMove);
+    const moved = moveNode(next, row.id, { parentId: next.pages.landing.sections[0]!.id, parentKind: "section", index: next.pages.landing.sections[0]!.rows.length });
+    expect(moved.pages.landing.sections[0]!.rows.some(entry => entry.id === row.id)).toBe(true);
+  });
+
+  it("moves columns atomically and rebalances both rows at every breakpoint", () => {
+    const { graph, nextId } = seed();
+    const section = graph.pages.landing.sections[0]!;
+    let next = insertPaletteItem(graph, { parentId: section.id, parentKind: "section", index: 0 }, { source: "row", columns: 2 }, createSectionPreset, nextId);
+    next = insertPaletteItem(next, { parentId: section.id, parentKind: "section", index: 1 }, { source: "row", columns: 2 }, createSectionPreset, nextId);
+    const source = next.pages.landing.sections[0]!.rows[0]!;
+    const target = next.pages.landing.sections[0]!.rows[1]!;
+    next = resizeColumns(next, source.id, [70, 30], "desktop");
+    next = resizeColumns(next, source.id, [60, 40], "tablet");
+    next = resizeColumns(next, target.id, [40, 60], "desktop");
+    next = resizeColumns(next, target.id, [45, 55], "tablet");
+    const columnId = source.columns[0]!.id;
+    next = moveNode(next, columnId, { parentId: target.id, parentKind: "row", index: 1 });
+    for (const row of next.pages.landing.sections[0]!.rows.slice(0, 2)) {
+      for (const breakpoint of ["desktop", "tablet"] as const) {
+        expect(row.columns.reduce((total, column) => total + column.widths[breakpoint], 0)).toBeCloseTo(100, 2);
+      }
+      expect(row.columns.every(column => column.widths.mobile === 100)).toBe(true);
+    }
+    const soleRow = next.pages.landing.sections[0]!.rows[0]!;
+    const beforeRejectedMove = next;
+    expect(moveNode(next, soleRow.columns[0]!.id, { parentId: target.id, parentKind: "row", index: 0 })).toBe(beforeRejectedMove);
   });
 });

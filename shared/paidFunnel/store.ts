@@ -1,4 +1,6 @@
 import { findNode, listChildIds, type PaidFunnelBreakpoint, type PaidFunnelGraph } from "./graph";
+import { finishAutosave } from "./autosave";
+import { siblingIndexTarget } from "./dropRouting";
 import { createHistory, pushHistory, redoHistory, type HistoryState, undoHistory } from "./history";
 import {
   applyGlobalStyles,
@@ -11,6 +13,7 @@ import {
   pasteNode,
   reorderNode,
   resizeColumns,
+  moveNode,
   saveReusableSection,
   setButtonAction,
   setInlineText,
@@ -42,6 +45,7 @@ export type PaidFunnelDocument = {
   stepId?: number;
   expectedUpdatedAt?: string;
   editSeq: number;
+  lastSavedEditSeq?: number;
 };
 
 export type StudioState = {
@@ -109,21 +113,18 @@ export function commitAutosave(
   state: StudioState,
   expectedRevision: number,
   persist?: { expectedUpdatedAt?: string; stepId?: number },
+  savedEditSeq?: number,
 ): StudioState {
   if (expectedRevision !== state.document.revision) {
     return { ...state, document: { ...state.document, saveStatus: "error", conflict: true } };
   }
-  return {
-    ...state,
-    document: {
-      ...state.document,
-      revision: state.document.revision + 1,
-      saveStatus: "saved",
-      conflict: false,
-      expectedUpdatedAt: persist?.expectedUpdatedAt ?? state.document.expectedUpdatedAt,
-      stepId: persist?.stepId ?? state.document.stepId,
-    },
-  };
+  return finishAutosave(state, savedEditSeq ?? state.document.editSeq, persist);
+}
+
+export function moveStudioNode(state: StudioState, id: string, target: DropTarget): StudioState {
+  const next = moveNode(state.document.graph, id, target);
+  if (next === state.document.graph) return state;
+  return { ...applyGraph(state, next), selectedId: id };
 }
 
 export function markStudioSaved(state: StudioState): StudioState {
@@ -339,6 +340,14 @@ export function studioHotkey(
     const found = findNode(state.document.graph, state.selectedId);
     if (!found?.parent) return state;
     return { ...applyGraph(state, deleteNode(state.document.graph, state.selectedId)), selectedId: null };
+  }
+  if ((key === "ArrowUp" || key === "ArrowLeft") && state.selectedId) {
+    const target = siblingIndexTarget(state.document.graph, state.selectedId, -1);
+    return target ? moveStudioNode(state, state.selectedId, target) : state;
+  }
+  if ((key === "ArrowDown" || key === "ArrowRight") && state.selectedId) {
+    const target = siblingIndexTarget(state.document.graph, state.selectedId, 1);
+    return target ? moveStudioNode(state, state.selectedId, target) : state;
   }
   return state;
 }

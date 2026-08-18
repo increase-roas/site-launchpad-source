@@ -211,6 +211,30 @@ export function reorderNode(graph: PaidFunnelGraph, id: string, toIndex: number)
   });
 }
 
+export function rebalanceColumnWidths(widths: number[], anchorIndex?: number): number[] {
+  if (widths.length === 0) return [];
+  const safe = widths.map(width => (Number.isFinite(width) && width > 0 ? width : 0));
+  if (anchorIndex != null && anchorIndex >= 0 && anchorIndex < safe.length && safe.length > 1) {
+    const anchor = Math.max(1, Math.min(99, safe[anchorIndex] ?? 0));
+    const remainder = 100 - anchor;
+    const otherTotal = safe.reduce((sum, width, index) => index === anchorIndex ? sum : sum + width, 0);
+    const scaled = safe.map((width, index) => {
+      if (index === anchorIndex) return anchor;
+      return otherTotal > 0 ? (width / otherTotal) * remainder : remainder / (safe.length - 1);
+    });
+    const rounded = scaled.map(width => Math.round(width * 100) / 100);
+    const correction = Math.round((100 - rounded.reduce((sum, width) => sum + width, 0)) * 100) / 100;
+    const correctionIndex = rounded.findLastIndex((_, index) => index !== anchorIndex);
+    if (correctionIndex >= 0) rounded[correctionIndex] = Math.round(((rounded[correctionIndex] ?? 0) + correction) * 100) / 100;
+    return rounded;
+  }
+  const total = safe.reduce((sum, width) => sum + width, 0);
+  const scaled = total <= 0 ? safe.map(() => 100 / safe.length) : safe.map(width => (width / total) * 100);
+  const head = scaled.slice(0, -1).map(width => Math.round(width * 100) / 100);
+  const used = head.reduce((sum, width) => sum + width, 0);
+  return [...head, Math.round((100 - used) * 100) / 100];
+}
+
 export function resizeColumns(
   graph: PaidFunnelGraph,
   rowId: string,
@@ -218,23 +242,84 @@ export function resizeColumns(
   breakpoint: PaidFunnelBreakpoint,
 ): PaidFunnelGraph {
   const found = findNode(graph, rowId);
-  if (!found || found.node.kind !== "row") throw new Error("Columns can only be resized on a row.");
-  if (widths.length !== found.node.columns.length) {
-    throw new Error("Provide a width for every column.");
-  }
-  const total = widths.reduce((sum, width) => sum + width, 0);
-  if (Math.abs(total - 100) > 0.05) {
-    throw new Error("Column widths must add up to 100%.");
-  }
+  if (!found || found.node.kind !== "row") return graph;
+  const current = found.node.columns.map(column => column.widths[breakpoint]);
+  const raw = found.node.columns.map((column, index) => widths[index] ?? column.widths[breakpoint]);
+  const changed = raw.flatMap((width, index) => Math.abs(width - (current[index] ?? width)) > 0.001 ? [index] : []);
+  const total = raw.reduce((sum, width) => sum + width, 0);
+  const balanced = Math.abs(total - 100) <= 0.05
+    ? raw
+    : rebalanceColumnWidths(raw, changed.length === 1 ? changed[0] : undefined);
   return mutateById(graph, rowId, node => {
     if (node.kind !== "row") return node;
     return {
       ...node,
       columns: node.columns.map((column, index) => ({
         ...column,
-        widths: { ...column.widths, [breakpoint]: widths[index] ?? column.widths[breakpoint] },
+        widths: { ...column.widths, [breakpoint]: balanced[index] ?? column.widths[breakpoint] },
       })),
     };
+  });
+}
+
+export function moveNode(graph: PaidFunnelGraph, id: string, target: DropTarget): PaidFunnelGraph {
+  const found = findNode(graph, id);
+  if (!found?.parent || found.node.kind === "page") return graph;
+  const targetNode = findNode(graph, target.parentId);
+  if (!targetNode || targetNode.node.kind !== target.parentKind || targetNode.node.kind === "element") return graph;
+  if (!isValidDrop(target, { kind: found.node.kind, node: found.node } as StudioClipboard)) return graph;
+  if (found.node.id === target.parentId) return graph;
+  const contains = (node: GraphNode, needle: string): boolean => {
+    if (node.id === needle) return true;
+    if (node.kind === "page") return node.sections.some(child => contains(child, needle));
+    if (node.kind === "section") return node.rows.some(child => contains(child, needle));
+    if (node.kind === "row") return node.columns.some(child => contains(child, needle));
+    if (node.kind === "column") return node.elements.some(child => contains(child, needle));
+    return false;
+  };
+  if (contains(found.node, target.parentId)) return graph;
+  if (found.parent.id === target.parentId) return reorderNode(graph, id, target.index);
+  if (found.node.kind === "column" && found.parent.kind === "row") {
+    if (found.parent.columns.length <= 1) return graph;
+    const rebalanceRow = (row: FunnelRow, columns: FunnelColumn[]): FunnelRow => {
+      const desktop = rebalanceColumnWidths(columns.map(column => column.widths.desktop));
+      const tablet = rebalanceColumnWidths(columns.map(column => column.widths.tablet));
+      return {
+        ...row,
+        columns: columns.map((column, index) => ({
+          ...column,
+          widths: {
+            desktop: desktop[index] ?? 100,
+            tablet: tablet[index] ?? 100,
+            // Mobile columns are stacked by default (100% each), so preserve
+            // each column's explicit mobile width instead of normalizing a row.
+            mobile: column.widths.mobile,
+          },
+        })),
+      };
+    };
+    const withoutSource = mutateById(graph, found.parent.id, source => {
+      if (source.kind !== "row") return source;
+      return rebalanceRow(source, source.columns.filter(column => column.id !== id));
+    });
+    return mutateById(withoutSource, target.parentId, destination => {
+      if (destination.kind !== "row") return destination;
+      return rebalanceRow(destination, insertAt(destination.columns, target.index, found.node as FunnelColumn));
+    });
+  }
+  const removed = deleteNode(graph, id);
+  const node = found.node;
+  return mutateById(removed, target.parentId, parent => {
+    if (parent.kind === "page" && node.kind === "section") {
+      return { ...parent, sections: insertAt(parent.sections, target.index, node) };
+    }
+    if (parent.kind === "section" && node.kind === "row") {
+      return { ...parent, rows: insertAt(parent.rows, target.index, node) };
+    }
+    if (parent.kind === "column" && node.kind === "element") {
+      return { ...parent, elements: insertAt(parent.elements, target.index, node) };
+    }
+    return parent;
   });
 }
 
@@ -536,4 +621,3 @@ export function nextStepKey(graph: PaidFunnelGraph, stepKey: string): string | n
   const index = graph.steps.findIndex(entry => entry.key === stepKey);
   return graph.steps[index + 1]?.key ?? null;
 }
-

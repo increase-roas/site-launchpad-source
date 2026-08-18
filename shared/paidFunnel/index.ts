@@ -9,3 +9,5 @@ export * from "./store";
 export * from "./library";
 export * from "./integrationPresence";
 export * from "./persist";
+export * from "./autosave";
+export * from "./dropRouting";
