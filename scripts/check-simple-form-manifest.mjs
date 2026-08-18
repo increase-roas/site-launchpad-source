@@ -22,13 +22,9 @@ const vendoredManifestPath = path.join(
   "server/templates/simple-form/launchpad.template.json"
 );
 const configuredCanonicalRoot = process.env.SIMPLE_FORM_CANONICAL_REPOSITORY;
-const localCanonicalRoot = configuredCanonicalRoot
-  ? path.resolve(configuredCanonicalRoot)
-  : path.resolve(repoRoot, "../paid-funnel-simple-form-funnel");
-const localCanonicalManifestPath = path.join(
-  localCanonicalRoot,
-  "launchpad.template.json"
-);
+const localCanonicalManifestPath = configuredCanonicalRoot
+  ? path.join(path.resolve(configuredCanonicalRoot), "launchpad.template.json")
+  : null;
 const publicCanonicalUrl =
   "https://raw.githubusercontent.com/increase-roas/paid-funnel-simple-form-funnel/main/launchpad.template.json";
 
@@ -46,7 +42,10 @@ async function readJsonFile(filePath) {
 }
 
 async function readCanonicalManifest() {
-  if (await fileExists(localCanonicalManifestPath)) {
+  if (localCanonicalManifestPath) {
+    if (!(await fileExists(localCanonicalManifestPath))) {
+      throw new Error(`Configured Simple Form canonical manifest was not found: ${localCanonicalManifestPath}`);
+    }
     return {
       manifest: await readJsonFile(localCanonicalManifestPath),
       source: localCanonicalManifestPath,

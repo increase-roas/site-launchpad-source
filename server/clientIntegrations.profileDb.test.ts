@@ -13,7 +13,11 @@ process.env.JWT_SECRET = "test-only-secret-that-is-long-enough";
 process.env.SECRETS_ENCRYPTION_KEY = "dedicated-test-encryption-key";
 process.env.NODE_ENV = "test";
 
-import { getClientIntegrationProfile, loadResolvedPaidFunnelProfile } from "./clientIntegrations";
+import {
+  getClientIntegrationProfile,
+  loadOrBackfillResolvedClientIntegrationProfile,
+  loadResolvedPaidFunnelProfile,
+} from "./clientIntegrations";
 
 describe("ClientIntegrationProfile database reads", () => {
   beforeEach(() => {
@@ -67,5 +71,36 @@ describe("ClientIntegrationProfile database reads", () => {
 
     const resolved = await loadResolvedPaidFunnelProfile(7);
     expect(resolved).toBeNull();
+  });
+
+  it("never overwrites an existing canonical profile during legacy backfill", async () => {
+    const insert = vi.fn();
+    dbMocks.getDb.mockResolvedValue({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [
+              {
+                clientId: 7,
+                profileVersion: 1,
+                ghlLocationId: "canonical-location",
+                googleSheetsId: null,
+                metaPixelId: null,
+                secretsEncrypted: null,
+                reconciliationStatus: "ready",
+                conflictedKeys: [],
+                createdAt: new Date("2026-08-18T12:00:00.000Z"),
+                updatedAt: new Date("2026-08-18T12:00:00.000Z"),
+              },
+            ],
+          }),
+        }),
+      }),
+      insert,
+    });
+
+    const resolved = await loadOrBackfillResolvedClientIntegrationProfile(7);
+    expect(resolved.dto.identifiers.GHL_LOCATION_ID).toBe("canonical-location");
+    expect(insert).not.toHaveBeenCalled();
   });
 });

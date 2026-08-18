@@ -17,7 +17,7 @@ import {
   type AstroClientConfigInput,
   type WranglerSecretName,
 } from "../shared/astroConfig";
-import { decryptSetupValue, encryptSetupValue, hasProtectedValue } from "./clientSecurity";
+import { decryptSetupValue, encryptSetupValue } from "./clientSecurity";
 import {
   getClientAssets,
   getClientById,
@@ -31,8 +31,15 @@ import { getAstroSiteRuntimeSecrets } from "../shared/astroSiteContract";
 import {
   clientIntegrationProfileResolverForClient,
   contributionsFromLegacyRows,
+  loadOrBackfillResolvedClientIntegrationProfile,
+  saveClientIntegrationProfile,
 } from "./clientIntegrations";
 import { assertAstroSitePublishProfileReady } from "./studio/website/publishProfile";
+import {
+  isIdentifierKey,
+  type ClientIntegrationProfileDto,
+  type ClientIntegrationSecretKey,
+} from "../shared/clientIntegrationProfile";
 
 async function requireDb() {
   const db = await getDb();
@@ -152,12 +159,11 @@ async function getWranglerSecretRow(clientId: number): Promise<WranglerSecretSet
 
 export async function getAstroConfigView(clientId: number) {
   const db = await requireDb();
-  const [client, configRows, assets, wranglerRow, legacySecrets] = await Promise.all([
+  const [client, configRows, assets, integrationProfile] = await Promise.all([
     getClientById(clientId),
     db.select().from(astroClientConfigs).where(eq(astroClientConfigs.clientId, clientId)).limit(1),
     getClientAssets(clientId),
-    getWranglerSecretRow(clientId),
-    getClientSecretSetup(clientId),
+    loadOrBackfillResolvedClientIntegrationProfile(clientId),
   ]);
   if (!client) throw new Error("Client not found.");
 
@@ -178,13 +184,7 @@ export async function getAstroConfigView(clientId: number) {
     assets.filter(asset => isAstroAssetSlot(asset.slot)).map(asset => [asset.slot, asset.storageUrl]),
   );
   const input = applyAstroAssetUrls(mergeStoredAstroConfig(defaults, configRows[0]), assetUrls);
-  const secretStatus = emptyWranglerSecretStatus();
-  for (const name of WRANGLER_SECRET_VALUES) {
-    const column = secretColumnByName[name];
-    secretStatus[name] = hasProtectedValue(wranglerRow?.[column] as string | null | undefined);
-  }
-  secretStatus.GHL_API_KEY ||= hasProtectedValue(legacySecrets?.ghlApiKeyEncrypted);
-  secretStatus.META_PIXEL_ID ||= hasProtectedValue(legacySecrets?.metaPixelIdEncrypted);
+  const secretStatus = wranglerSecretStatusFromProfile(integrationProfile.dto);
 
   const generatedConfig = configRows[0]?.generatedConfigEncrypted
     ? decryptSetupValue(configRows[0].generatedConfigEncrypted)
@@ -195,6 +195,7 @@ export async function getAstroConfigView(clientId: number) {
     input,
     assets: assets.filter(asset => isAstroAssetSlot(asset.slot)),
     secretStatus,
+    integrationProfile: integrationProfile.dto,
     generatedConfig,
     generatedAt: configRows[0]?.generatedAt ?? null,
   };
@@ -209,8 +210,10 @@ export type AstroSitePublishMaterial = {
 export async function getAstroSitePublishMaterial(
   clientId: number,
 ): Promise<AstroSitePublishMaterial> {
-  const [view, wranglerRow, legacySecrets, resolver] = await Promise.all([
-    getAstroConfigView(clientId),
+  // Loading the view first also performs the safe, missing-row-only legacy
+  // backfill. The resolver then reads the exact same canonical profile.
+  const view = await getAstroConfigView(clientId);
+  const [wranglerRow, legacySecrets, resolver] = await Promise.all([
     getWranglerSecretRow(clientId),
     getClientSecretSetup(clientId),
     clientIntegrationProfileResolverForClient(clientId),
@@ -326,6 +329,7 @@ export async function saveWranglerSecrets(
   const db = await requireDb();
   const existingClient = await getClientById(clientId);
   if (!existingClient) throw new Error("Client not found.");
+  await loadOrBackfillResolvedClientIntegrationProfile(clientId);
   const updates = protectWranglerSecretValues(input);
 
   if (Object.keys(updates).length > 0) {
@@ -343,7 +347,40 @@ export async function saveWranglerSecrets(
   if (input.META_PIXEL_ID?.trim()) legacyUpdates.metaPixelIdEncrypted = encryptSetupValue(input.META_PIXEL_ID.trim());
   if (Object.keys(legacyUpdates).length) await saveClientSecretSetup(clientId, legacyUpdates);
 
+  const identifiers: Partial<Record<"GHL_LOCATION_ID" | "GOOGLE_SHEETS_ID" | "META_PIXEL_ID", string>> = {};
+  const replaceSecrets: Partial<Record<ClientIntegrationSecretKey, string>> = {};
+  const resolvedKeys: WranglerSecretName[] = [];
+  for (const name of WRANGLER_SECRET_VALUES) {
+    const value = input[name]?.trim();
+    if (!value) continue;
+    resolvedKeys.push(name);
+    if (isIdentifierKey(name)) identifiers[name] = value;
+    else replaceSecrets[name] = value;
+  }
+  if (resolvedKeys.length > 0) {
+    // The canonical row is the source of truth. Legacy rows remain mirrored for
+    // compatibility, and explicitly replaced keys resolve only their own
+    // reconciliation conflicts without hiding unrelated conflicts.
+    await saveClientIntegrationProfile(clientId, {
+      identifiers,
+      replaceSecrets,
+      resolveConflictedKeys: resolvedKeys,
+    });
+  }
+
   return getAstroConfigView(clientId);
+}
+
+export function wranglerSecretStatusFromProfile(
+  profile: ClientIntegrationProfileDto,
+): Record<WranglerSecretName, boolean> {
+  const status = emptyWranglerSecretStatus();
+  for (const name of WRANGLER_SECRET_VALUES) {
+    status[name] = isIdentifierKey(name)
+      ? Boolean(profile.identifiers[name]?.trim())
+      : profile.secretPresence[name] === "SET";
+  }
+  return status;
 }
 
 export function protectWranglerSecretValues(

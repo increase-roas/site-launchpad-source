@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clientLeadIntegrations,
   funnelSimpleFormConfigs,
@@ -6,6 +6,10 @@ import {
   funnels,
 } from "../drizzle/schema";
 import { buildSimpleFormStoredRecord } from "../shared/simpleFormConfig";
+import {
+  buildClientIntegrationProfileDto,
+  emptySecretPresence,
+} from "../shared/clientIntegrationProfile";
 import { encryptSetupValue } from "./clientSecurity";
 
 const dbMocks = vi.hoisted(() => ({
@@ -16,12 +20,78 @@ const dbMocks = vi.hoisted(() => ({
 
 vi.mock("./db", () => dbMocks);
 
+const integrationMocks = vi.hoisted(() => ({
+  loadOrBackfillResolvedClientIntegrationProfile: vi.fn(),
+  saveClientIntegrationProfile: vi.fn(),
+}));
+
+vi.mock("./clientIntegrations", () => integrationMocks);
+
 import {
   createSimpleFormFromTemplate,
   getSimpleFormDetail,
   getSimpleFormPublishHandoff,
+  getSimpleFormPublishMaterial,
   saveSimpleFormConfig,
+  saveSimpleFormIntegration,
 } from "./simpleFormDb";
+
+function resolvedProfile(input: {
+  identifiers?: Partial<{
+    GHL_LOCATION_ID: string | null;
+    GOOGLE_SHEETS_ID: string | null;
+    META_PIXEL_ID: string | null;
+  }>;
+  secrets?: Partial<Record<
+    | "GHL_API_KEY"
+    | "META_CAPI_ACCESS_TOKEN"
+    | "STAGE_WEBHOOK_SECRET"
+    | "GOOGLE_SERVICE_ACCOUNT_EMAIL"
+    | "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY"
+    | "ALERT_WEBHOOK_URL",
+    string
+  >>;
+} = {}) {
+  const identifiers = {
+    GHL_LOCATION_ID: "location-123",
+    GOOGLE_SHEETS_ID: "sheet-123",
+    META_PIXEL_ID: "123456789012345",
+    ...input.identifiers,
+  };
+  const secrets = {
+    GHL_API_KEY: "ghl-key",
+    META_CAPI_ACCESS_TOKEN: "meta-token",
+    STAGE_WEBHOOK_SECRET: "stage-secret",
+    GOOGLE_SERVICE_ACCOUNT_EMAIL: "publisher@example.iam.gserviceaccount.com",
+    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: "private-key",
+    ...input.secrets,
+  };
+  const secretPresence = emptySecretPresence();
+  for (const key of Object.keys(secrets) as Array<keyof typeof secretPresence>) {
+    if (secrets[key]) secretPresence[key] = "SET";
+  }
+  return {
+    clientId: 5,
+    dto: buildClientIntegrationProfileDto({
+      clientId: 5,
+      identifiers,
+      secretPresence,
+      lastUpdated: new Date("2026-08-18T12:00:00.000Z"),
+      reconciliationStatus: "ready",
+      conflictedKeys: [],
+    }),
+    secrets,
+  };
+}
+
+beforeEach(() => {
+  integrationMocks.loadOrBackfillResolvedClientIntegrationProfile.mockResolvedValue(
+    resolvedProfile(),
+  );
+  integrationMocks.saveClientIntegrationProfile.mockResolvedValue(
+    resolvedProfile().dto,
+  );
+});
 
 function buildReadyRecord() {
   const record = buildSimpleFormStoredRecord({
@@ -258,6 +328,9 @@ describe("createSimpleFormFromTemplate", () => {
 describe("Simple Form private candidate validation", () => {
   it("requires the client GHL location before marking configuration ready", async () => {
     process.env.JWT_SECRET = "test-only-secret-that-is-long-enough";
+    integrationMocks.loadOrBackfillResolvedClientIntegrationProfile.mockResolvedValue(
+      resolvedProfile({ identifiers: { GHL_LOCATION_ID: null } }),
+    );
     dbMocks.getDb.mockResolvedValue(
       detailDatabase(buildReadyRecord(), { ghlLocationId: "" })
     );
@@ -307,5 +380,82 @@ describe("Simple Form private candidate validation", () => {
     expect(JSON.stringify(handoff)).not.toContain("ghl-key");
     expect(JSON.stringify(handoff)).not.toContain("stage-secret");
     expect(JSON.stringify(handoff)).not.toContain("[PRESENT]");
+  });
+
+  it("uses the canonical profile for status and publish material without exposing secrets", async () => {
+    const profile = resolvedProfile({
+      identifiers: { GHL_LOCATION_ID: "astro-saved-location" },
+      secrets: {
+        GHL_API_KEY: "astro-saved-ghl-key",
+        GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: "astro-private-key",
+      },
+    });
+    integrationMocks.loadOrBackfillResolvedClientIntegrationProfile.mockResolvedValue(
+      profile,
+    );
+    dbMocks.getDb.mockResolvedValue(detailDatabase(buildReadyRecord()));
+    dbMocks.getClientAssets.mockResolvedValue([]);
+    dbMocks.getClientById.mockResolvedValue({
+      id: 5,
+      businessName: "Northland Spas",
+      shortName: "northland",
+    });
+
+    const detail = await getSimpleFormDetail(5, 11);
+    const material = await getSimpleFormPublishMaterial({ clientId: 5, funnelId: 11 });
+
+    expect(detail.integration.GHL_LOCATION_ID).toBe("astro-saved-location");
+    expect(detail.secretStatus.GHL_API_KEY).toBe(true);
+    expect(JSON.stringify(detail)).not.toContain("astro-saved-ghl-key");
+    expect(JSON.stringify(detail)).not.toContain("astro-private-key");
+    expect(material.runtimeSecrets.GHL_API_KEY).toBe("astro-saved-ghl-key");
+    expect(material.runtimeSecrets.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY).toBe(
+      "astro-private-key",
+    );
+  });
+
+  it("writes Simple Form integration changes to canonical and compatibility stores", async () => {
+    const profile = resolvedProfile();
+    integrationMocks.loadOrBackfillResolvedClientIntegrationProfile.mockResolvedValue(
+      profile,
+    );
+    const legacyWrites: Array<Record<string, unknown>> = [];
+    const database = {
+      ...detailDatabase(buildReadyRecord()),
+      insert: (table: unknown) => ({
+        values: (values: Record<string, unknown>) => ({
+          onConflictDoUpdate: async () => {
+            if (table === clientLeadIntegrations) legacyWrites.push(values);
+          },
+        }),
+      }),
+    };
+    dbMocks.getDb.mockResolvedValue(database);
+    dbMocks.getClientAssets.mockResolvedValue([]);
+    dbMocks.getClientById.mockResolvedValue({
+      id: 5,
+      businessName: "Northland Spas",
+      shortName: "northland",
+    });
+
+    const result = await saveSimpleFormIntegration(5, 11, {
+      GHL_LOCATION_ID: "simple-form-location",
+      GHL_API_KEY: "simple-form-secret",
+    });
+
+    expect(integrationMocks.saveClientIntegrationProfile).toHaveBeenCalledWith(
+      5,
+      expect.objectContaining({
+        identifiers: { GHL_LOCATION_ID: "simple-form-location" },
+        replaceSecrets: { GHL_API_KEY: "simple-form-secret" },
+        resolveConflictedKeys: ["GHL_LOCATION_ID", "GHL_API_KEY"],
+      }),
+    );
+    expect(legacyWrites).toHaveLength(1);
+    expect(legacyWrites[0]).toMatchObject({
+      clientId: 5,
+      ghlLocationId: "simple-form-location",
+    });
+    expect(JSON.stringify(result)).not.toContain("simple-form-secret");
   });
 });

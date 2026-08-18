@@ -9,7 +9,6 @@ import {
 } from "../drizzle/schema";
 import {
   SIMPLE_FORM_CLOUDFLARE_INFRA,
-  SIMPLE_FORM_CLIENT_SECRET_KEYS,
   SIMPLE_FORM_MANIFEST,
   SIMPLE_FORM_PREVIEW,
   SIMPLE_FORM_SECRET_COLUMN,
@@ -32,7 +31,16 @@ import {
   type SimpleFormSecretPresence,
   type SimpleFormStoredRecord,
 } from "../shared/simpleFormConfig";
-import { encryptSetupValue, generateCrmCallbackSecret, hasProtectedValue, decryptSetupValue } from "./clientSecurity";
+import { encryptSetupValue, generateCrmCallbackSecret } from "./clientSecurity";
+import {
+  loadOrBackfillResolvedClientIntegrationProfile,
+  saveClientIntegrationProfile,
+} from "./clientIntegrations";
+import type {
+  ClientIntegrationIdentifierKey,
+  ClientIntegrationProfileKey,
+  ClientIntegrationSecretKey,
+} from "../shared/clientIntegrationProfile";
 import { getClientAssets, getClientById, getDb } from "./db";
 import {
   postgresConflictTargets,
@@ -48,31 +56,31 @@ async function requireDb() {
   return db;
 }
 
-function emptySecretPresence(): SimpleFormSecretPresence {
+type ResolvedClientIntegrationProfile = Awaited<
+  ReturnType<typeof loadOrBackfillResolvedClientIntegrationProfile>
+>;
+
+export function simpleFormSecretPresenceFromProfile(
+  profile: ResolvedClientIntegrationProfile,
+): SimpleFormSecretPresence {
   return {
-    GHL_API_KEY: false,
-    META_CAPI_ACCESS_TOKEN: false,
-    STAGE_WEBHOOK_SECRET: false,
-    ALERT_WEBHOOK_URL: false,
+    GHL_API_KEY: profile.dto.secretPresence.GHL_API_KEY === "SET",
+    META_CAPI_ACCESS_TOKEN:
+      profile.dto.secretPresence.META_CAPI_ACCESS_TOKEN === "SET",
+    STAGE_WEBHOOK_SECRET:
+      profile.dto.secretPresence.STAGE_WEBHOOK_SECRET === "SET",
+    ALERT_WEBHOOK_URL:
+      profile.dto.secretPresence.ALERT_WEBHOOK_URL === "SET",
   };
 }
 
-export function secretPresenceFromRow(row: ClientLeadIntegration | undefined): SimpleFormSecretPresence {
-  const presence = emptySecretPresence();
-  if (!row) return presence;
-  for (const key of SIMPLE_FORM_CLIENT_SECRET_KEYS) {
-    presence[key] = hasProtectedValue(row[SIMPLE_FORM_SECRET_COLUMN[key]]);
-  }
-  return presence;
-}
-
-function integrationFieldsFromRow(
-  row: ClientLeadIntegration | undefined,
+export function simpleFormIntegrationFromProfile(
+  profile: ResolvedClientIntegrationProfile,
 ): SimpleFormClientIntegrationFields {
   return {
-    GHL_LOCATION_ID: row?.ghlLocationId ?? null,
-    GOOGLE_SHEETS_ID: row?.googleSheetsId ?? null,
-    META_PIXEL_ID: row?.metaPixelId ?? null,
+    GHL_LOCATION_ID: profile.dto.identifiers.GHL_LOCATION_ID,
+    GOOGLE_SHEETS_ID: profile.dto.identifiers.GOOGLE_SHEETS_ID,
+    META_PIXEL_ID: profile.dto.identifiers.META_PIXEL_ID,
   };
 }
 
@@ -177,26 +185,22 @@ function parseStoredRecord(value: Record<string, unknown>): SimpleFormStoredReco
   return simpleFormStoredRecordSchema.parse(value);
 }
 
-function decryptRuntimeSecret(value: string | null | undefined): string | null {
-  return hasProtectedValue(value) ? decryptSetupValue(value as string) : null;
-}
-
 export async function getSimpleFormDetail(clientId: number, funnelId: number) {
   const db = await requireDb();
   const funnel = await getOwnedFunnel(clientId, funnelId);
   if (funnel.templateKey !== SIMPLE_FORM_TEMPLATE_KEY) {
     throw new Error("This funnel is not a Simple Form template instance.");
   }
-  const [configRows, integrationRows, assets, client] = await Promise.all([
+  const [configRows, integrationProfile, assets, client] = await Promise.all([
     db.select().from(funnelSimpleFormConfigs).where(eq(funnelSimpleFormConfigs.funnelId, funnelId)).limit(1),
-    db.select().from(clientLeadIntegrations).where(eq(clientLeadIntegrations.clientId, clientId)).limit(1),
+    loadOrBackfillResolvedClientIntegrationProfile(clientId),
     getClientAssets(clientId),
     getClientById(clientId),
   ]);
   if (!client) throw new Error("Client not found.");
   const stored = parseStoredRecord((configRows[0]?.configJson ?? {}) as Record<string, unknown>);
-  const secrets = secretPresenceFromRow(integrationRows[0]);
-  const integration = integrationFieldsFromRow(integrationRows[0]);
+  const secrets = simpleFormSecretPresenceFromProfile(integrationProfile);
+  const integration = simpleFormIntegrationFromProfile(integrationProfile);
   const config = resolveSimpleFormImages(stored, assets);
   const record = { ...stored, config };
   const readiness = buildSimpleFormReadiness(record, secrets, integration);
@@ -307,28 +311,72 @@ export async function saveSimpleFormIntegration(
   if (funnel.templateKey !== SIMPLE_FORM_TEMPLATE_KEY) {
     throw new Error("This funnel is not a Simple Form template instance.");
   }
+  const currentProfile =
+    await loadOrBackfillResolvedClientIntegrationProfile(clientId);
   const db = await requireDb();
-  const existing = await db
-    .select()
-    .from(clientLeadIntegrations)
-    .where(eq(clientLeadIntegrations.clientId, clientId))
-    .limit(1);
   const updates: Partial<ClientLeadIntegration> = {};
+  const identifiers: Partial<
+    Record<ClientIntegrationIdentifierKey, string | null>
+  > = {};
+  const replaceSecrets: Partial<Record<ClientIntegrationSecretKey, string>> = {};
+  const clearSecrets: ClientIntegrationSecretKey[] = [];
+  const resolvedKeys: ClientIntegrationProfileKey[] = [];
   const assign = (key: SimpleFormClientSecretKey, value: string | undefined) => {
     const trimmed = value?.trim();
     if (!trimmed) return;
     updates[SIMPLE_FORM_SECRET_COLUMN[key]] = encryptSetupValue(trimmed);
+    replaceSecrets[key] = trimmed;
+    resolvedKeys.push(key);
   };
-  if (input.GHL_LOCATION_ID !== undefined) updates.ghlLocationId = input.GHL_LOCATION_ID.trim() || null;
-  if (input.GOOGLE_SHEETS_ID !== undefined) updates.googleSheetsId = input.GOOGLE_SHEETS_ID.trim() || null;
-  if (input.META_PIXEL_ID !== undefined) updates.metaPixelId = input.META_PIXEL_ID.trim() || null;
+  const assignIdentifier = (
+    key: ClientIntegrationIdentifierKey,
+    column: "ghlLocationId" | "googleSheetsId" | "metaPixelId",
+    value: string | undefined,
+  ) => {
+    if (value === undefined) return;
+    const trimmed = value.trim() || null;
+    updates[column] = trimmed;
+    identifiers[key] = trimmed;
+    resolvedKeys.push(key);
+  };
+  assignIdentifier("GHL_LOCATION_ID", "ghlLocationId", input.GHL_LOCATION_ID);
+  assignIdentifier(
+    "GOOGLE_SHEETS_ID",
+    "googleSheetsId",
+    input.GOOGLE_SHEETS_ID,
+  );
+  assignIdentifier("META_PIXEL_ID", "metaPixelId", input.META_PIXEL_ID);
   assign("GHL_API_KEY", input.GHL_API_KEY);
   assign("META_CAPI_ACCESS_TOKEN", input.META_CAPI_ACCESS_TOKEN);
   assign("ALERT_WEBHOOK_URL", input.ALERT_WEBHOOK_URL);
-  if (input.clearAlertWebhookUrl) updates.alertWebhookUrlEncrypted = null;
-  if (input.regenerateStageWebhookSecret || !existing[0]) {
-    updates.stageWebhookSecretEncrypted = encryptSetupValue(generateCrmCallbackSecret());
+  if (input.clearAlertWebhookUrl) {
+    updates.alertWebhookUrlEncrypted = null;
+    clearSecrets.push("ALERT_WEBHOOK_URL");
+    resolvedKeys.push("ALERT_WEBHOOK_URL");
   }
+  if (
+    input.regenerateStageWebhookSecret ||
+    currentProfile.dto.secretPresence.STAGE_WEBHOOK_SECRET !== "SET"
+  ) {
+    const stageWebhookSecret = generateCrmCallbackSecret();
+    updates.stageWebhookSecretEncrypted = encryptSetupValue(stageWebhookSecret);
+    replaceSecrets.STAGE_WEBHOOK_SECRET = stageWebhookSecret;
+    resolvedKeys.push("STAGE_WEBHOOK_SECRET");
+  }
+  if (
+    Object.keys(identifiers).length > 0 ||
+    Object.keys(replaceSecrets).length > 0 ||
+    clearSecrets.length > 0
+  ) {
+    await saveClientIntegrationProfile(clientId, {
+      identifiers,
+      replaceSecrets,
+      clearSecrets,
+      resolveConflictedKeys: [...new Set(resolvedKeys)],
+    });
+  }
+  // Keep the compatibility row synchronized for legacy consumers. Simple Form
+  // reads and publishing use only the canonical profile below.
   if (Object.keys(updates).length > 0) {
     await db
       .insert(clientLeadIntegrations)
@@ -380,32 +428,23 @@ export async function getSimpleFormPublishMaterial(input: {
   if (!detail.readiness.configurationReady) {
     throw new Error("Complete Simple Form readiness before publishing.");
   }
-  const db = await requireDb();
-  const rows = await db
-    .select()
-    .from(clientLeadIntegrations)
-    .where(eq(clientLeadIntegrations.clientId, input.clientId))
-    .limit(1);
-  const secrets = rows[0];
-  if (!secrets) throw new Error("Simple Form runtime secrets are missing.");
+  const profile =
+    await loadOrBackfillResolvedClientIntegrationProfile(input.clientId);
   return {
     config: detail.config,
     runtimeSecrets: {
-      GHL_API_KEY: decryptRuntimeSecret(secrets.ghlApiKeyEncrypted),
-      GHL_LOCATION_ID: secrets.ghlLocationId,
-      GOOGLE_SHEETS_ID: secrets.googleSheetsId,
-      GOOGLE_SERVICE_ACCOUNT_EMAIL: null,
-      GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: null,
-      META_PIXEL_ID: secrets.metaPixelId,
-      META_CAPI_ACCESS_TOKEN: decryptRuntimeSecret(
-        secrets.metaCapiAccessTokenEncrypted,
-      ),
-      STAGE_WEBHOOK_SECRET: decryptRuntimeSecret(
-        secrets.stageWebhookSecretEncrypted,
-      ),
-      ALERT_WEBHOOK_URL: decryptRuntimeSecret(
-        secrets.alertWebhookUrlEncrypted,
-      ),
+      GHL_API_KEY: profile.secrets.GHL_API_KEY ?? null,
+      GHL_LOCATION_ID: profile.dto.identifiers.GHL_LOCATION_ID,
+      GOOGLE_SHEETS_ID: profile.dto.identifiers.GOOGLE_SHEETS_ID,
+      GOOGLE_SERVICE_ACCOUNT_EMAIL:
+        profile.secrets.GOOGLE_SERVICE_ACCOUNT_EMAIL ?? null,
+      GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY:
+        profile.secrets.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY ?? null,
+      META_PIXEL_ID: profile.dto.identifiers.META_PIXEL_ID,
+      META_CAPI_ACCESS_TOKEN:
+        profile.secrets.META_CAPI_ACCESS_TOKEN ?? null,
+      STAGE_WEBHOOK_SECRET: profile.secrets.STAGE_WEBHOOK_SECRET ?? null,
+      ALERT_WEBHOOK_URL: profile.secrets.ALERT_WEBHOOK_URL ?? null,
     },
   };
 }

@@ -1209,9 +1209,18 @@ function createRuntimeExternal(): SimpleFormPublishExternal {
       });
     },
     async patchRuntimeSecrets(input) {
+      const profileGoogleSecrets = {
+        serviceAccountEmail:
+          input.runtimeSecrets.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim() ?? "",
+        serviceAccountPrivateKey:
+          input.runtimeSecrets.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.trim() ?? "",
+      };
       const secrets = buildPublisherWorkerSecrets(
         input.runtimeSecrets,
-        getGooglePublisherEnvironment()
+        profileGoogleSecrets.serviceAccountEmail &&
+          profileGoogleSecrets.serviceAccountPrivateKey
+          ? profileGoogleSecrets
+          : getGooglePublisherEnvironment()
       );
       await cloudflare.patchWorkerSecrets({
         scriptName: input.workerName,

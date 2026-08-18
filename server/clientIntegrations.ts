@@ -22,6 +22,7 @@ import {
   isSecretKey,
   type ClientIntegrationIdentifierKey,
   type ClientIntegrationIdentifiers,
+  type ClientIntegrationProfileKey,
   type ClientIntegrationProfileDto,
   type ClientIntegrationSecretKey,
   type ClientIntegrationSecretPresence,
@@ -349,6 +350,7 @@ export async function saveClientIntegrationProfile(
     replaceSecrets?: Partial<Record<ClientIntegrationSecretKey, string>>;
     clearSecrets?: ClientIntegrationSecretKey[];
     rotateStageWebhookSecret?: boolean;
+    resolveConflictedKeys?: ClientIntegrationProfileKey[];
   },
 ): Promise<ClientIntegrationProfileDto> {
   const db = await requireDb();
@@ -373,6 +375,10 @@ export async function saveClientIntegrationProfile(
   if (input.rotateStageWebhookSecret) {
     secrets.STAGE_WEBHOOK_SECRET = generateCrmCallbackSecret();
   }
+  const resolvedConflicts = new Set(input.resolveConflictedKeys ?? []);
+  const conflictedKeys = (existing?.conflictedKeys ?? []).filter(
+    key => !resolvedConflicts.has(key as ClientIntegrationProfileKey),
+  );
   const row = {
     clientId,
     profileVersion: existing?.profileVersion ?? 1,
@@ -380,8 +386,8 @@ export async function saveClientIntegrationProfile(
     googleSheetsId: identifiers.GOOGLE_SHEETS_ID,
     metaPixelId: identifiers.META_PIXEL_ID,
     secretsEncrypted: encryptSecretBlob(secrets),
-    reconciliationStatus: existing?.reconciliationStatus === "conflict" ? ("conflict" as const) : ("ready" as const),
-    conflictedKeys: existing?.conflictedKeys ?? [],
+    reconciliationStatus: conflictedKeys.length > 0 ? ("conflict" as const) : ("ready" as const),
+    conflictedKeys,
   };
   await db
     .insert(clientIntegrationProfiles)
@@ -393,7 +399,10 @@ export async function saveClientIntegrationProfile(
   return getClientIntegrationProfile(clientId);
 }
 
-export async function reconcileClientIntegrationProfile(clientId: number): Promise<ClientIntegrationProfileDto> {
+export async function reconcileClientIntegrationProfile(
+  clientId: number,
+  options: { onlyIfMissing?: boolean } = {},
+): Promise<ClientIntegrationProfileDto> {
   const db = await requireDb();
   const [lead, wrangler, clientSecrets, funnelRows] = await Promise.all([
     db.select().from(clientLeadIntegrations).where(eq(clientLeadIntegrations.clientId, clientId)).limit(1),
@@ -425,13 +434,22 @@ export async function reconcileClientIntegrationProfile(clientId: number): Promi
     reconciliationStatus: reconciled.status,
     conflictedKeys: reconciled.conflictedKeys,
   };
-  await db
-    .insert(clientIntegrationProfiles)
-    .values(row)
-    .onConflictDoUpdate({
-      target: postgresConflictTargets.clientIntegrationProfiles,
-      set: withUpdatedAt(row),
-    });
+  if (options.onlyIfMissing) {
+    await db
+      .insert(clientIntegrationProfiles)
+      .values(row)
+      .onConflictDoNothing({
+        target: postgresConflictTargets.clientIntegrationProfiles,
+      });
+  } else {
+    await db
+      .insert(clientIntegrationProfiles)
+      .values(row)
+      .onConflictDoUpdate({
+        target: postgresConflictTargets.clientIntegrationProfiles,
+        set: withUpdatedAt(row),
+      });
+  }
   return getClientIntegrationProfile(clientId);
 }
 
@@ -462,6 +480,25 @@ export async function loadResolvedPaidFunnelProfile(
   }
 }
 
+/**
+ * Returns the canonical per-client integration profile, importing legacy
+ * client-scoped rows exactly once when the canonical row does not exist yet.
+ * Existing canonical profiles are never overwritten by this backfill path.
+ */
+export async function loadOrBackfillResolvedClientIntegrationProfile(
+  clientId: number,
+): Promise<PaidFunnelResolvedProfile> {
+  const existing = await loadResolvedPaidFunnelProfile(clientId);
+  if (existing) return existing;
+
+  await reconcileClientIntegrationProfile(clientId, { onlyIfMissing: true });
+  const backfilled = await loadResolvedPaidFunnelProfile(clientId);
+  if (!backfilled) {
+    throw new Error("Client integration profile could not be initialized.");
+  }
+  return backfilled;
+}
+
 export function createClientIntegrationProfileResolver(
   profiles: readonly PaidFunnelResolvedProfile[],
 ): ClientIntegrationProfileResolver {
@@ -476,6 +513,6 @@ export function createClientIntegrationProfileResolver(
 export async function clientIntegrationProfileResolverForClient(
   clientId: number,
 ): Promise<ClientIntegrationProfileResolver> {
-  const profile = await loadResolvedPaidFunnelProfile(clientId);
-  return createClientIntegrationProfileResolver(profile ? [profile] : []);
+  const profile = await loadOrBackfillResolvedClientIntegrationProfile(clientId);
+  return createClientIntegrationProfileResolver([profile]);
 }
