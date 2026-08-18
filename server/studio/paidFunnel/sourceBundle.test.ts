@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createGenericPaidFunnelFixture } from "../../../shared/paidFunnel/fixture";
 import { buildGenericPaidFunnelPackageFixture } from "../../../shared/studio/paidFunnelPackage";
+import { SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT } from "../../../shared/simpleFormContract";
 import {
   buildReadyPaidFunnelProfileDto,
   buildReadyPaidFunnelSecrets,
@@ -61,6 +62,27 @@ describe("generic paid-funnel source bundle", () => {
       }]),
     })).toThrow(/GHL_API_KEY/);
   });
+
+  it.each(SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT.requiredRuntimeSecrets)(
+    "blocks source publishing when required runtime value %s is absent",
+    key => {
+      const clientId = 21;
+      const dto = buildReadyPaidFunnelProfileDto(clientId);
+      const secrets = buildReadyPaidFunnelSecrets();
+      if (key in dto.identifiers) {
+        (dto.identifiers as Record<string, string | null>)[key] = null;
+      } else {
+        delete (secrets as Record<string, string | undefined>)[key];
+      }
+
+      expect(() => buildGenericPaidFunnelSourceBundle({
+        clientId,
+        graph: createGenericPaidFunnelFixture("missing-contract-value"),
+        package: buildGenericPaidFunnelPackageFixture(),
+        resolver: memoryProfileResolver([{ clientId, dto, secrets }]),
+      })).toThrow(new RegExp(key));
+    },
+  );
 
   it("fail-closes when a legacy saved value is present but malformed", () => {
     const clientId = 19;

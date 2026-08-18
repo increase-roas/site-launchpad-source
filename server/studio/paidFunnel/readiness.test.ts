@@ -3,6 +3,7 @@ import {
   buildGenericPaidFunnelPackageFixture,
   buildGenericPaidFunnelSettingsFixture,
 } from "../../../shared/studio/paidFunnelPackage";
+import { SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT } from "../../../shared/simpleFormContract";
 import { buildReadyPaidFunnelProfileDto } from "./profileMapping";
 import {
   PAID_FUNNEL_READINESS_KEYS,
@@ -164,6 +165,25 @@ describe("paid-funnel readiness", () => {
     ]);
     expect(JSON.stringify(readiness)).not.toMatch(/server-only|secret-value|ghl-live-api-key/i);
   });
+
+  it.each(SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT.requiredRuntimeSecrets)(
+    "blocks readiness when required runtime value %s is missing",
+    key => {
+      const pkg = buildGenericPaidFunnelPackageFixture();
+      const settings = buildGenericPaidFunnelSettingsFixture(pkg);
+      const profile = buildReadyPaidFunnelProfileDto(settings.clientId);
+      if (key in profile.identifiers) {
+        (profile.identifiers as Record<string, string | null>)[key] = null;
+      } else {
+        (profile.secretPresence as Record<string, "SET" | "NOT SET">)[key] = "NOT SET";
+      }
+
+      const readiness = buildPaidFunnelReadiness(pkg, settings, profile);
+
+      expect(readiness.configurationReady).toBe(false);
+      expect(sectionMissing(readiness, "secrets")).toContain(key);
+    },
+  );
 
   it("fail-closes when the client profile is missing or conflicted", () => {
     const pkg = buildGenericPaidFunnelPackageFixture();
