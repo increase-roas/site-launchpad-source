@@ -442,19 +442,24 @@ export function resolvePublisherMappings(blob: string | null | undefined) {
 export async function loadResolvedPaidFunnelProfile(
   clientId: number,
 ): Promise<PaidFunnelResolvedProfile | null> {
-  const db = await requireDb();
-  const rows = await db
-    .select()
-    .from(clientIntegrationProfiles)
-    .where(eq(clientIntegrationProfiles.clientId, clientId))
-    .limit(1);
-  const row = rows[0];
-  if (!row) return null;
-  return {
-    clientId,
-    dto: toProfileDto(row, clientId),
-    secrets: decryptSecretBlob(row.secretsEncrypted),
-  };
+  try {
+    const db = await requireDb();
+    const rows = await db
+      .select()
+      .from(clientIntegrationProfiles)
+      .where(eq(clientIntegrationProfiles.clientId, clientId))
+      .limit(1);
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      clientId,
+      dto: toProfileDto(row, clientId),
+      secrets: decryptSecretBlob(row.secretsEncrypted),
+    };
+  } catch (error) {
+    if (isUndefinedRelationError(error)) return null;
+    throw error;
+  }
 }
 
 export function createClientIntegrationProfileResolver(

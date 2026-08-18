@@ -13,7 +13,7 @@ process.env.JWT_SECRET = "test-only-secret-that-is-long-enough";
 process.env.SECRETS_ENCRYPTION_KEY = "dedicated-test-encryption-key";
 process.env.NODE_ENV = "test";
 
-import { getClientIntegrationProfile } from "./clientIntegrations";
+import { getClientIntegrationProfile, loadResolvedPaidFunnelProfile } from "./clientIntegrations";
 
 describe("ClientIntegrationProfile database reads", () => {
   beforeEach(() => {
@@ -48,5 +48,24 @@ describe("ClientIntegrationProfile database reads", () => {
     expect(dto.readiness.funnelReady).toBe(false);
     expect(JSON.stringify(dto)).not.toContain("Failed query");
     expect(JSON.stringify(dto)).not.toContain("client_integration_profiles");
+  });
+
+  it("treats a missing profile table as not SET for publish resolution", async () => {
+    dbMocks.getDb.mockResolvedValue({
+      select: () => {
+        throw Object.assign(
+          new Error('Failed query: select "clientId" from client_integration_profiles'),
+          {
+            cause: Object.assign(
+              new Error('relation "client_integration_profiles" does not exist'),
+              { code: "42P01" },
+            ),
+          },
+        );
+      },
+    });
+
+    const resolved = await loadResolvedPaidFunnelProfile(7);
+    expect(resolved).toBeNull();
   });
 });

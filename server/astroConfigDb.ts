@@ -28,6 +28,11 @@ import {
 import { postgresConflictTargets, withUpdatedAt } from "./postgresPersistence";
 import type { ProductCategory } from "../shared/client";
 import { getAstroSiteRuntimeSecrets } from "../shared/astroSiteContract";
+import {
+  clientIntegrationProfileResolverForClient,
+  contributionsFromLegacyRows,
+} from "./clientIntegrations";
+import { assertAstroSitePublishProfileReady } from "./studio/website/publishProfile";
 
 async function requireDb() {
   const db = await getDb();
@@ -204,41 +209,28 @@ export type AstroSitePublishMaterial = {
 export async function getAstroSitePublishMaterial(
   clientId: number,
 ): Promise<AstroSitePublishMaterial> {
-  const [view, wranglerRow, legacySecrets] = await Promise.all([
+  const [view, wranglerRow, legacySecrets, resolver] = await Promise.all([
     getAstroConfigView(clientId),
     getWranglerSecretRow(clientId),
     getClientSecretSetup(clientId),
+    clientIntegrationProfileResolverForClient(clientId),
   ]);
   const enabledIntegrations = {
     ghl: view.input.integrations.ghl.enabled,
     meta: view.input.integrations.meta.enabled,
   };
   const requiredNames = getAstroSiteRuntimeSecrets(enabledIntegrations);
-  const runtimeSecrets: Record<string, string> = {};
-  const missing: string[] = [];
-
-  for (const name of requiredNames) {
-    const typedName = name as WranglerSecretName;
-    const column = secretColumnByName[typedName];
-    const protectedValue = wranglerRow?.[column] as string | null | undefined;
-    const legacyProtected =
-      typedName === "GHL_API_KEY"
-        ? legacySecrets?.ghlApiKeyEncrypted
-        : typedName === "META_PIXEL_ID"
-          ? legacySecrets?.metaPixelIdEncrypted
-          : null;
-    const value = protectedValue
-      ? decryptSetupValue(protectedValue)
-      : legacyProtected
-        ? decryptSetupValue(legacyProtected)
-        : "";
-    if (!value.trim()) missing.push(name);
-    else runtimeSecrets[name] = value;
-  }
-
-  if (missing.length > 0) {
-    throw new Error(`Website runtime secrets are missing: ${missing.join(", ")}.`);
-  }
+  const legacyValues = contributionsFromLegacyRows({
+    clientId,
+    wrangler: wranglerRow ?? null,
+    clientSecrets: legacySecrets ?? null,
+  });
+  const { runtimeSecrets } = assertAstroSitePublishProfileReady({
+    clientId,
+    resolver,
+    requiredSecretNames: requiredNames,
+    legacyValues,
+  });
   if (!view.generatedAt) {
     throw new Error("Save the website configuration before publishing.");
   }
