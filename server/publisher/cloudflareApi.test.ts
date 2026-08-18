@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { FetchFunction } from "../../shared/requestTimeout";
 import {
   CLOUDFLARE_REQUEST_TIMEOUT_MS,
+  CloudflareApiError,
   createCloudflareApiClient,
 } from "./cloudflareApi";
 
@@ -310,6 +311,41 @@ describe("Cloudflare publisher client", () => {
         },
       },
     });
+  });
+
+  it("retains only the numeric Cloudflare API code from a failed secret update", async () => {
+    const { fetchFn } = createMockFetch([
+      jsonResponse(
+        {
+          success: false,
+          errors: [
+            {
+              code: 10215,
+              message: "secret-shaped upstream response must not escape",
+            },
+          ],
+        },
+        400,
+      ),
+    ]);
+
+    const failure = await createClient(fetchFn)
+      .patchWorkerSecrets({
+        scriptName: "northland-simple-form",
+        secrets: [{ name: "RUNTIME_SECRET", value: "opaque-secret-value" }],
+        signal: activeSignal(),
+      })
+      .catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(CloudflareApiError);
+    expect(failure).toMatchObject({
+      status: 400,
+      apiCode: 10215,
+      message:
+        "Cloudflare bulk secret update failed with HTTP 400 (code 10215).",
+    });
+    expect(JSON.stringify(failure)).not.toContain("secret-shaped");
+    expect(JSON.stringify(failure)).not.toContain("opaque-secret-value");
   });
 
   it("looks up the workers.dev enablement and URL without exposing credentials", async () => {

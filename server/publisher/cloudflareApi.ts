@@ -81,12 +81,15 @@ export class CloudflareApiError extends Error {
 
   constructor(
     readonly operation: string,
-    readonly status?: number
+    readonly status?: number,
+    readonly apiCode?: number
   ) {
     super(
       status === undefined
         ? `Cloudflare ${operation} failed.`
-        : `Cloudflare ${operation} failed with HTTP ${status}.`
+        : `Cloudflare ${operation} failed with HTTP ${status}${
+            apiCode === undefined ? "" : ` (code ${apiCode})`
+          }.`
     );
     this.name = "CloudflareApiError";
   }
@@ -117,6 +120,16 @@ type R2Bucket = { name: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseCloudflareApiCode(value: unknown): number | undefined {
+  if (!isRecord(value) || !Array.isArray(value.errors)) return undefined;
+  const firstError = value.errors[0];
+  if (!isRecord(firstError)) return undefined;
+  const code = firstError.code;
+  return typeof code === "number" && Number.isSafeInteger(code)
+    ? code
+    : undefined;
 }
 
 function requireRecord(
@@ -263,7 +276,14 @@ function createRequest(options: {
       throw new CloudflareApiError(operation);
     }
     if (!response.ok) {
-      throw new CloudflareApiError(operation, response.status);
+      let apiCode: number | undefined;
+      try {
+        apiCode = parseCloudflareApiCode(await response.json());
+      } catch {
+        // Error bodies are deliberately discarded. Only a numeric API code is
+        // safe and useful enough to carry into publisher diagnostics.
+      }
+      throw new CloudflareApiError(operation, response.status, apiCode);
     }
     try {
       const body: unknown = await response.json();

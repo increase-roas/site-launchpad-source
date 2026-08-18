@@ -215,9 +215,9 @@ describe("generic Astro paid funnel workflow Retry", () => {
   it("reports actionable Cloudflare failures without exposing response bodies", () => {
     expect(
       safeGenericPaidFunnelPublishFailure(
-        new CloudflareApiError("bulk secret update", 403)
+        new CloudflareApiError("bulk secret update", 403, 10000)
       )
-    ).toBe("Cloudflare bulk secret update failed with HTTP 403.");
+    ).toBe("Cloudflare bulk secret update failed with HTTP 403 (code 10000).");
   });
 
   it("defers organization-secret verification when a repository token cannot read org metadata", async () => {
