@@ -5,7 +5,6 @@ import { httpLink } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
-import BootConfigurationError from "./components/BootConfigurationError";
 import "./index.css";
 
 const API_REQUEST_TIMEOUT_MS = 45_000;
@@ -45,24 +44,10 @@ const trpcClient = trpc.createClient({
   ],
 });
 
-const rootElement = document.getElementById("root");
-if (!rootElement) {
-  throw new Error("Root element #root was not found.");
-}
-
-const publicUrl = String(import.meta.env.VITE_SUPABASE_URL ?? "").trim();
-const publicKey = String(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "").trim();
-
-if (!publicUrl || !publicKey) {
-  createRoot(rootElement).render(
-    <BootConfigurationError message="Supabase browser authentication is not configured." />,
-  );
-} else {
-  createRoot(rootElement).render(
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
-    </trpc.Provider>,
-  );
-}
+createRoot(document.getElementById("root")!).render(
+  <trpc.Provider client={trpcClient} queryClient={queryClient}>
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>
+  </trpc.Provider>
+);
