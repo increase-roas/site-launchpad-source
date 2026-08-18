@@ -33,8 +33,12 @@ describe("optimistic client writes", () => {
 });
 
 describe("duplicate key detection", () => {
-  it("recognizes MySQL duplicate entry errors", () => {
-    expect(isDuplicateKeyError({ code: "ER_DUP_ENTRY" })).toBe(true);
+  it("recognizes only PostgreSQL unique-violation SQLSTATE errors", () => {
+    expect(isDuplicateKeyError({ code: "23505" })).toBe(true);
+    expect(isDuplicateKeyError(new Error("duplicate key value violates unique constraint"))).toBe(
+      false,
+    );
+    expect(isDuplicateKeyError({ code: "23503" })).toBe(false);
     expect(isDuplicateKeyError(new Error("other"))).toBe(false);
   });
 });

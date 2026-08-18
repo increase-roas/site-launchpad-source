@@ -2,14 +2,12 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import type { ClientSecretSetup } from "../../drizzle/schema";
 import {
-  ASSET_SLOT_FILENAMES,
-  ASSET_SLOT_VALUES,
   SECRET_FIELD_VALUES,
   buildReadiness,
   clientInputSchema,
+  draftClientInputSchema,
   emptySecretStatus,
   isAssetSlot,
-  sanitizeClientFolder,
   secretSetupInputSchema,
   type ClientInput,
   type SecretSetupInput,
@@ -17,21 +15,18 @@ import {
 } from "../../shared/client";
 import {
   createClientWithSecrets,
+  createDraftClient,
   getClientAssets,
   getClientById,
   getClientSecretSetup,
-  listClientAssets,
-  listClientSecretSetups,
-  listClients,
+  getClientViewData,
+  listClientViewData,
   saveClientSecretSetup,
   updateClient,
-  upsertClientAsset,
 } from "../db";
 import { encryptSetupValue, hasProtectedValue } from "../clientSecurity";
-import { decodeImageDataUrl, MAX_DATA_URL_CHARS, processUploadedImage } from "../imageProcessing";
-import { storagePutExact } from "../storage";
+import { observeRuntimeOperation } from "../_core/operationTelemetry";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
-import { ensureWorkspaceDefaults } from "../workspaceDb";
 import { UpdateConflictError, isDuplicateKeyError } from "../trpcErrors";
 import type { Client, ClientAsset } from "../../drizzle/schema";
 
@@ -84,23 +79,19 @@ function clientViewFrom(client: Client, assets: ClientAsset[], secretRow: Client
 }
 
 export async function getClientView(clientId: number) {
-  const [client, assets, secretRow] = await Promise.all([
-    getClientById(clientId),
-    getClientAssets(clientId),
-    getClientSecretSetup(clientId),
-  ]);
+  const { client, assets, secretSetup } = await getClientViewData(clientId);
 
   if (!client) throw new TRPCError({ code: "NOT_FOUND", message: "Client not found." });
-  return clientViewFrom(client, assets, secretRow);
+  return clientViewFrom(client, assets, secretSetup);
 }
 
 export const clientsRouter = router({
   list: protectedProcedure.query(async () => {
-    const [rows, assets, secretRows] = await Promise.all([
-      listClients(),
-      listClientAssets(),
-      listClientSecretSetups(),
-    ]);
+    const { clients: rows, assets, secretSetups: secretRows } =
+      await observeRuntimeOperation(
+        "clients_list_database",
+        listClientViewData,
+      );
     const assetsByClient = new Map<number, ClientAsset[]>();
     for (const asset of assets) {
       const current = assetsByClient.get(asset.clientId) ?? [];
@@ -123,13 +114,29 @@ export const clientsRouter = router({
           { ...input.details, status: "draft" },
           encryptedSetupValues(input.setup),
         );
-        await ensureWorkspaceDefaults(clientId);
         return getClientView(clientId);
       } catch (error) {
         if (isDuplicateKeyError(error)) {
           throw new TRPCError({
             code: "CONFLICT",
             message: "That short name is already used. Choose a different one.",
+          });
+        }
+        throw error;
+      }
+    }),
+
+  createDraft: protectedProcedure
+    .input(draftClientInputSchema)
+    .mutation(async ({ input }) => {
+      try {
+        const clientId = await createDraftClient(input.businessName);
+        return getClientView(clientId);
+      } catch (error) {
+        if (isDuplicateKeyError(error)) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "That short name is already used. Try a slightly different business name.",
           });
         }
         throw error;
@@ -164,52 +171,6 @@ export const clientsRouter = router({
           });
         }
         throw error;
-      }
-    }),
-
-  uploadAsset: protectedProcedure
-    .input(
-      z.object({
-        clientId: z.number().int().positive(),
-        slot: z.enum(ASSET_SLOT_VALUES),
-        originalFilename: z.string().trim().min(1).max(500),
-        dataUrl: z.string().min(20).max(MAX_DATA_URL_CHARS),
-      }),
-    )
-    .mutation(async ({ input }) => {
-      const client = await getClientById(input.clientId);
-      if (!client) throw new TRPCError({ code: "NOT_FOUND", message: "Client not found." });
-
-      try {
-        const decoded = decodeImageDataUrl(input.dataUrl);
-        const processed = await processUploadedImage(decoded.buffer, input.slot);
-        const folder = sanitizeClientFolder(client.shortName) || `client-${client.id}`;
-        const filename = ASSET_SLOT_FILENAMES[input.slot];
-        const stored = await storagePutExact(
-          `clients/${client.id}-${folder}/${filename}`,
-          processed.buffer,
-          processed.mimeType,
-        );
-
-        await upsertClientAsset({
-          clientId: client.id,
-          slot: input.slot,
-          storageKey: stored.key,
-          storageUrl: stored.url,
-          filename,
-          originalFilename: input.originalFilename,
-          mimeType: processed.mimeType,
-          byteSize: processed.byteSize,
-          width: processed.width,
-          height: processed.height,
-        });
-
-        return getClientView(client.id);
-      } catch (error) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: error instanceof Error ? error.message : "That image could not be uploaded.",
-        });
       }
     }),
 

@@ -40,11 +40,11 @@ describe("Astro config persistence helpers", () => {
   it("merges every persisted category hero asset into saved category data", () => {
     const config = defaultConfig();
     const merged = applyAstroAssetUrls(config, {
-      categoryHotTubs: "/manus-storage/hot-tubs.webp",
-      categorySwimSpas: "/manus-storage/swim-spas.webp",
-      categorySaunas: "/manus-storage/saunas.webp",
-      categoryColdPlunge: "/manus-storage/cold-plunge.webp",
-      categoryMassageChairs: "/manus-storage/massage-chairs.webp",
+      categoryHotTubs: "https://assets.example.com/hot-tubs.webp",
+      categorySwimSpas: "https://assets.example.com/swim-spas.webp",
+      categorySaunas: "https://assets.example.com/saunas.webp",
+      categoryColdPlunge: "https://assets.example.com/cold-plunge.webp",
+      categoryMassageChairs: "https://assets.example.com/massage-chairs.webp",
     });
     expect(merged.categories["hot-tubs"].heroImage).toContain("hot-tubs.webp");
     expect(merged.categories["swim-spas"].heroImage).toContain("swim-spas.webp");

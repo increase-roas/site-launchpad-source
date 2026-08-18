@@ -2,6 +2,7 @@ import { StatusDot } from "@/components/StatusDot";
 import { WorkspaceModeTabs } from "@/components/WorkspaceModeTabs";
 import { FunnelBuilderList } from "@/components/funnels/FunnelBuilderList";
 import { FunnelConfigEditor } from "@/components/funnels/FunnelConfigEditor";
+import { SimpleFormFunnelEditor } from "@/components/funnels/SimpleFormFunnelEditor";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -224,6 +225,9 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
   }
 
   const workspace = workspaceQuery.data;
+  const selectedFromWorkspace = workspace.funnels.find(funnel => funnel.id === selectedFunnelId);
+  const selectedIsSimpleForm = selectedFromWorkspace?.templateKey === "simple-form";
+  const legacyFunnels = workspace.funnels.filter(funnel => !funnel.templateKey);
 
   return (
     <div className="mx-auto w-full max-w-[1580px] space-y-7">
@@ -241,21 +245,31 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
       </section>
 
       {selectedFunnelId ? (
-        <FunnelConfigEditor
-          clientId={clientId}
-          funnelId={selectedFunnelId}
-          onBack={closeFunnel}
-        />
+        selectedIsSimpleForm ? (
+          <SimpleFormFunnelEditor
+            clientId={clientId}
+            funnelId={selectedFunnelId}
+            onBack={closeFunnel}
+          />
+        ) : (
+          <FunnelConfigEditor
+            clientId={clientId}
+            funnelId={selectedFunnelId}
+            onBack={closeFunnel}
+          />
+        )
       ) : (
         <FunnelBuilderList clientId={clientId} onEdit={openFunnel} />
       )}
 
+      {legacyFunnels.length > 0 ? (
+      <>
       <section className="pt-2">
         <div className="mb-4">
           <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-300">Funnel structure maps</p>
           <h2 className="mt-1.5 text-2xl font-extrabold tracking-tight">Shape and step view</h2>
           <p className="mt-1 text-sm font-medium text-muted-foreground">
-            The existing Shape A, B, and C controls remain available for adjusting the page-level structure.
+            Legacy Shape A, B, and C controls remain available for older funnels.
           </p>
         </div>
       </section>
@@ -275,7 +289,7 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
       </section>
 
       <section className="space-y-5">
-        {workspace.funnels.map(funnel => {
+        {legacyFunnels.map(funnel => {
           const statusTone = funnel.status === "live" ? "green" : funnel.status === "issue" ? "red" : "yellow";
           return (
             <Card key={funnel.id} className="overflow-hidden border-white/8 bg-card/70 p-0 shadow-[0_18px_55px_rgba(0,0,0,0.18)]">
@@ -352,6 +366,8 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
           </div>
         </div>
       </section>
+      </>
+      ) : null}
 
       <StepEditor
         step={selectedStep}

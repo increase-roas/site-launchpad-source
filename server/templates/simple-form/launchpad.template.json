@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": 1,
+  "templateKey": "simple-form",
+  "name": "Simple Form Funnel",
+  "repo": "increase-roas/paid-funnel-simple-form-funnel",
+  "defaultBranch": "main",
+  "type": "paid-funnel",
+  "shape": "A",
+  "active": true,
+  "offlineConversionContract": {
+    "version": 1,
+    "joinKey": "leadUuid",
+    "callback": {
+      "method": "POST",
+      "route": "/api/lead-stage",
+      "authentication": "Bearer STAGE_WEBHOOK_SECRET"
+    },
+    "stageMappings": [
+      {
+        "pipelineStage": "Hot Pursuit",
+        "callbackStage": "qualified",
+        "metaEvent": "QualifiedLead"
+      },
+      {
+        "pipelineStage": "Appointment Set",
+        "callbackStage": "appointment",
+        "metaEvent": "Schedule"
+      },
+      {
+        "pipelineStage": "Showed",
+        "callbackStage": "show",
+        "metaEvent": "Showed"
+      },
+      {
+        "pipelineStage": "Sold",
+        "callbackStage": "sale",
+        "metaEvent": "Purchase"
+      }
+    ],
+    "requiredRuntimeSecrets": [
+      "GHL_API_KEY",
+      "GHL_LOCATION_ID",
+      "GOOGLE_SHEETS_ID",
+      "GOOGLE_SERVICE_ACCOUNT_EMAIL",
+      "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
+      "META_PIXEL_ID",
+      "META_CAPI_ACCESS_TOKEN",
+      "STAGE_WEBHOOK_SECRET"
+    ],
+    "deduplication": {
+      "idempotencyKey": "downstream_conversions.external_id",
+      "eventId": "downstream_conversions.event_id"
+    },
+    "originalAttribution": {
+      "reuse": true,
+      "fields": [
+        "first_url",
+        "original_query_string",
+        "fbc",
+        "fbp",
+        "ip_address",
+        "user_agent"
+      ]
+    },
+    "purchase": {
+      "requiresExplicitPositiveValue": true
+    }
+  }
+}

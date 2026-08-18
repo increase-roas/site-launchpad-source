@@ -1,0 +1,55 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1786824955168,
+      "tag": "0000_true_genesis",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786832516098,
+      "tag": "0001_narrow_loa",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786839498323,
+      "tag": "0002_supabase_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786842729319,
+      "tag": "0003_r2_direct_uploads",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786990487908,
+      "tag": "0004_dashboard_publishing",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786994718559,
+      "tag": "0005_lyrical_wonder_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787008650094,
+      "tag": "0006_clumsy_layla_miller",
+      "breakpoints": true
+    }
+  ]
+}

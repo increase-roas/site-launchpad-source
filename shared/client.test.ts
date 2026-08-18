@@ -5,6 +5,7 @@ import {
   BUSINESS_DAY_VALUES,
   buildReadiness,
   clientInputSchema,
+  draftClientInputSchema,
   type ClientInput,
 } from "./client";
 
@@ -75,6 +76,11 @@ describe("client input validation", () => {
     expect(() =>
       clientInputSchema.safeParse({ ...validClientInput, websiteUrl: "https://" }),
     ).not.toThrow();
+  });
+
+  it("accepts a draft client with only a business name", () => {
+    expect(draftClientInputSchema.safeParse({ businessName: "Northland Spas" }).success).toBe(true);
+    expect(draftClientInputSchema.safeParse({ businessName: "A" }).success).toBe(false);
   });
 });
 

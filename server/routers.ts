@@ -1,10 +1,10 @@
-import { COOKIE_NAME } from "@shared/const";
-import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
+import { assetsRouter } from "./routers/assets";
 import { clientsRouter } from "./routers/clients";
 import { astroConfigRouter } from "./routers/astroConfig";
 import { funnelBuilderRouter } from "./routers/funnelBuilder";
+import { simpleFormRouter } from "./routers/simpleForm";
 import { workspaceRouter } from "./routers/workspace";
 
 export const appRouter = router({
@@ -12,17 +12,12 @@ export const appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return {
-        success: true,
-      } as const;
-    }),
   }),
+  assets: assetsRouter,
   clients: clientsRouter,
   astroConfig: astroConfigRouter,
   funnelBuilder: funnelBuilderRouter,
+  simpleForm: simpleFormRouter,
   workspace: workspaceRouter,
 });
 

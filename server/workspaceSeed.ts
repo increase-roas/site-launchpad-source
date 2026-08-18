@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import {
   funnelSteps,
   funnels,
@@ -7,7 +7,6 @@ import {
   sitePages,
 } from "../drizzle/schema";
 import {
-  DEFAULT_FUNNELS,
   DEFAULT_HOMEPAGE_SECTIONS,
   DEFAULT_SITE_PAGES,
   FUNNEL_SHAPES,
@@ -15,7 +14,7 @@ import {
 } from "../shared/workspace";
 import { isDuplicateKeyError } from "./trpcErrors";
 
-export type WorkspaceSeedClient = Pick<MySql2Database, "select" | "insert">;
+export type WorkspaceSeedClient = Pick<PostgresJsDatabase, "select" | "insert">;
 
 export function funnelStepRows(funnelId: number, slug: string, definitions: FunnelStepDefinition[]) {
   return definitions.map((definition, position) => ({
@@ -64,23 +63,6 @@ export async function seedWorkspaceDefaults(db: WorkspaceSeedClient, clientId: n
     } catch (error) {
       if (!isDuplicateKeyError(error)) throw error;
     }
-  }
-
-  if (existingFunnels.length === 0) {
-    try {
-      for (const funnel of DEFAULT_FUNNELS) {
-        const created = await db
-          .insert(funnels)
-          .values({ clientId, ...funnel, status: "draft" })
-          .$returningId();
-        const funnelId = created[0]?.id;
-        if (!funnelId) throw new Error("Funnel could not be created.");
-        await db.insert(funnelSteps).values(funnelStepRows(funnelId, funnel.slug, FUNNEL_SHAPES[funnel.shape]));
-      }
-    } catch (error) {
-      if (!isDuplicateKeyError(error)) throw error;
-    }
-    return;
   }
 
   for (const funnel of existingFunnels) {

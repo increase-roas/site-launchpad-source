@@ -67,3 +67,7 @@ export function decryptSetupValue(value: string): string {
 export function hasProtectedValue(value: string | null | undefined): boolean {
   return Boolean(value && (value.startsWith(`${CURRENT_VERSION}.`) || value.startsWith(`${LEGACY_VERSION}.`)));
 }
+
+export function generateCrmCallbackSecret(): string {
+  return randomBytes(32).toString("base64url");
+}

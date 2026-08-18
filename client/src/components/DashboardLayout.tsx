@@ -10,6 +10,10 @@ import {
 import { startLogin } from "@/const";
 import { WorkspaceProvider, useWorkspace } from "@/contexts/WorkspaceContext";
 import {
+  UNAPPROVED_ACCOUNT_MESSAGE,
+  switchGoogleAccount,
+} from "@/lib/auth";
+import {
   getWorkspaceArea,
   workspaceRoute,
   type WorkspaceArea,
@@ -43,8 +47,20 @@ function breadcrumbItems(location: string, clientName?: string): string[] {
   return ["Clients"];
 }
 
-function DashboardShell({ children }: { children: ReactNode }) {
-  const { user, logout } = useAuth();
+type DashboardShellProps = {
+  children: ReactNode;
+  user: {
+    name: string | null;
+    email: string | null;
+  };
+  logout: () => Promise<void>;
+};
+
+function DashboardShell({
+  children,
+  user,
+  logout,
+}: DashboardShellProps) {
   const { selectedClientId, selectedClient, selectClient } = useWorkspace();
   const [location, setLocation] = useLocation();
   const area = getWorkspaceArea(location);
@@ -224,7 +240,7 @@ function DashboardShell({ children }: { children: ReactNode }) {
 }
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
-  const { loading, user } = useAuth();
+  const { isUnauthorized, loading, logout, user } = useAuth();
 
   if (loading) return <DashboardLayoutSkeleton />;
 
@@ -236,17 +252,55 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             <Rocket className="h-8 w-8" />
           </div>
           <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">Sign in to Site Launchpad</h1>
+            <h1 className="text-3xl font-extrabold tracking-tight">
+              {isUnauthorized
+                ? "Account not approved"
+                : "Sign in to Site Launchpad"}
+            </h1>
             <p className="mt-3 text-base font-medium leading-relaxed text-muted-foreground">
-              Only your agency team can open this workspace.
+              {isUnauthorized
+                ? UNAPPROVED_ACCOUNT_MESSAGE
+                : "Only your agency team can open this workspace."}
             </p>
           </div>
           <Button
-            onClick={() => startLogin()}
+            onClick={() => {
+              if (isUnauthorized) {
+                void switchGoogleAccount({
+                  logout,
+                  startLogin,
+                }).then(result => {
+                  switch (result) {
+                    case "started":
+                      return;
+                    case "logout-failed":
+                      toast.error(
+                        "Sign out failed. Please try again.",
+                      );
+                      return;
+                    case "login-failed":
+                      toast.error(
+                        "Google sign-in could not start.",
+                      );
+                      return;
+                    default: {
+                      const exhaustiveResult: never = result;
+                      return exhaustiveResult;
+                    }
+                  }
+                });
+                return;
+              }
+              void startLogin().catch(() => {
+                toast.error("Google sign-in could not start.");
+              });
+            }}
             size="lg"
             className="h-14 w-full rounded-2xl bg-cyan-400 text-base font-extrabold text-slate-950 hover:bg-cyan-300"
           >
-            Sign in
+            {isUnauthorized
+              ? "Use another Google account"
+              : "Sign in with Google"}
           </Button>
         </div>
       </div>
@@ -255,7 +309,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <WorkspaceProvider>
-      <DashboardShell>{children}</DashboardShell>
+      <DashboardShell user={user} logout={logout}>
+        {children}
+      </DashboardShell>
     </WorkspaceProvider>
   );
 }

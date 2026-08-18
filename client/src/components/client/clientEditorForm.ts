@@ -61,12 +61,3 @@ export const EMPTY_SETUP: Record<SecretField, string> = {
   ghlWebhookUrl: "",
   cloudflareProjectName: "",
 };
-
-export function toDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("That photo could not be read."));
-    reader.readAsDataURL(file);
-  });
-}

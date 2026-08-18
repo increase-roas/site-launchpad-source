@@ -63,13 +63,13 @@ export function funnelFormStepCount(questionCount: number): number {
 }
 
 export function defaultServiceArea(input: {
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
 }): string {
   return [input.city, input.state, input.postalCode, input.country]
-    .map(value => value.trim())
+    .map(value => (value ?? "").trim())
     .filter(Boolean)
     .join(", ");
 }

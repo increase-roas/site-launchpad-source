@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { clientSecretSetups, users } from "../drizzle/schema";
 import { UpdateConflictError } from "./trpcErrors";
 
 const seedMocks = vi.hoisted(() => ({
@@ -10,28 +11,89 @@ vi.mock("./workspaceSeed", () => ({
 }));
 
 import {
+  POSTGRES_RUNTIME_OPTIONS,
   createClientWithSecretsInTransaction,
-  mysqlAffectedRows,
+  createDraftClientWithDb,
+  createDraftClientInTransaction,
   resolveOptimisticUpdate,
+  upsertUserWithDb,
 } from "./db";
 
-describe("optimistic client updates", () => {
-  it("reads affectedRows from a mysql2 result tuple", () => {
-    expect(mysqlAffectedRows([{ affectedRows: 1 }, []])).toBe(1);
-    expect(mysqlAffectedRows([{ affectedRows: 0 }, []])).toBe(0);
-    expect(mysqlAffectedRows({ affectedRows: 2 })).toBe(2);
+describe("PostgreSQL runtime configuration", () => {
+  it("uses transaction-pooler-safe options without exposing a URL", () => {
+    expect(POSTGRES_RUNTIME_OPTIONS).toEqual({
+      prepare: false,
+      max: 1,
+      idle_timeout: 20,
+      connect_timeout: 10,
+      max_lifetime: 1_800,
+      connection: {
+        statement_timeout: 15_000,
+        idle_in_transaction_session_timeout: 30_000,
+      },
+    });
+    expect(POSTGRES_RUNTIME_OPTIONS).not.toHaveProperty("url");
+    expect(JSON.stringify(POSTGRES_RUNTIME_OPTIONS)).not.toContain("DATABASE_URL");
   });
+});
 
+describe("Supabase user synchronization", () => {
+  it.each(["admin", "user"] as const)(
+    "persists an explicit %s role so promotion and downgrade both synchronize",
+    async role => {
+      const returnedUser = {
+        id: 7,
+        authUserId: "123e4567-e89b-12d3-a456-426614174000",
+        email: "operator@example.com",
+        name: "Site Operator",
+        loginMethod: "google",
+        role,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastSignedIn: new Date(),
+      };
+      const returning = vi.fn(async () => [returnedUser]);
+      const onConflictDoUpdate = vi.fn(() => ({ returning }));
+      const values = vi.fn(() => ({ onConflictDoUpdate }));
+      const database = {
+        insert: vi.fn(() => ({ values })),
+      };
+
+      const result = await upsertUserWithDb(database as never, {
+        authUserId: returnedUser.authUserId,
+        email: returnedUser.email,
+        name: returnedUser.name,
+        loginMethod: "google",
+        role,
+        lastSignedIn: returnedUser.lastSignedIn,
+      });
+
+      expect(result).toBe(returnedUser);
+      expect(database.insert).toHaveBeenCalledWith(users);
+      expect(onConflictDoUpdate).toHaveBeenCalledWith({
+        target: users.authUserId,
+        set: expect.objectContaining({
+          email: "operator@example.com",
+          loginMethod: "google",
+          role,
+          updatedAt: expect.any(Date),
+        }),
+      });
+    },
+  );
+});
+
+describe("optimistic client updates", () => {
   it("treats a matching update as success", () => {
-    expect(() => resolveOptimisticUpdate(1, { id: 7 })).not.toThrow();
+    expect(() => resolveOptimisticUpdate([{ id: 7 }], undefined)).not.toThrow();
   });
 
   it("maps zero rows with a missing client to not found", () => {
-    expect(() => resolveOptimisticUpdate(0, undefined)).toThrow("Client not found.");
+    expect(() => resolveOptimisticUpdate([], undefined)).toThrow("Client not found.");
   });
 
   it("maps zero rows with a still-present client to conflict", () => {
-    expect(() => resolveOptimisticUpdate(0, { id: 7 })).toThrow(UpdateConflictError);
+    expect(() => resolveOptimisticUpdate([], { id: 7 })).toThrow(UpdateConflictError);
   });
 });
 
@@ -42,11 +104,12 @@ describe("createClientWithSecretsInTransaction", () => {
   });
 
   it("inserts the client, secrets, and workspace defaults in one transaction", async () => {
+    const onConflictDoUpdate = vi.fn(async () => undefined);
     const tx = {
       insert: vi.fn(() => ({
         values: vi.fn(() => ({
-          $returningId: async () => [{ id: 42 }],
-          onDuplicateKeyUpdate: async () => undefined,
+          returning: async () => [{ id: 42 }],
+          onConflictDoUpdate,
         })),
       })),
     };
@@ -59,6 +122,13 @@ describe("createClientWithSecretsInTransaction", () => {
 
     expect(clientId).toBe(42);
     expect(seedMocks.seedWorkspaceDefaults).toHaveBeenCalledWith(tx, 42);
+    expect(onConflictDoUpdate).toHaveBeenCalledWith({
+      target: clientSecretSetups.clientId,
+      set: expect.objectContaining({
+        metaPixelIdEncrypted: "v2.secret",
+        updatedAt: expect.any(Date),
+      }),
+    });
   });
 
   it("lets the caller roll back when workspace seed fails after the client insert", async () => {
@@ -67,11 +137,11 @@ describe("createClientWithSecretsInTransaction", () => {
     const tx = {
       insert: () => ({
         values: () => ({
-          $returningId: async () => {
+          returning: async () => {
             committed.push("client");
             return [{ id: 9 }];
           },
-          onDuplicateKeyUpdate: async () => {
+          onConflictDoUpdate: async () => {
             committed.push("secrets");
           },
         }),
@@ -97,5 +167,69 @@ describe("createClientWithSecretsInTransaction", () => {
       ),
     ).rejects.toThrow("workspace boom");
     expect(committed).toEqual([]);
+  });
+});
+
+describe("createDraftClientInTransaction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    seedMocks.seedWorkspaceDefaults.mockResolvedValue(undefined);
+  });
+
+  it("rolls back the draft client when workspace seeding fails", async () => {
+    seedMocks.seedWorkspaceDefaults.mockRejectedValue(new Error("workspace boom"));
+    const committed: string[] = [];
+    const tx = {
+      select: () => ({
+        from: () => Promise.resolve([]),
+      }),
+      insert: () => ({
+        values: () => ({
+          returning: async () => {
+            committed.push("client");
+            return [{ id: 77 }];
+          },
+        }),
+      }),
+    };
+
+    async function runTransaction<T>(fn: (inner: typeof tx) => Promise<T>): Promise<T> {
+      try {
+        return await fn(tx);
+      } catch (error) {
+        committed.length = 0;
+        throw error;
+      }
+    }
+
+    await expect(
+      runTransaction(inner =>
+        createDraftClientInTransaction(inner as never, "Northland Spas"),
+      ),
+    ).rejects.toThrow("workspace boom");
+    expect(seedMocks.seedWorkspaceDefaults).toHaveBeenCalledWith(tx, 77);
+    expect(committed).toEqual([]);
+  });
+
+  it("uses the production transaction wrapper for allocation, insert, and workspace seed", async () => {
+    const tx = {
+      select: () => ({
+        from: () => Promise.resolve([]),
+      }),
+      insert: () => ({
+        values: () => ({
+          returning: async () => [{ id: 78 }],
+        }),
+      }),
+    };
+    const db = {
+      transaction: vi.fn(async (callback: (transaction: typeof tx) => Promise<number>) =>
+        callback(tx),
+      ),
+    };
+
+    await expect(createDraftClientWithDb(db as never, "Northland Spas")).resolves.toBe(78);
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+    expect(seedMocks.seedWorkspaceDefaults).toHaveBeenCalledWith(tx, 78);
   });
 });

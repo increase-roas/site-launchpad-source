@@ -69,7 +69,7 @@ describe("Astro client config schema", () => {
     const config = createDefaultAstroConfig(client);
     config.categories["hot-tubs"] = { enabled: true, label: "Hot Tubs", slug: "hot-tubs", description: "Shop hot tubs", heroImage: "" };
     expect(astroClientConfigInputSchema.safeParse(config).success).toBe(false);
-    config.categories["hot-tubs"].heroImage = "/manus-storage/category.webp";
+    config.categories["hot-tubs"].heroImage = "https://assets.example.com/category.webp";
     expect(astroClientConfigInputSchema.safeParse(config).success).toBe(true);
   });
 
@@ -95,13 +95,16 @@ describe("Astro client config schema", () => {
 
   it("generates deterministic TypeScript containing nested config and asset URLs", () => {
     const config = createDefaultAstroConfig(client);
-    const assets = { navLogo: "/manus-storage/nav.webp", ogImage: "/manus-storage/og.webp" };
+    const assets = {
+      navLogo: "https://assets.example.com/nav.webp",
+      ogImage: "https://assets.example.com/og.webp",
+    };
     const first = generateAstroClientConfig(config, assets);
     const second = generateAstroClientConfig(config, assets);
     expect(first).toBe(second);
     expect(first).toContain("export const clientConfig");
     expect(first).toContain("HomeAndConstructionBusiness");
-    expect(first).toContain("/manus-storage/nav.webp");
+    expect(first).toContain("https://assets.example.com/nav.webp");
   });
 
   it("rejects Astro hours that repeat a weekday", () => {

@@ -1,105 +1,214 @@
 import { and, desc, eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import {
   Client,
   ClientAsset,
   ClientSecretSetup,
   InsertClient,
-  InsertClientAsset,
   InsertClientSecretSetup,
   InsertUser,
+  User,
   clientAssets,
   clientSecretSetups,
   clients,
   users,
 } from "../drizzle/schema";
-import { ENV } from "./_core/env";
+import { CLOSED_BUSINESS_HOURS, sanitizeClientFolder } from "../shared/client";
+import {
+  postgresConflictTargets,
+  requireSinglePositiveId,
+  withUpdatedAt,
+} from "./postgresPersistence";
+import {
+  classifyRuntimeError,
+  type RuntimeErrorClassification,
+} from "./_core/operationTelemetry";
 import { UpdateConflictError } from "./trpcErrors";
 import { seedWorkspaceDefaults, type WorkspaceSeedClient } from "./workspaceSeed";
 
-let _db: ReturnType<typeof drizzle> | null = null;
+type Database = ReturnType<typeof drizzle>;
+type DatabaseClient = ReturnType<typeof postgres>;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
-export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
-    }
+type DatabaseRuntime = {
+  client: DatabaseClient;
+  db: Database;
+};
+
+let databaseRuntime: DatabaseRuntime | null = null;
+
+export const POSTGRES_RUNTIME_OPTIONS = {
+  prepare: false,
+  max: 1,
+  idle_timeout: 20,
+  connect_timeout: 10,
+  max_lifetime: 1_800,
+  connection: {
+    statement_timeout: 15_000,
+    idle_in_transaction_session_timeout: 30_000,
+  },
+} as const;
+
+export const DATABASE_OPERATION_TIMEOUT_MS = 20_000;
+export const RETRYABLE_DATABASE_MESSAGE =
+  "The database is temporarily unavailable. Please try again.";
+
+type RetryableDatabaseClassification = Extract<
+  RuntimeErrorClassification,
+  "database_connection" | "database_statement_timeout" | "timeout"
+>;
+
+export class DatabaseOperationTimeoutError extends Error {
+  readonly code = "DATABASE_OPERATION_TIMEOUT";
+
+  constructor(readonly operation: string) {
+    super("The database operation exceeded its deadline.");
+    this.name = "DatabaseOperationTimeoutError";
   }
-  return _db;
 }
 
-export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
-  }
+export class RetryableDatabaseError extends Error {
+  readonly code = "RETRYABLE_DATABASE_ERROR";
 
-  const db = await getDb();
-  if (!db) {
+  constructor(readonly classification: RetryableDatabaseClassification) {
+    super(RETRYABLE_DATABASE_MESSAGE);
+    this.name = "RetryableDatabaseError";
+  }
+}
+
+function isRetryableDatabaseClassification(
+  classification: RuntimeErrorClassification,
+): classification is RetryableDatabaseClassification {
+  return (
+    classification === "database_connection" ||
+    classification === "database_statement_timeout" ||
+    classification === "timeout"
+  );
+}
+
+function getDatabaseRuntime(): DatabaseRuntime | null {
+  if (!databaseRuntime && process.env.DATABASE_URL) {
+    const client = postgres(
+      process.env.DATABASE_URL,
+      POSTGRES_RUNTIME_OPTIONS,
+    );
+    databaseRuntime = {
+      client,
+      db: drizzle(client),
+    };
+  }
+  return databaseRuntime;
+}
+
+function logDatabaseCloseFailure(error: unknown): void {
+  console.error("[DatabaseRuntime]", {
+    outcome: "close_failure",
+    classification: classifyRuntimeError(error),
+  });
+}
+
+function discardDatabaseRuntime(runtime: DatabaseRuntime): void {
+  if (databaseRuntime !== runtime) {
+    return;
+  }
+  databaseRuntime = null;
+  try {
+    void runtime.client.end({ timeout: 0 }).catch(logDatabaseCloseFailure);
+  } catch (error) {
+    logDatabaseCloseFailure(error);
+  }
+}
+
+async function runDatabaseOperation<T>(
+  operationName: string,
+  operation: (database: Database) => Promise<T>,
+): Promise<T> {
+  const runtime = getDatabaseRuntime();
+  if (!runtime) {
     throw new Error("Database is not available.");
   }
 
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      reject(new DatabaseOperationTimeoutError(operationName));
+    }, DATABASE_OPERATION_TIMEOUT_MS);
+  });
+
   try {
-    const values: InsertUser = {
-      openId: user.openId,
-    };
-    const updateSet: Record<string, unknown> = {};
-
-    const textFields = ["name", "email", "loginMethod"] as const;
-    type TextField = (typeof textFields)[number];
-
-    const assignNullable = (field: TextField) => {
-      const value = user[field];
-      if (value === undefined) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
-
-    textFields.forEach(assignNullable);
-
-    if (user.lastSignedIn !== undefined) {
-      values.lastSignedIn = user.lastSignedIn;
-      updateSet.lastSignedIn = user.lastSignedIn;
-    }
-    if (user.role !== undefined) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
-    }
-
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
-
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
+    return await Promise.race([
+      Promise.resolve().then(() => operation(runtime.db)),
+      deadline,
+    ]);
   } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
+    const classification = classifyRuntimeError(error);
+    if (isRetryableDatabaseClassification(classification)) {
+      discardDatabaseRuntime(runtime);
+      throw new RetryableDatabaseError(classification);
+    }
     throw error;
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
   }
 }
 
-export async function getUserByOpenId(openId: string) {
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
+// Lazily create the drizzle instance so local tooling can run without a DB.
+export async function getDb() {
+  return getDatabaseRuntime()?.db ?? null;
+}
+
+export type UserSyncInput = Pick<
+  InsertUser,
+  "authUserId" | "email" | "name" | "loginMethod" | "role" | "lastSignedIn"
+> & {
+  authUserId: string;
+  email: string;
+  loginMethod: "google";
+  role: "user" | "admin";
+  lastSignedIn: Date;
+};
+
+export type UserPersistenceDatabase = Pick<
+  ReturnType<typeof drizzle>,
+  "insert"
+>;
+
+export async function upsertUserWithDb(
+  db: UserPersistenceDatabase,
+  user: UserSyncInput,
+): Promise<User> {
+  const updateSet = {
+    name: user.name ?? null,
+    email: user.email,
+    loginMethod: user.loginMethod,
+    role: user.role,
+    lastSignedIn: user.lastSignedIn,
+  };
+  const rows = await db
+    .insert(users)
+    .values({
+      authUserId: user.authUserId,
+      ...updateSet,
+    })
+    .onConflictDoUpdate({
+      target: postgresConflictTargets.users,
+      set: withUpdatedAt(updateSet),
+    })
+    .returning();
+
+  const synchronizedUser = rows[0];
+  if (!synchronizedUser || rows.length !== 1) {
+    throw new Error("Authenticated user could not be synchronized.");
   }
+  return synchronizedUser;
+}
 
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-
-  return result.length > 0 ? result[0] : undefined;
+export async function upsertUser(user: UserSyncInput): Promise<User> {
+  return runDatabaseOperation("user_synchronization", database =>
+    upsertUserWithDb(database, user),
+  );
 }
 
 async function requireDb() {
@@ -108,9 +217,22 @@ async function requireDb() {
   return db;
 }
 
-export async function listClients(): Promise<Client[]> {
-  const db = await requireDb();
-  return db.select().from(clients).orderBy(desc(clients.updatedAt));
+export type ClientListViewData = {
+  clients: Client[];
+  assets: ClientAsset[];
+  secretSetups: ClientSecretSetup[];
+};
+
+export async function listClientViewData(): Promise<ClientListViewData> {
+  return runDatabaseOperation("clients_list_database", async database => {
+    const clientRows = await database
+      .select()
+      .from(clients)
+      .orderBy(desc(clients.updatedAt));
+    const assets = await database.select().from(clientAssets);
+    const secretSetups = await database.select().from(clientSecretSetups);
+    return { clients: clientRows, assets, secretSetups };
+  });
 }
 
 export async function getClientById(clientId: number): Promise<Client | undefined> {
@@ -121,23 +243,15 @@ export async function getClientById(clientId: number): Promise<Client | undefine
 
 export async function createClient(values: InsertClient): Promise<number> {
   const db = await requireDb();
-  const result = await db.insert(clients).values(values).$returningId();
-  const created = result[0];
-  if (!created?.id) throw new Error("Client could not be created.");
-  return created.id;
+  const rows = await db.insert(clients).values(values).returning({ id: clients.id });
+  return requireSinglePositiveId(rows, "Client could not be created.");
 }
 
-export function mysqlAffectedRows(result: unknown): number {
-  const header = Array.isArray(result) ? result[0] : result;
-  if (header && typeof header === "object" && "affectedRows" in header) {
-    const value = header.affectedRows;
-    return typeof value === "number" ? value : 0;
-  }
-  return 0;
-}
-
-export function resolveOptimisticUpdate(affectedRows: number, existing: { id: number } | undefined): void {
-  if (affectedRows > 0) return;
+export function resolveOptimisticUpdate(
+  returnedRows: readonly { id: number }[],
+  existing: { id: number } | undefined,
+): void {
+  if (returnedRows.length > 0) return;
   if (!existing) throw new Error("Client not found.");
   throw new UpdateConflictError();
 }
@@ -150,20 +264,11 @@ export async function updateClient(
   const db = await requireDb();
   const result = await db
     .update(clients)
-    .set({ ...values, updatedAt: new Date() })
-    .where(and(eq(clients.id, clientId), eq(clients.updatedAt, expectedUpdatedAt)));
-  if (mysqlAffectedRows(result) > 0) return;
-  resolveOptimisticUpdate(0, await getClientById(clientId));
-}
-
-export async function listClientAssets(): Promise<ClientAsset[]> {
-  const db = await requireDb();
-  return db.select().from(clientAssets);
-}
-
-export async function listClientSecretSetups(): Promise<ClientSecretSetup[]> {
-  const db = await requireDb();
-  return db.select().from(clientSecretSetups);
+    .set(withUpdatedAt(values))
+    .where(and(eq(clients.id, clientId), eq(clients.updatedAt, expectedUpdatedAt)))
+    .returning({ id: clients.id });
+  if (result.length > 0) return;
+  resolveOptimisticUpdate(result, await getClientById(clientId));
 }
 
 export async function getClientAssets(clientId: number): Promise<ClientAsset[]> {
@@ -176,14 +281,16 @@ export async function createClientWithSecretsInTransaction(
   values: InsertClient,
   secretValues: Partial<Omit<InsertClientSecretSetup, "clientId">>,
 ): Promise<number> {
-  const result = await tx.insert(clients).values(values).$returningId();
-  const clientId = result[0]?.id;
-  if (!clientId) throw new Error("Client could not be created.");
+  const result = await tx.insert(clients).values(values).returning({ id: clients.id });
+  const clientId = requireSinglePositiveId(result, "Client could not be created.");
   if (Object.keys(secretValues).length > 0) {
     await tx
       .insert(clientSecretSetups)
       .values({ clientId, ...secretValues })
-      .onDuplicateKeyUpdate({ set: secretValues });
+      .onConflictDoUpdate({
+        target: postgresConflictTargets.clientSecretSetups,
+        set: withUpdatedAt(secretValues),
+      });
   }
   await seedWorkspaceDefaults(tx, clientId);
   return clientId;
@@ -195,25 +302,6 @@ export async function createClientWithSecrets(
 ): Promise<number> {
   const db = await requireDb();
   return db.transaction(tx => createClientWithSecretsInTransaction(tx, values, secretValues));
-}
-
-export async function upsertClientAsset(values: InsertClientAsset): Promise<void> {
-  const db = await requireDb();
-  await db
-    .insert(clientAssets)
-    .values(values)
-    .onDuplicateKeyUpdate({
-      set: {
-        storageKey: values.storageKey,
-        storageUrl: values.storageUrl,
-        filename: values.filename,
-        originalFilename: values.originalFilename,
-        mimeType: values.mimeType,
-        byteSize: values.byteSize,
-        width: values.width,
-        height: values.height,
-      },
-    });
 }
 
 export async function getClientSecretSetup(
@@ -228,6 +316,38 @@ export async function getClientSecretSetup(
   return rows[0];
 }
 
+export type ClientViewData = {
+  client: Client | undefined;
+  assets: ClientAsset[];
+  secretSetup: ClientSecretSetup | undefined;
+};
+
+export async function getClientViewData(
+  clientId: number,
+): Promise<ClientViewData> {
+  return runDatabaseOperation("client_view_database", async database => {
+    const clientRows = await database
+      .select()
+      .from(clients)
+      .where(eq(clients.id, clientId))
+      .limit(1);
+    const assets = await database
+      .select()
+      .from(clientAssets)
+      .where(eq(clientAssets.clientId, clientId));
+    const secretRows = await database
+      .select()
+      .from(clientSecretSetups)
+      .where(eq(clientSecretSetups.clientId, clientId))
+      .limit(1);
+    return {
+      client: clientRows[0],
+      assets,
+      secretSetup: secretRows[0],
+    };
+  });
+}
+
 export async function saveClientSecretSetup(
   clientId: number,
   values: Partial<Omit<InsertClientSecretSetup, "clientId">>,
@@ -236,5 +356,80 @@ export async function saveClientSecretSetup(
   await db
     .insert(clientSecretSetups)
     .values({ clientId, ...values })
-    .onDuplicateKeyUpdate({ set: values });
+    .onConflictDoUpdate({
+      target: postgresConflictTargets.clientSecretSetups,
+      set: withUpdatedAt(values),
+    });
+}
+
+export async function listClientShortNames(): Promise<string[]> {
+  const db = await requireDb();
+  return listClientShortNamesWithDb(db);
+}
+
+async function listClientShortNamesWithDb(db: WorkspaceSeedClient): Promise<string[]> {
+  const rows = await db.select({ shortName: clients.shortName }).from(clients);
+  return rows.map(row => row.shortName);
+}
+
+async function allocateUniqueShortNameWithDb(
+  db: WorkspaceSeedClient,
+  businessName: string,
+): Promise<string> {
+  const used = new Set(
+    (await listClientShortNamesWithDb(db)).map(name => name.toLowerCase()),
+  );
+  const base =
+    sanitizeClientFolder(businessName).slice(0, 80) ||
+    "client";
+  if (!used.has(base.toLowerCase())) return base;
+  let suffix = 2;
+  while (true) {
+    const token = `-${suffix}`;
+    const candidate = `${base.slice(0, Math.max(1, 80 - token.length))}${token}`;
+    if (!used.has(candidate.toLowerCase())) return candidate;
+    suffix += 1;
+  }
+}
+
+export async function allocateUniqueShortName(businessName: string): Promise<string> {
+  const db = await requireDb();
+  return allocateUniqueShortNameWithDb(db, businessName);
+}
+
+export async function createDraftClientInTransaction(
+  transaction: WorkspaceSeedClient,
+  businessName: string,
+): Promise<number> {
+  const shortName = await allocateUniqueShortNameWithDb(transaction, businessName);
+  return createClientWithSecretsInTransaction(
+    transaction,
+    {
+      businessName: businessName.trim(),
+      shortName,
+      country: "US",
+      theme: "aqua",
+      businessHours: CLOSED_BUSINESS_HOURS,
+      productCategories: [],
+      status: "draft",
+    },
+    {},
+  );
+}
+
+type DraftClientDatabase = Pick<ReturnType<typeof drizzle>, "transaction">;
+
+export async function createDraftClientWithDb(
+  db: DraftClientDatabase,
+  businessName: string,
+): Promise<number> {
+  return db.transaction(transaction =>
+    createDraftClientInTransaction(transaction, businessName),
+  );
+}
+
+export async function createDraftClient(businessName: string): Promise<number> {
+  return runDatabaseOperation("client_create_draft_database", database =>
+    createDraftClientWithDb(database, businessName),
+  );
 }

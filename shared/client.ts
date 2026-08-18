@@ -223,6 +223,18 @@ export const clientInputSchema = z.object({
 
 export type ClientInput = z.infer<typeof clientInputSchema>;
 
+export const draftClientInputSchema = z.object({
+  businessName: z.string().trim().min(2, "Enter the business name.").max(160),
+});
+export type DraftClientInput = z.infer<typeof draftClientInputSchema>;
+
+export const CLOSED_BUSINESS_HOURS: BusinessHour[] = BUSINESS_DAY_VALUES.map(day => ({
+  day,
+  isOpen: false,
+  opensAt: "09:00",
+  closesAt: "17:00",
+}));
+
 const optionalPattern = (schema: z.ZodString) => z.union([z.literal(""), schema]).optional();
 
 export const secretSetupInputSchema = z.object({

@@ -1,19 +1,38 @@
 import sharp from "sharp";
 import type { AssetSlot } from "../shared/client";
 import type { AstroAssetSlot } from "../shared/astroConfig";
+import type { SupportedImageMimeType } from "../shared/assetUpload";
 
 export const MAX_MARKETING_PHOTO_BYTES = 150 * 1024;
-export const MAX_DATA_URL_CHARS = 8_000_000;
 export const MARKETING_PHOTO_COMPRESS_ATTEMPTS = 5;
-const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
-const ALLOWED_IMAGE_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/avif",
-  "image/tiff",
-  "image/gif",
-]);
+
+export async function inspectSupportedImageMimeType(
+  source: Buffer,
+): Promise<SupportedImageMimeType> {
+  const metadata = await sharp(source, {
+    failOn: "error",
+    limitInputPixels: 80_000_000,
+    animated: false,
+  }).metadata();
+
+  switch (metadata.format) {
+    case "jpeg":
+      return "image/jpeg";
+    case "png":
+      return "image/png";
+    case "webp":
+      return "image/webp";
+    case "tiff":
+      return "image/tiff";
+    case "gif":
+      return "image/gif";
+    case "heif":
+      if (metadata.compression === "av1") return "image/avif";
+      throw new Error("Unsupported HEIF image.");
+    default:
+      throw new Error("Unsupported image format.");
+  }
+}
 
 export type ProcessedImage = {
   buffer: Buffer;
@@ -22,24 +41,6 @@ export type ProcessedImage = {
   width: number;
   height: number;
 };
-
-export function decodeImageDataUrl(dataUrl: string): { buffer: Buffer; mimeType: string } {
-  const match = /^data:([^;,]+);base64,([A-Za-z0-9+/=\s]+)$/.exec(dataUrl);
-  if (!match) throw new Error("Choose an image file and try again.");
-
-  const mimeType = match[1].toLowerCase();
-  if (!ALLOWED_IMAGE_TYPES.has(mimeType)) {
-    throw new Error("Use a JPG, PNG, WebP, AVIF, TIFF, or GIF image.");
-  }
-
-  const buffer = Buffer.from(match[2].replace(/\s/g, ""), "base64");
-  if (!buffer.length) throw new Error("That image appears to be empty.");
-  if (buffer.length > MAX_UPLOAD_BYTES) {
-    throw new Error("That image is too large. Choose one smaller than 20 MB.");
-  }
-
-  return { buffer, mimeType };
-}
 
 async function describe(buffer: Buffer): Promise<Omit<ProcessedImage, "buffer" | "mimeType">> {
   const metadata = await sharp(buffer).metadata();

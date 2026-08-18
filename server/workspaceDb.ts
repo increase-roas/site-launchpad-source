@@ -11,6 +11,7 @@ import {
 } from "../drizzle/schema";
 import { FUNNEL_SHAPES, type HomepageSectionType } from "../shared/workspace";
 import { getClientById, getDb } from "./db";
+import { withUpdatedAt } from "./postgresPersistence";
 import { funnelStepRows, seedWorkspaceDefaults } from "./workspaceSeed";
 
 async function requireDb() {
@@ -72,9 +73,15 @@ export async function replaceFunnelShape(
     .limit(1);
   const funnel = rows[0];
   if (!funnel) throw new Error("Funnel not found.");
+  if (funnel.templateKey) {
+    throw new Error("This funnel uses a locked template. Shape cannot be changed.");
+  }
 
   await db.transaction(async transaction => {
-    await transaction.update(funnels).set({ shape }).where(eq(funnels.id, funnelId));
+    await transaction
+      .update(funnels)
+      .set(withUpdatedAt({ shape }))
+      .where(eq(funnels.id, funnelId));
     await transaction.delete(funnelSteps).where(eq(funnelSteps.funnelId, funnelId));
     await transaction
       .insert(funnelSteps)
@@ -103,12 +110,12 @@ export async function updateFunnelStep(
 
   await db
     .update(funnelSteps)
-    .set({
+    .set(withUpdatedAt({
       title: input.title,
       path: input.path,
       capturedFields: input.capturedFields,
       trackingActions: input.trackingActions,
-    })
+    }))
     .where(eq(funnelSteps.id, input.stepId));
 }
 
@@ -134,13 +141,13 @@ export async function saveHomepageSectionOrder(
     for (let index = 0; index < sections.length; index += 1) {
       await transaction
         .update(homepageSections)
-        .set({ position: 1000 + index })
+        .set(withUpdatedAt({ position: 1000 + index }))
         .where(eq(homepageSections.id, sections[index].id));
     }
     for (let index = 0; index < sections.length; index += 1) {
       await transaction
         .update(homepageSections)
-        .set({ position: index, enabled: sections[index].enabled ? 1 : 0 })
+        .set(withUpdatedAt({ position: index, enabled: sections[index].enabled ? 1 : 0 }))
         .where(eq(homepageSections.id, sections[index].id));
     }
   });

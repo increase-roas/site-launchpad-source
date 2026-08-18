@@ -9,13 +9,15 @@ const mocks = vi.hoisted(() => ({
   getClientById: vi.fn(),
   getClientAssets: vi.fn(),
   getClientSecretSetup: vi.fn(),
+  getClientViewData: vi.fn(),
   updateClient: vi.fn(),
   listClients: vi.fn(),
   listClientAssets: vi.fn(),
   listClientSecretSetups: vi.fn(),
+  listClientViewData: vi.fn(),
   createClientWithSecrets: vi.fn(),
+  createDraftClient: vi.fn(),
   saveClientSecretSetup: vi.fn(),
-  upsertClientAsset: vi.fn(),
 }));
 
 const workspaceMocks = vi.hoisted(() => ({
@@ -103,7 +105,7 @@ function createContext(role: "admin" | "user" | null = "admin"): TrpcContext {
         ? null
         : {
             id: 1,
-            openId: "test-user",
+            authUserId: "123e4567-e89b-12d3-a456-426614174002",
             name: "Test User",
             email: "test@example.com",
             loginMethod: "manus",
@@ -124,11 +126,24 @@ describe("client launch gating", () => {
     mocks.getClientById.mockResolvedValue(baseClient);
     mocks.getClientAssets.mockResolvedValue([]);
     mocks.getClientSecretSetup.mockResolvedValue(undefined);
+    mocks.getClientViewData.mockImplementation(async clientId => {
+      const client = await mocks.getClientById(clientId);
+      const assets = await mocks.getClientAssets(clientId);
+      const secretSetup = await mocks.getClientSecretSetup(clientId);
+      return { client, assets, secretSetup };
+    });
     mocks.updateClient.mockResolvedValue(undefined);
     mocks.listClients.mockResolvedValue([baseClient]);
     mocks.listClientAssets.mockResolvedValue([]);
     mocks.listClientSecretSetups.mockResolvedValue([]);
+    mocks.listClientViewData.mockImplementation(async () => {
+      const clients = await mocks.listClients();
+      const assets = await mocks.listClientAssets();
+      const secretSetups = await mocks.listClientSecretSetups();
+      return { clients, assets, secretSetups };
+    });
     mocks.createClientWithSecrets.mockResolvedValue(7);
+    mocks.createDraftClient.mockResolvedValue(7);
     mocks.saveClientSecretSetup.mockResolvedValue(undefined);
     workspaceMocks.ensureWorkspaceDefaults.mockResolvedValue(undefined);
   });
@@ -145,9 +160,66 @@ describe("client launch gating", () => {
     expect(list[0]?.client.id).toBe(7);
     expect(detail.client.businessName).toBe("Paradise Spas");
     expect(detail.readiness.isComplete).toBe(false);
+    expect(mocks.listClientViewData).toHaveBeenCalledTimes(1);
+    expect(mocks.getClientViewData).toHaveBeenCalledWith(7);
   });
 
-  it("creates a client and protects setup values before persistence", async () => {
+  it("uses one grouped database operation for clients.list with a max-one runtime", async () => {
+    let activeReads = 0;
+    let maxConcurrentReads = 0;
+    const trackRead = async <T>(value: T): Promise<T> => {
+      activeReads += 1;
+      maxConcurrentReads = Math.max(maxConcurrentReads, activeReads);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      activeReads -= 1;
+      return value;
+    };
+    mocks.listClients.mockImplementation(() => trackRead([baseClient]));
+    mocks.listClientAssets.mockImplementation(() => trackRead([]));
+    mocks.listClientSecretSetups.mockImplementation(() => trackRead([]));
+
+    const caller = appRouter.createCaller(createContext());
+    await caller.clients.list();
+
+    expect(mocks.listClientViewData).toHaveBeenCalledTimes(1);
+    expect(maxConcurrentReads).toBeLessThanOrEqual(1);
+  });
+
+  it("classifies clients.list database failures without logging sensitive details", async () => {
+    const unsafeDetail =
+      "postgresql://private-user:private-password@private-host/database";
+    mocks.listClientViewData.mockRejectedValueOnce(
+      Object.assign(
+        new Error("The database is temporarily unavailable. Please try again."),
+        {
+          code: "RETRYABLE_DATABASE_ERROR",
+          classification: "database_connection",
+        },
+      ),
+    );
+    const logError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const caller = appRouter.createCaller(createContext());
+
+      await expect(caller.clients.list()).rejects.toThrow(
+        "The database is temporarily unavailable. Please try again.",
+      );
+
+      expect(logError).toHaveBeenCalledWith(
+        "[RuntimeOperation]",
+        expect.objectContaining({
+          operation: "clients_list_database",
+          outcome: "failure",
+          classification: "database_connection",
+        }),
+      );
+      expect(JSON.stringify(logError.mock.calls)).not.toContain(unsafeDetail);
+    } finally {
+      logError.mockRestore();
+    }
+  });
+
+  it("creates a client without redundantly seeding after the transactional create", async () => {
     const caller = appRouter.createCaller(createContext());
     await caller.clients.create({ details: detailsInput, setup: setupInput });
 
@@ -159,7 +231,14 @@ describe("client launch gating", () => {
         ghlWebhookUrlEncrypted: expect.stringMatching(/^v[12]\./),
       }),
     );
-    expect(workspaceMocks.ensureWorkspaceDefaults).toHaveBeenCalledWith(7);
+    expect(workspaceMocks.ensureWorkspaceDefaults).not.toHaveBeenCalled();
+  });
+
+  it("creates a draft client without redundantly seeding after the transactional create", async () => {
+    const caller = appRouter.createCaller(createContext());
+    await caller.clients.createDraft({ businessName: "Northland Spas" });
+    expect(mocks.createDraftClient).toHaveBeenCalledWith("Northland Spas");
+    expect(workspaceMocks.ensureWorkspaceDefaults).not.toHaveBeenCalled();
   });
 
   it("updates client details and keeps blank setup fields unchanged", async () => {
@@ -202,7 +281,7 @@ describe("client launch gating", () => {
         clientId: 7,
         slot,
         storageKey: `clients/7/${slot}.webp`,
-        storageUrl: `/manus-storage/clients/7/${slot}.webp`,
+        storageUrl: `https://assets.example.com/clients/7/${slot}.webp`,
         filename: `${slot}.webp`,
         originalFilename: `${slot}.jpg`,
         mimeType: "image/webp",

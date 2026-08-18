@@ -4,7 +4,12 @@ import { ContentTab } from "@/components/astro/ContentTab";
 import { TechnicalTab } from "@/components/astro/TechnicalTab";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { uploadAssetDirectly } from "@/lib/assetUpload";
 import { trpc } from "@/lib/trpc";
+import {
+  MAX_RAW_UPLOAD_BYTES,
+  isSupportedImageMimeType,
+} from "@shared/assetUpload";
 import {
   astroClientConfigInputSchema,
   type AstroAssetSlot,
@@ -22,15 +27,6 @@ import {
 } from "./editorIsolation";
 
 type SaveState = "idle" | "pending" | "saving" | "saved" | "invalid" | "error";
-
-function toDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("That image could not be read."));
-    reader.readAsDataURL(file);
-  });
-}
 
 export default function AstroClientEditor({ clientId }: { clientId: number }) {
   const [, setLocation] = useLocation();
@@ -79,39 +75,8 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
     onError: error => toast.error(error.message),
   });
 
-  const uploadMutation = trpc.astroConfig.uploadAsset.useMutation({
-    onSuccess: view => {
-      setAssets(view.assets);
-      const current = configRef.current ?? view.input;
-      const uploaded = view.assets.find(asset => asset.slot === uploadingSlot);
-      const categoryBySlot = {
-        categoryHotTubs: "hot-tubs",
-        categorySwimSpas: "swim-spas",
-        categorySaunas: "saunas",
-        categoryColdPlunge: "cold-plunge",
-        categoryMassageChairs: "massage-chairs",
-      } as const;
-      const category = uploadingSlot && uploadingSlot in categoryBySlot
-        ? categoryBySlot[uploadingSlot as keyof typeof categoryBySlot]
-        : undefined;
-      const next = category && uploaded
-        ? {
-            ...current,
-            categories: {
-              ...current.categories,
-              [category]: { ...current.categories[category], heroImage: uploaded.storageUrl },
-            },
-          }
-        : current;
-      setConfig(next);
-      configRef.current = next;
-      dirtyRef.current = true;
-      setSaveState("pending");
-      toast.success("Image added.");
-    },
-    onError: error => toast.error(error.message),
-    onSettled: () => setUploadingSlot(null),
-  });
+  const requestUploadMutation = trpc.assets.requestUpload.useMutation();
+  const completeUploadMutation = trpc.assets.completeUpload.useMutation();
 
   const exportMutation = trpc.astroConfig.exportGeneratedConfig.useMutation();
 
@@ -196,16 +161,74 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
 
   const uploadFile = async (slot: AstroAssetSlot, file: File) => {
     if (uploadingSlot) return;
-    if (!file.type.startsWith("image/") || file.size > 20 * 1024 * 1024) {
+    if (
+      !isSupportedImageMimeType(file.type) ||
+      file.size <= 0 ||
+      file.size > MAX_RAW_UPLOAD_BYTES
+    ) {
       toast.error("Choose an image file smaller than 20 MB.");
       return;
     }
     try {
       setUploadingSlot(slot);
-      uploadMutation.mutate({ clientId, slot, originalFilename: file.name, dataUrl: await toDataUrl(file) });
+      const completed = await uploadAssetDirectly(
+        file,
+        { clientId, assetKind: "astro", slot },
+        {
+          requestUpload: input => requestUploadMutation.mutateAsync({
+            clientId: input.clientId,
+            assetKind: "astro",
+            slot,
+            originalFilename: input.originalFilename,
+            mimeType: input.mimeType,
+            sizeBytes: input.sizeBytes,
+          }),
+          completeUpload: input => completeUploadMutation.mutateAsync(input),
+          fetchFn: (input, init) => fetch(input, init),
+        },
+      );
+      setAssets(currentAssets => [
+        ...currentAssets.filter(asset => asset.slot !== slot),
+        completed.asset,
+      ]);
+      const current = configRef.current;
+      const categoryBySlot = {
+        categoryHotTubs: "hot-tubs",
+        categorySwimSpas: "swim-spas",
+        categorySaunas: "saunas",
+        categoryColdPlunge: "cold-plunge",
+        categoryMassageChairs: "massage-chairs",
+      } as const;
+      const category = slot in categoryBySlot
+        ? categoryBySlot[slot as keyof typeof categoryBySlot]
+        : undefined;
+      if (current) {
+        const next = category
+          ? {
+              ...current,
+              categories: {
+                ...current.categories,
+                [category]: {
+                  ...current.categories[category],
+                  heroImage: completed.asset.storageUrl,
+                },
+              },
+            }
+          : current;
+        setConfig(next);
+        configRef.current = next;
+        dirtyRef.current = true;
+        setSaveState("pending");
+      }
+      await Promise.all([
+        utils.clients.list.invalidate(),
+        utils.astroConfig.get.invalidate(queryInput),
+      ]);
+      toast.success("Image added.");
     } catch (error) {
+      toast.error(error instanceof Error ? error.message : "That image could not be uploaded.");
+    } finally {
       setUploadingSlot(null);
-      toast.error(error instanceof Error ? error.message : "That image could not be read.");
     }
   };
 

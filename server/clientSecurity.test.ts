@@ -1,6 +1,6 @@
 import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { decryptSetupValue, encryptSetupValue, hasProtectedValue } from "./clientSecurity";
+import { decryptSetupValue, encryptSetupValue, generateCrmCallbackSecret, hasProtectedValue } from "./clientSecurity";
 
 const originalSecret = process.env.JWT_SECRET;
 const originalDedicated = process.env.SECRETS_ENCRYPTION_KEY;
@@ -62,5 +62,12 @@ describe("protected setup values", () => {
     delete process.env.SECRETS_ENCRYPTION_KEY;
     process.env.NODE_ENV = "production";
     expect(() => encryptSetupValue("secret-value-123")).toThrow(/SECRETS_ENCRYPTION_KEY/);
+  });
+
+  it("generates a CRM callback secret without using a guessable string", () => {
+    const first = generateCrmCallbackSecret();
+    const second = generateCrmCallbackSecret();
+    expect(first).toHaveLength(43);
+    expect(second).not.toBe(first);
   });
 });

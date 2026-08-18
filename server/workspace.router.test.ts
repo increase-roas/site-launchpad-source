@@ -19,7 +19,7 @@ function context(): TrpcContext {
   return {
     user: {
       id: 1,
-      openId: "workspace-test-user",
+      authUserId: "123e4567-e89b-12d3-a456-426614174005",
       name: "Workspace Test",
       email: "workspace@example.com",
       loginMethod: "manus",

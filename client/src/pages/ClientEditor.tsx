@@ -4,14 +4,18 @@ import { ClientSecretsFields } from "@/components/client/ClientSecretsFields";
 import {
   EMPTY_DETAILS,
   EMPTY_SETUP,
-  toDataUrl,
   type FieldErrors,
   type FormDetails,
 } from "@/components/client/clientEditorForm";
 import { ReadinessChecklist } from "@/components/ReadinessChecklist";
 import { StatusDot } from "@/components/StatusDot";
 import { Button } from "@/components/ui/button";
+import { uploadAssetDirectly } from "@/lib/assetUpload";
 import { trpc } from "@/lib/trpc";
+import {
+  MAX_RAW_UPLOAD_BYTES,
+  isSupportedImageMimeType,
+} from "@shared/assetUpload";
 import {
   SECRET_FIELD_VALUES,
   buildReadiness,
@@ -49,24 +53,24 @@ export default function ClientEditor({ clientId }: { clientId?: number }) {
     setDetails({
       businessName: view.client.businessName,
       shortName: view.client.shortName,
-      phone: view.client.phone,
-      email: view.client.email,
-      streetAddress: view.client.streetAddress,
-      city: view.client.city,
-      state: view.client.state,
-      postalCode: view.client.postalCode,
+      phone: view.client.phone ?? "",
+      email: view.client.email ?? "",
+      streetAddress: view.client.streetAddress ?? "",
+      city: view.client.city ?? "",
+      state: view.client.state ?? "",
+      postalCode: view.client.postalCode ?? "",
       country: view.client.country,
-      websiteUrl: view.client.websiteUrl,
-      foundedYear: String(view.client.foundedYear),
-      tagline: view.client.tagline,
+      websiteUrl: view.client.websiteUrl ?? "",
+      foundedYear: view.client.foundedYear != null ? String(view.client.foundedYear) : "",
+      tagline: view.client.tagline ?? "",
       theme: view.client.theme,
       businessHours: view.client.businessHours,
-      facebookUrl: view.client.facebookUrl,
-      googleMapsUrl: view.client.googleMapsUrl,
+      facebookUrl: view.client.facebookUrl ?? "",
+      googleMapsUrl: view.client.googleMapsUrl ?? "",
       productCategories: view.client.productCategories,
-      primaryOffer: view.client.primaryOffer,
-      financingPromise: view.client.financingPromise,
-      deliveryPromise: view.client.deliveryPromise,
+      primaryOffer: view.client.primaryOffer ?? "",
+      financingPromise: view.client.financingPromise ?? "",
+      deliveryPromise: view.client.deliveryPromise ?? "",
     });
     setHydratedClientId(view.client.id);
   }, [clientQuery.data, hydratedClientId]);
@@ -91,17 +95,8 @@ export default function ClientEditor({ clientId }: { clientId?: number }) {
     onError: error => toast.error(error.message),
   });
 
-  const uploadMutation = trpc.clients.uploadAsset.useMutation({
-    onSuccess: async view => {
-      await Promise.all([
-        utils.clients.list.invalidate(),
-        utils.clients.get.invalidate({ clientId: view.client.id }),
-      ]);
-      toast.success("Photo added.");
-    },
-    onError: error => toast.error(error.message),
-    onSettled: () => setUploadingSlot(null),
-  });
+  const requestUploadMutation = trpc.assets.requestUpload.useMutation();
+  const completeUploadMutation = trpc.assets.completeUpload.useMutation();
 
   const launchMutation = trpc.clients.launch.useMutation({
     onSuccess: async view => {
@@ -190,22 +185,42 @@ export default function ClientEditor({ clientId }: { clientId?: number }) {
 
   const uploadFile = async (slot: AssetSlot, file: File) => {
     if (!clientId || uploadingSlot) return;
-    if (!file.type.startsWith("image/")) {
+    if (!isSupportedImageMimeType(file.type)) {
       toast.error("Choose an image file.");
       return;
     }
-    if (file.size > 20 * 1024 * 1024) {
+    if (file.size <= 0 || file.size > MAX_RAW_UPLOAD_BYTES) {
       toast.error("Choose an image smaller than 20 MB.");
       return;
     }
 
     try {
       setUploadingSlot(slot);
-      const dataUrl = await toDataUrl(file);
-      uploadMutation.mutate({ clientId, slot, originalFilename: file.name, dataUrl });
+      await uploadAssetDirectly(
+        file,
+        { clientId, assetKind: "client", slot },
+        {
+          requestUpload: input => requestUploadMutation.mutateAsync({
+            clientId: input.clientId,
+            assetKind: "client",
+            slot,
+            originalFilename: input.originalFilename,
+            mimeType: input.mimeType,
+            sizeBytes: input.sizeBytes,
+          }),
+          completeUpload: input => completeUploadMutation.mutateAsync(input),
+          fetchFn: (input, init) => fetch(input, init),
+        },
+      );
+      await Promise.all([
+        utils.clients.list.invalidate(),
+        utils.clients.get.invalidate({ clientId }),
+      ]);
+      toast.success("Photo added.");
     } catch (error) {
+      toast.error(error instanceof Error ? error.message : "That photo could not be uploaded.");
+    } finally {
       setUploadingSlot(null);
-      toast.error(error instanceof Error ? error.message : "That photo could not be read.");
     }
   };
 
