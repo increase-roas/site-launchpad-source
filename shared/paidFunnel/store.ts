@@ -38,6 +38,10 @@ export type PaidFunnelDocument = {
   graph: PaidFunnelGraph;
   saveStatus: SaveStatus;
   conflict: boolean;
+  funnelId?: number;
+  stepId?: number;
+  expectedUpdatedAt?: string;
+  editSeq: number;
 };
 
 export type StudioState = {
@@ -53,11 +57,32 @@ export type StudioState = {
 export function createDocumentFromFixture(clientId: number, key = `funnel-${clientId}`): PaidFunnelDocument {
   const graph = createGenericPaidFunnelFixture(createIdFactory(key));
   graph.funnelKey = key;
-  return { key, clientId, revision: 1, graph, saveStatus: "saved", conflict: false };
+  return { key, clientId, revision: 1, graph, saveStatus: "saved", conflict: false, editSeq: 0 };
 }
 
 export function createBlankDocument(clientId: number, name: string, key = `blank-${clientId}`): PaidFunnelDocument {
-  return { key, clientId, revision: 1, graph: createEmptyGraph({ funnelKey: key, name }), saveStatus: "saved", conflict: false };
+  return { key, clientId, revision: 1, graph: createEmptyGraph({ funnelKey: key, name }), saveStatus: "saved", conflict: false, editSeq: 0 };
+}
+
+export function createDocumentFromPersist(input: {
+  clientId: number;
+  funnelId: number;
+  stepId: number;
+  expectedUpdatedAt: Date | string;
+  graph: PaidFunnelGraph;
+}): PaidFunnelDocument {
+  return {
+    key: input.graph.funnelKey,
+    clientId: input.clientId,
+    funnelId: input.funnelId,
+    stepId: input.stepId,
+    expectedUpdatedAt: new Date(input.expectedUpdatedAt).toISOString(),
+    revision: input.graph.version,
+    graph: input.graph,
+    saveStatus: "saved",
+    conflict: false,
+    editSeq: 0,
+  };
 }
 
 export function createStudioState(document: PaidFunnelDocument): StudioState {
@@ -76,17 +101,28 @@ export function applyGraph(state: StudioState, graph: PaidFunnelGraph): StudioSt
   return {
     ...state,
     history: pushHistory(state.history, graph),
-    document: { ...state.document, graph, saveStatus: "saving" },
+    document: { ...state.document, graph, saveStatus: "saving", editSeq: state.document.editSeq + 1 },
   };
 }
 
-export function commitAutosave(state: StudioState, expectedRevision: number): StudioState {
+export function commitAutosave(
+  state: StudioState,
+  expectedRevision: number,
+  persist?: { expectedUpdatedAt?: string; stepId?: number },
+): StudioState {
   if (expectedRevision !== state.document.revision) {
     return { ...state, document: { ...state.document, saveStatus: "error", conflict: true } };
   }
   return {
     ...state,
-    document: { ...state.document, revision: state.document.revision + 1, saveStatus: "saved", conflict: false },
+    document: {
+      ...state.document,
+      revision: state.document.revision + 1,
+      saveStatus: "saved",
+      conflict: false,
+      expectedUpdatedAt: persist?.expectedUpdatedAt ?? state.document.expectedUpdatedAt,
+      stepId: persist?.stepId ?? state.document.stepId,
+    },
   };
 }
 
@@ -112,12 +148,12 @@ export function markStudioError(state: StudioState): StudioState {
 
 export function undoStudio(state: StudioState): StudioState {
   const history = undoHistory(state.history);
-  return { ...state, history, document: { ...state.document, graph: history.present, saveStatus: "saving" } };
+  return { ...state, history, document: { ...state.document, graph: history.present, saveStatus: "saving", editSeq: state.document.editSeq + 1 } };
 }
 
 export function redoStudio(state: StudioState): StudioState {
   const history = redoHistory(state.history);
-  return { ...state, history, document: { ...state.document, graph: history.present, saveStatus: "saving" } };
+  return { ...state, history, document: { ...state.document, graph: history.present, saveStatus: "saving", editSeq: state.document.editSeq + 1 } };
 }
 
 export function selectStudioNode(state: StudioState, id: string | null): StudioState {

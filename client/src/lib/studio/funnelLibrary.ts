@@ -72,3 +72,10 @@ export function intakeImportedArchive(
   if (!intake.ok) return { intake };
   return { intake, detect: detectPaidFunnelPackage(files) };
 }
+
+export function libraryFromRegistry<TTemplate extends { templateKey: string }, TFunnel extends { id: number }>(
+  templates: TTemplate[],
+  funnels: TFunnel[],
+): { templates: TTemplate[]; funnels: TFunnel[] } {
+  return { templates, funnels };
+}

@@ -4,6 +4,7 @@ import {
   createDraftFromFixture,
   intakeImportedArchive,
   isTemplatesSiteNavPath,
+  libraryFromRegistry,
   libraryTemplates,
   paidAdsFunnelsPath,
   parseFunnelWorkspaceView,
@@ -28,5 +29,21 @@ describe("paid ads funnel library navigation", () => {
     );
     expect(result.intake.ok).toBe(true);
     expect(result.detect?.status).toBe("ready");
+  });
+
+  it("lists registry templates and my funnels instead of only local fixtures", () => {
+    const listed = libraryFromRegistry(
+      [
+        { templateKey: "generic-paid-funnel", name: "Generic" },
+        { templateKey: "imported-offer", name: "Imported" },
+      ],
+      [{ id: 21, name: "Northland Paid Funnel" }],
+    );
+    expect(listed.templates.map(item => item.templateKey)).toEqual([
+      "generic-paid-funnel",
+      "imported-offer",
+    ]);
+    expect(listed.funnels.map(item => item.id)).toEqual([21]);
+    expect(listed.templates).not.toEqual([libraryTemplates()[0]]);
   });
 });

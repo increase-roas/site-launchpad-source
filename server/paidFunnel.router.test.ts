@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrpcContext } from "./_core/context";
 import { UNAUTHED_ERR_MSG } from "../shared/const";
 import { GENERIC_PAID_FUNNEL_PACKAGE } from "../shared/paidFunnelFixture";
+import { createGenericPaidFunnelFixture } from "../shared/paidFunnel/fixture";
 
 const mocks = vi.hoisted(() => ({
   listPaidFunnelTemplates: vi.fn(),
@@ -113,6 +114,23 @@ describe("paid funnel registry procedures", () => {
     expect(result.unsupportedRegions).toEqual([
       { path: "index.html", reason: "iframe is an unsupported region." },
     ]);
+  });
+
+  it("accepts a builder graph on saveGraph", async () => {
+    const caller = paidFunnelRouter.createCaller(context());
+    const graph = createGenericPaidFunnelFixture("router-save");
+    await caller.saveGraph({
+      clientId: 5,
+      funnelId: 21,
+      stepId: 3,
+      expectedUpdatedAt: new Date("2026-08-18T12:00:00.000Z"),
+      graph,
+    });
+    expect(mocks.savePaidFunnelGraph).toHaveBeenCalledOnce();
+    const payload = mocks.savePaidFunnelGraph.mock.calls[0][0];
+    expect(payload.graph.version).toBe(1);
+    expect(payload.graph.pages[0].kind).toBe("page");
+    expect(payload.graph.pages[0].sections[0].kind).toBe("section");
   });
 
   it("rejects unauthenticated registry reads", async () => {

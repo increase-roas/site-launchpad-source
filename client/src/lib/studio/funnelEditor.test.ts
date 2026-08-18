@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createGenericPaidFunnelFixture } from "@shared/paidFunnel/fixture";
 import { PaidFunnelEditor } from "./funnelEditor";
+import { studioToStorageGraph, storageToStudioGraph } from "@shared/paidFunnel/persist";
 
 describe("paid funnel visual editor session", () => {
   it("undoes and redoes structural and property edits", () => {
@@ -38,5 +39,30 @@ describe("paid funnel visual editor session", () => {
     expect(editor.detectConflict(2)).toBe(true);
     expect(editor.snapshot().saveStatus).toBe("conflict");
     expect(pageId).toBeTruthy();
+  });
+
+  it("round-trips editor graphs through the registry storage graph", () => {
+    const editor = new PaidFunnelEditor(createGenericPaidFunnelFixture("persist"));
+    const pageId = editor.snapshot().graph.pages.landing.id;
+    editor.insert({ source: "section", preset: "cta" }, { parentId: pageId, parentKind: "page", index: 0 });
+    const storage = studioToStorageGraph(editor.snapshot().graph);
+    const restored = storageToStudioGraph(storage, {
+      funnel: { id: 8, name: "Persist", slug: "persist" },
+      steps: editor.snapshot().graph.steps.map((step, position) => ({
+        id: position + 1,
+        key: step.key,
+        stepType: step.type,
+        slug: step.slug,
+        title: step.title,
+        seo: step.seo,
+        nextStep: step.nextStep.type === "step" ? step.nextStep.stepKey : null,
+        previewState: step.previewState,
+        publishState: step.publishState,
+        position,
+      })),
+    });
+    const again = new PaidFunnelEditor(restored);
+    expect(again.snapshot().graph.pages.landing.sections[0]?.preset).toBe("cta");
+    expect(again.snapshot().graph.pages.landing.sections[0]?.kind).toBe("section");
   });
 });

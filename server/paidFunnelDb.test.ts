@@ -20,9 +20,12 @@ vi.mock("./db", () => dbMocks);
 
 import {
   createPaidFunnelFromTemplate,
+  getPaidFunnelDetail,
   importPaidFunnelZip,
   listPaidFunnelTemplates,
+  savePaidFunnelGraph,
 } from "./paidFunnelDb";
+import { createGenericPaidFunnelFixture } from "../shared/paidFunnel/fixture";
 
 type Row = Record<string, unknown> & { id?: number };
 
@@ -88,7 +91,11 @@ function createMemoryDb() {
     }),
     insert: (table: unknown) => ({
       values: (values: Row) => {
-        const row = { ...values, id: values.id ?? nextId++ };
+        const row = {
+          ...values,
+          id: values.id ?? nextId++,
+          updatedAt: values.updatedAt ?? new Date("2026-08-18T12:00:00.000Z"),
+        };
         tables.get(table)?.push(row);
         inserted.push({ table, values: row });
         return {
@@ -98,10 +105,13 @@ function createMemoryDb() {
     }),
     update: (table: unknown) => ({
       set: (values: Row) => ({
-        where: async () => {
-          const rows = tables.get(table) ?? [];
-          if (rows[0]) Object.assign(rows[0], values);
-        },
+        where: () => ({
+          returning: async () => {
+            const rows = tables.get(table) ?? [];
+            if (rows[0]) Object.assign(rows[0], values);
+            return rows[0] ? [{ id: rows[0].id }] : [];
+          },
+        }),
       }),
     }),
     transaction: async (callback: (tx: typeof api) => Promise<unknown>) =>
@@ -177,5 +187,25 @@ describe("paid funnel registry persistence", () => {
       db.inserted.some(row => row.table === paidFunnelTemplateArtifacts)
     ).toBe(true);
     expect(JSON.stringify(result)).not.toMatch(/EAAB|sk_live/);
+  });
+
+  it("assembles a studio graph and saves builder graphs through saveGraph", async () => {
+    const created = await createPaidFunnelFromTemplate(5, "generic-paid-funnel");
+    const detail = await getPaidFunnelDetail(5, created.funnelId);
+    expect(detail.studio).toBeTruthy();
+    expect(detail.studio?.graph.kind).toBe("paid-funnel");
+    expect(detail.studio?.graph.pages.landing.kind).toBe("page");
+    expect(detail.graphs[0]?.graph.pages[0]?.kind).toBe("page");
+
+    const builder = createGenericPaidFunnelFixture("db-save");
+    const saved = await savePaidFunnelGraph({
+      clientId: 5,
+      funnelId: created.funnelId,
+      stepId: detail.studio!.stepId,
+      expectedUpdatedAt: detail.studio!.expectedUpdatedAt,
+      graph: builder,
+    });
+    expect(saved.studio?.graph.pages.landing.kind).toBe("page");
+    expect(saved.graphs[0]?.graph.version).toBe(1);
   });
 });

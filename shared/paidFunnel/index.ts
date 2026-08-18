@@ -8,3 +8,4 @@ export * from "./inspector";
 export * from "./store";
 export * from "./library";
 export * from "./integrationPresence";
+export * from "./persist";

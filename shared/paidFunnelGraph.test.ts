@@ -45,6 +45,29 @@ describe("paid funnel content graph", () => {
     expect(paidFunnelGraphSchema.parse(validGraph).pages).toHaveLength(1);
     expect(PAID_FUNNEL_ELEMENT_TYPES).toContain("form");
     expect(PAID_FUNNEL_SECTION_PRESETS).toContain("pricing");
+    const migrated = paidFunnelGraphSchema.parse(validGraph);
+    expect(migrated.pages[0]?.kind).toBe("page");
+    expect(migrated.pages[0]?.sections[0]?.kind).toBe("section");
+    expect(migrated.pages[0]?.sections[0]?.rows[0]?.kind).toBe("row");
+    expect(migrated.pages[0]?.sections[0]?.rows[0]?.columns[0]?.kind).toBe("column");
+    expect(migrated.pages[0]?.sections[0]?.rows[0]?.columns[0]?.elements[0]?.kind).toBe("element");
+  });
+
+  it("migrates builder pages records into the same versioned array graph", () => {
+    const builderShaped = {
+      schemaVersion: 1,
+      kind: "paid-funnel",
+      funnelKey: "demo",
+      name: "Demo",
+      version: 1,
+      pages: {
+        landing: validGraph.pages[0],
+      },
+    };
+    const migrated = migratePaidFunnelGraph(builderShaped);
+    expect(migrated.pages).toHaveLength(1);
+    expect(migrated.pages[0]?.id).toBe("page-landing");
+    expect(migrated.funnelKey).toBe("demo");
   });
 
   it("rejects duplicate stable ids", () => {

@@ -9,7 +9,6 @@ import {
   canUndoStudio,
   insertPaletteOnCanvas,
   insertStudioItem,
-  markStudioSaved,
   selectStudioNode,
   setStudioDevice,
   setStudioStep,
@@ -199,7 +198,10 @@ export function PaidFunnelBuilder({
           </Button>
           <Button
             type="button"
-            onClick={() => onChange(markStudioSaved(state))}
+            onClick={() => {
+              if (state.document.saveStatus === "saved") return;
+              onChange({ ...state, document: { ...state.document, saveStatus: "saving", editSeq: state.document.editSeq + 1 } });
+            }}
             className="h-9 rounded-xl bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
           >
             <Save className="h-4 w-4" />

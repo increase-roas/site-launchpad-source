@@ -29,7 +29,15 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PaidAdsFunnelLibrary } from "@/components/funnels/studio/PaidAdsFunnelLibrary";
 import { PaidFunnelBuilder } from "@/components/funnels/studio/PaidFunnelBuilder";
-import { commitAutosave, createDocumentFromFixture, createStudioState, parsePaidAdsFunnelSearch, type PaidAdsFunnelTab, type StudioState } from "@shared/paidFunnel";
+import {
+  commitAutosave,
+  createDocumentFromPersist,
+  createStudioState,
+  parsePaidAdsFunnelSearch,
+  studioToStorageGraph,
+  type PaidAdsFunnelTab,
+  type StudioState,
+} from "@shared/paidFunnel";
 import { selectedFunnelForClient } from "./editorIsolation";
 
 type Step = {
@@ -172,14 +180,65 @@ function StepEditor({
 export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
   const utils = trpc.useUtils();
   const workspaceQuery = trpc.workspace.get.useQuery({ clientId });
+  const templatesQuery = trpc.paidFunnel.listTemplates.useQuery({ clientId });
+  const registryFunnelsQuery = trpc.paidFunnel.listFunnels.useQuery({ clientId });
   const [selectedStep, setSelectedStep] = useState<Step | null>(null);
   const [selectedFunnelId, setSelectedFunnelId] = useState<number | null>(null);
   const parsedSearch = parsePaidAdsFunnelSearch(typeof window === "undefined" ? "" : window.location.search);
+  const initialStudioId = parsedSearch.studioKey && /^\d+$/.test(parsedSearch.studioKey) ? Number(parsedSearch.studioKey) : null;
+  const [studioFunnelId, setStudioFunnelId] = useState<number | null>(initialStudioId);
   const [libraryTab, setLibraryTab] = useState<PaidAdsFunnelTab>(parsedSearch.tab);
-  const [studio, setStudio] = useState<StudioState | null>(() => parsedSearch.studioKey ? createStudioState(createDocumentFromFixture(clientId, parsedSearch.studioKey)) : null);
+  const [studio, setStudio] = useState<StudioState | null>(null);
+
+  const studioDetailQuery = trpc.paidFunnel.get.useQuery(
+    { clientId, funnelId: studioFunnelId ?? 0 },
+    { enabled: studioFunnelId != null },
+  );
+
+  const saveGraphMutation = trpc.paidFunnel.saveGraph.useMutation({
+    onSuccess: async detail => {
+      await utils.paidFunnel.get.invalidate({ clientId, funnelId: detail.funnel.id });
+      await utils.paidFunnel.listFunnels.invalidate({ clientId });
+      if (!detail.studio) return;
+      setStudio(current => {
+        if (!current) return current;
+        return commitAutosave(current, current.document.revision, {
+          expectedUpdatedAt: new Date(detail.studio!.expectedUpdatedAt).toISOString(),
+          stepId: detail.studio!.stepId,
+        });
+      });
+    },
+    onError: error => {
+      setStudio(current =>
+        current
+          ? {
+              ...current,
+              document: {
+                ...current.document,
+                saveStatus: "error",
+                conflict: /updated elsewhere|conflict/i.test(error.message),
+              },
+            }
+          : current,
+      );
+      toast.error(error.message);
+    },
+  });
+
+  const createFromTemplateMutation = trpc.paidFunnel.createFromTemplate.useMutation({
+    onSuccess: async result => {
+      await utils.paidFunnel.listFunnels.invalidate({ clientId });
+      await utils.paidFunnel.listTemplates.invalidate({ clientId });
+      openStudioFunnel(result.funnelId);
+      toast.success(result.alreadyExists ? "Opened existing paid funnel." : "Paid funnel created.");
+    },
+    onError: error => toast.error(error.message),
+  });
 
   useEffect(() => {
     setSelectedStep(null);
+    setStudio(null);
+    setStudioFunnelId(null);
   }, [clientId]);
 
   useEffect(() => {
@@ -194,8 +253,27 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
     }
   }, [clientId, workspaceQuery.data]);
 
+  useEffect(() => {
+    if (studio) return;
+    if (!studioDetailQuery.data?.studio || studioFunnelId == null) return;
+    const assembled = studioDetailQuery.data.studio;
+    setStudio(
+      createStudioState(
+        createDocumentFromPersist({
+          clientId,
+          funnelId: studioFunnelId,
+          stepId: assembled.stepId,
+          expectedUpdatedAt: assembled.expectedUpdatedAt,
+          graph: assembled.graph,
+        }),
+      ),
+    );
+  }, [clientId, studio, studioFunnelId, studioDetailQuery.data]);
+
   const openFunnel = (funnelId: number) => {
     setSelectedFunnelId(funnelId);
+    setStudio(null);
+    setStudioFunnelId(null);
     window.history.replaceState(null, "", `${window.location.pathname}?funnel=${funnelId}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -205,24 +283,36 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
     window.history.replaceState(null, "", window.location.pathname);
   };
 
-  const openStudio = (key: string) => {
-    setStudio(createStudioState(createDocumentFromFixture(clientId, key)));
+  const openStudioFunnel = (funnelId: number) => {
     setSelectedFunnelId(null);
-    window.history.replaceState(null, "", `${window.location.pathname}?studio=${encodeURIComponent(key)}`);
+    setStudioFunnelId(funnelId);
+    window.history.replaceState(null, "", `${window.location.pathname}?studio=${funnelId}`);
   };
 
   const closeStudio = () => {
     setStudio(null);
+    setStudioFunnelId(null);
     window.history.replaceState(null, "", `${window.location.pathname}?tab=${libraryTab}`);
   };
 
   useEffect(() => {
     if (!studio || studio.document.saveStatus !== "saving") return;
+    if (!studio.document.funnelId || !studio.document.stepId || !studio.document.expectedUpdatedAt) return;
+    if (saveGraphMutation.isPending) return;
+    const snapshot = studio;
     const handle = window.setTimeout(() => {
-      setStudio(current => (current ? commitAutosave(current, current.document.revision) : current));
-    }, 250);
+      if (!snapshot.document.funnelId || !snapshot.document.stepId || !snapshot.document.expectedUpdatedAt) return;
+      saveGraphMutation.mutate({
+        clientId,
+        funnelId: snapshot.document.funnelId,
+        stepId: snapshot.document.stepId,
+        expectedUpdatedAt: new Date(snapshot.document.expectedUpdatedAt),
+        graph: studioToStorageGraph(snapshot.document.graph),
+      });
+    }, 450);
     return () => window.clearTimeout(handle);
-  }, [studio]);
+    // Key off editSeq so every graph mutation schedules saveGraph.
+  }, [studio?.document.editSeq, studio?.document.saveStatus, clientId]);
 
   const shapeMutation = trpc.workspace.setFunnelShape.useMutation({
     onSuccess: async () => {
@@ -289,13 +379,17 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
         <div className="space-y-8">
           <PaidAdsFunnelLibrary
             tab={libraryTab}
-            creating={false}
+            creating={createFromTemplateMutation.isPending}
+            templates={templatesQuery.data ?? []}
+            templatesLoading={templatesQuery.isLoading}
+            funnels={registryFunnelsQuery.data ?? []}
+            funnelsLoading={registryFunnelsQuery.isLoading}
             onTabChange={tab => {
               setLibraryTab(tab);
               window.history.replaceState(null, "", `${window.location.pathname}?tab=${tab}`);
             }}
-            onCreateFromFixture={() => openStudio(`client-${clientId}-paid-funnel`)}
-            onOpenBuilder={openStudio}
+            onCreateFromTemplate={templateKey => createFromTemplateMutation.mutate({ clientId, templateKey })}
+            onOpenFunnel={openStudioFunnel}
           />
           <FunnelBuilderList clientId={clientId} onEdit={openFunnel} />
         </div>

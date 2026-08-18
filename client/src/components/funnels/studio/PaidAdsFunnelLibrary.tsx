@@ -1,33 +1,60 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { inspectPaidFunnelZipIntake, type PaidAdsFunnelTab, type ZipIntakeResult } from "@shared/paidFunnel";
-import { GENERIC_PAID_FUNNEL_FIXTURE_KEY } from "@shared/paidFunnel/fixture";
-import { PAID_ADS_SECTION_PRESET_LABELS } from "@shared/paidFunnel/presets";
-import { FileArchive, Layers3, Loader2, Upload } from "lucide-react";
+import { FileArchive, Layers3, Loader2, Route, Upload } from "lucide-react";
 import { useState } from "react";
+
+export type LibraryTemplate = {
+  templateKey: string;
+  name: string;
+  framework?: string;
+  stepCount?: number;
+  source?: string;
+  status?: string;
+  existingFunnelId?: number | null;
+};
+
+export type LibraryFunnel = {
+  id: number;
+  name: string;
+  slug: string;
+  source: string;
+  status: string;
+  updatedAt?: string | Date;
+};
 
 export function PaidAdsFunnelLibrary({
   tab,
   onTabChange,
-  onCreateFromFixture,
-  onOpenBuilder,
+  onCreateFromTemplate,
+  onOpenFunnel,
   creating,
+  templates,
+  templatesLoading,
+  funnels,
+  funnelsLoading,
 }: {
   tab: PaidAdsFunnelTab;
   onTabChange: (tab: PaidAdsFunnelTab) => void;
-  onCreateFromFixture: () => void;
-  onOpenBuilder: (key: string) => void;
+  onCreateFromTemplate: (templateKey: string) => void;
+  onOpenFunnel: (funnelId: number) => void;
   creating: boolean;
+  templates: LibraryTemplate[];
+  templatesLoading: boolean;
+  funnels: LibraryFunnel[];
+  funnelsLoading: boolean;
 }) {
   const [intake, setIntake] = useState<ZipIntakeResult | null>(null);
 
   return (
     <div className="space-y-6">
       <div className="inline-flex rounded-2xl border border-white/8 bg-black/20 p-1.5">
-        {([
-          ["templates", "Templates"],
-          ["mine", "My Funnels"],
-        ] as const).map(([key, label]) => (
+        {(
+          [
+            ["templates", "Templates"],
+            ["mine", "My Funnels"],
+          ] as const
+        ).map(([key, label]) => (
           <button
             key={key}
             type="button"
@@ -43,27 +70,37 @@ export function PaidAdsFunnelLibrary({
 
       {tab === "templates" ? (
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="border-white/8 bg-card/70 p-5">
-            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-300">Paid Ads template</p>
-            <h3 className="mt-2 text-xl font-extrabold">Generic multi-step paid funnel</h3>
-            <p className="mt-2 text-sm font-medium text-muted-foreground">
-              Landing → Form → Thank You → Booking → Upsell. Visual graph, not a website page list.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {Object.values(PAID_ADS_SECTION_PRESET_LABELS).slice(0, 6).map(label => (
-                <span key={label} className="rounded-full bg-white/[0.05] px-3 py-1 text-xs font-bold">{label}</span>
-              ))}
-            </div>
-            <Button
-              type="button"
-              disabled={creating}
-              onClick={onCreateFromFixture}
-              className="mt-5 h-12 w-full rounded-xl bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
-            >
-              {creating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Layers3 className="h-5 w-5" />}
-              Create from paid-funnel fixture
-            </Button>
-          </Card>
+          {templatesLoading ? (
+            <Card className="border-white/8 bg-card/70 p-8 text-center font-bold text-muted-foreground">
+              <Loader2 className="mx-auto h-6 w-6 animate-spin text-cyan-300" />
+              Loading registry templates…
+            </Card>
+          ) : templates.length ? (
+            templates.map(template => (
+              <Card key={template.templateKey} className="border-white/8 bg-card/70 p-5">
+                <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-300">
+                  {template.source === "zip" ? "Imported template" : "Paid Ads template"}
+                </p>
+                <h3 className="mt-2 text-xl font-extrabold">{template.name}</h3>
+                <p className="mt-2 text-sm font-medium text-muted-foreground">
+                  {template.stepCount ?? "?"} steps · {template.framework ?? "unknown"} · {template.status ?? "ready"}
+                </p>
+                <Button
+                  type="button"
+                  disabled={creating}
+                  onClick={() => onCreateFromTemplate(template.templateKey)}
+                  className="mt-5 h-12 w-full rounded-xl bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
+                >
+                  {creating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Layers3 className="h-5 w-5" />}
+                  {template.existingFunnelId ? "Open existing from template" : "Create from template"}
+                </Button>
+              </Card>
+            ))
+          ) : (
+            <Card className="border-white/8 bg-card/70 p-5 font-bold text-muted-foreground">
+              No paid-funnel templates in the registry yet.
+            </Card>
+          )}
 
           <Card className="border-dashed border-cyan-300/25 bg-cyan-400/[0.04] p-5">
             <div className="flex items-center gap-3">
@@ -88,11 +125,13 @@ export function PaidAdsFunnelLibrary({
                 onChange={event => {
                   const file = event.target.files?.[0];
                   if (!file) return;
-                  setIntake(inspectPaidFunnelZipIntake({
-                    archiveName: file.name,
-                    byteSize: file.size,
-                    files: [{ path: file.name, byteSize: file.size }],
-                  }));
+                  setIntake(
+                    inspectPaidFunnelZipIntake({
+                      archiveName: file.name,
+                      byteSize: file.size,
+                      files: [{ path: file.name, byteSize: file.size }],
+                    }),
+                  );
                 }}
               />
             </label>
@@ -103,19 +142,43 @@ export function PaidAdsFunnelLibrary({
             ) : null}
           </Card>
         </div>
+      ) : funnelsLoading ? (
+        <Card className="border-white/8 bg-card/70 p-8 text-center font-bold text-muted-foreground">
+          <Loader2 className="mx-auto h-6 w-6 animate-spin text-cyan-300" />
+          Loading my funnels…
+        </Card>
+      ) : funnels.length ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {funnels.map(funnel => (
+            <Card key={funnel.id} className="border-white/8 bg-card/70 p-5">
+              <div className="flex items-start gap-3">
+                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-cyan-400/10 text-cyan-300">
+                  <Route className="h-5 w-5" />
+                </span>
+                <div>
+                  <h3 className="text-xl font-extrabold">{funnel.name}</h3>
+                  <p className="mt-1 text-sm font-bold text-cyan-300">/{funnel.slug}</p>
+                  <p className="mt-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    {funnel.source} · {funnel.status}
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                onClick={() => onOpenFunnel(funnel.id)}
+                className="mt-5 h-12 w-full rounded-xl bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
+              >
+                Open visual builder
+              </Button>
+            </Card>
+          ))}
+        </div>
       ) : (
         <Card className="border-white/8 bg-card/70 p-5">
-          <h3 className="text-xl font-extrabold">Open a visual paid funnel</h3>
+          <h3 className="text-xl font-extrabold">No registry funnels yet</h3>
           <p className="mt-2 text-sm font-medium text-muted-foreground">
-            Simple Form stays on its specialized editor. Generic paid funnels open the GHL-style builder.
+            Create one from a paid-funnel template. Simple Form stays on its specialized editor below.
           </p>
-          <Button
-            type="button"
-            onClick={() => onOpenBuilder(GENERIC_PAID_FUNNEL_FIXTURE_KEY)}
-            className="mt-5 h-12 rounded-xl bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
-          >
-            Open fixture builder
-          </Button>
         </Card>
       )}
     </div>

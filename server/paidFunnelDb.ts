@@ -25,6 +25,10 @@ import {
   migratePaidFunnelGraph,
   paidFunnelSectionSchema,
 } from "../shared/paidFunnelGraph";
+import {
+  assembleStudioGraph,
+  persistGraphInput,
+} from "../shared/paidFunnel/persist";
 import { ingestPaidFunnelZip } from "../shared/paidFunnelZip";
 import { getClientById, getDb } from "./db";
 import { requireSinglePositiveId, withUpdatedAt } from "./postgresPersistence";
@@ -399,13 +403,40 @@ export async function getPaidFunnelDetail(clientId: number, funnelId: number) {
     .from(paidFunnelGraphs)
     .where(eq(paidFunnelGraphs.funnelId, funnelId));
 
+  const orderedSteps = steps.sort((left, right) => left.position - right.position);
+  const graphRows = graphs.map(graph => ({
+    ...graph,
+    graph: migratePaidFunnelGraph(graph.graphJson),
+  }));
+  const studio =
+    graphRows.length > 0
+      ? assembleStudioGraph({
+          funnel: { id: funnel.id, name: funnel.name, slug: funnel.slug },
+          steps: orderedSteps.map(step => ({
+            id: step.id,
+            key: step.key,
+            stepType: step.stepType,
+            slug: step.slug,
+            title: step.title,
+            seo: (step.seo ?? {}) as Record<string, unknown>,
+            nextStep: step.nextStep,
+            previewState: step.previewState,
+            publishState: step.publishState,
+            position: step.position,
+          })),
+          graphs: graphRows.map(row => ({
+            stepId: row.stepId,
+            updatedAt: row.updatedAt,
+            graph: row.graph,
+          })),
+        })
+      : null;
+
   return {
     funnel,
-    steps: steps.sort((left, right) => left.position - right.position),
-    graphs: graphs.map(graph => ({
-      ...graph,
-      graph: migratePaidFunnelGraph(graph.graphJson),
-    })),
+    steps: orderedSteps,
+    graphs: graphRows,
+    studio,
   };
 }
 
@@ -443,7 +474,7 @@ export async function savePaidFunnelGraph(input: {
   if (!current) throw new Error("Graph not found.");
   assertWritableVersion(current.updatedAt, input.expectedUpdatedAt);
 
-  const graph = migratePaidFunnelGraph(input.graph);
+  const graph = persistGraphInput(input.graph);
   const revisionRows = await db
     .select({ revision: paidFunnelGraphRevisions.revision })
     .from(paidFunnelGraphRevisions)
