@@ -8,14 +8,18 @@ import {
   type GenericPaidFunnelPublishStep,
   type GenericPaidFunnelResourceDefinitions,
 } from "../../shared/genericPaidFunnelPublish";
+import { decryptSetupValue, encryptSetupValue } from "../clientSecurity";
 import { createCloudflareApiClient } from "./cloudflareApi";
 import {
   createGitHubApiClient,
   expectedWorkflowDisplayTitle,
+  GitHubApiError,
 } from "./githubApi";
 import {
   genericPaidFunnelResourceDefinitions,
   getGenericPaidFunnelPublishMaterial,
+  openGenericPaidFunnelMaterialSnapshot,
+  sealGenericPaidFunnelMaterialSnapshot,
   type GenericPaidFunnelPublishMaterial,
 } from "./genericPaidFunnelMaterial";
 import { genericPaidFunnelPublishStore } from "./genericPaidFunnelPublishDb";
@@ -29,8 +33,11 @@ import {
 } from "./publisherEnv";
 import {
   PublisherManualAttentionError,
+  PublisherProvenNoEffectError,
   reconcilePublicGeneratedRepository,
 } from "./repositoryReconciliation";
+
+export { PublisherProvenNoEffectError } from "./repositoryReconciliation";
 
 export type GenericPaidFunnelPublishJob = GenericPaidFunnelPublish;
 
@@ -49,6 +56,7 @@ export type GenericPaidFunnelPublishStepValues = Partial<
     | "workflowStatus"
     | "workflowCheckedAt"
     | "runtimeSecretsPatchedAt"
+    | "repositoryCreateRequestedAt"
   >
 >;
 
@@ -68,9 +76,13 @@ export interface GenericPaidFunnelPublishStore {
     repositoryName: string;
     workerName: string;
     resourceDefinitions: GenericPaidFunnelResourceDefinitions;
+    materialSnapshotEncrypted: string;
     now: Date;
   }): Promise<GenericPaidFunnelPublishJob>;
-  get(clientId: number, funnelId: number): Promise<GenericPaidFunnelPublishJob | null>;
+  get(
+    clientId: number,
+    funnelId: number
+  ): Promise<GenericPaidFunnelPublishJob | null>;
   claim(input: {
     clientId: number;
     funnelId: number;
@@ -109,19 +121,31 @@ export interface GenericPaidFunnelPublishStore {
 type WorkflowResult = {
   workflowRunId: string;
   status: "queued" | "in_progress" | "completed";
-  conclusion: "success" | "failure" | "cancelled" | "timed_out" | "action_required" | null;
+  conclusion:
+    | "success"
+    | "failure"
+    | "cancelled"
+    | "timed_out"
+    | "action_required"
+    | null;
   headSha: string;
   displayTitle: string;
 };
 
 export interface GenericPaidFunnelPublishExternal {
+  preflightDeploymentCredentials(input: { signal: AbortSignal }): Promise<void>;
   ensureRepository(input: {
     externalFunnelId: string;
     repositoryName: string;
     allowCreate: boolean;
     markCreateRequested: () => Promise<void>;
     signal: AbortSignal;
-  }): Promise<Pick<GenericPaidFunnelPublishJob, "repositoryId" | "repositoryFullName" | "repositoryUrl" | "defaultBranch">>;
+  }): Promise<
+    Pick<
+      GenericPaidFunnelPublishJob,
+      "repositoryId" | "repositoryFullName" | "repositoryUrl" | "defaultBranch"
+    >
+  >;
   ensureResources(input: {
     definitions: GenericPaidFunnelResourceDefinitions;
     signal: AbortSignal;
@@ -161,13 +185,19 @@ export interface GenericPaidFunnelPublishExternal {
     runtimeSecrets: Record<string, string>;
     signal: AbortSignal;
   }): Promise<void>;
-  getWorkersDevStatus(input: { workerName: string; signal: AbortSignal }): Promise<{ liveUrl: string }>;
+  getWorkersDevStatus(input: {
+    workerName: string;
+    signal: AbortSignal;
+  }): Promise<{ liveUrl: string }>;
 }
 
 export type GenericPaidFunnelPublishDependencies = {
   store: GenericPaidFunnelPublishStore;
   external: GenericPaidFunnelPublishExternal;
-  loadMaterial(clientId: number, funnelId: number): Promise<GenericPaidFunnelPublishMaterial>;
+  loadMaterial(
+    clientId: number,
+    funnelId: number
+  ): Promise<GenericPaidFunnelPublishMaterial>;
   now: () => Date;
   createLeaseToken: () => string;
   leaseDurationMs: number;
@@ -177,6 +207,66 @@ export type GenericPaidFunnelPublishDependencies = {
 type OwnerInput = { clientId: number; funnelId: number; retryFailed?: boolean };
 const RECONCILIATION_WINDOW_MS = 60_000;
 const DEPLOY_WORKFLOW = "deploy.yml";
+const MANAGED_FILES_MANIFEST = ".site-launchpad/managed-files.json";
+const REQUIRED_ACTIONS_SECRETS = [
+  "CLOUDFLARE_API_TOKEN",
+  "CLOUDFLARE_ACCOUNT_ID",
+] as const;
+
+function isProvenNoEffectGitHubError(error: unknown): boolean {
+  return (
+    error instanceof GitHubApiError &&
+    (error.status === 403 || error.status === 404 || error.status === 422)
+  );
+}
+
+function validManagedPath(path: unknown): path is string {
+  return (
+    typeof path === "string" &&
+    path.length > 0 &&
+    !path.startsWith("/") &&
+    !path.includes("..") &&
+    path !== MANAGED_FILES_MANIFEST
+  );
+}
+
+export function genericPaidFunnelManagedFilePlan(
+  currentPaths: readonly string[],
+  previousManifest: string | null
+): { deletePaths: string[]; manifestContent: string } {
+  const paths = [...new Set(currentPaths)].sort();
+  if (paths.some(path => !validManagedPath(path))) {
+    throw new Error(
+      "Generated paid funnel contains an invalid managed file path."
+    );
+  }
+  let previousPaths: string[] = [];
+  if (previousManifest !== null) {
+    try {
+      const parsed: unknown = JSON.parse(decryptSetupValue(previousManifest));
+      if (
+        !parsed ||
+        typeof parsed !== "object" ||
+        Array.isArray(parsed) ||
+        (parsed as { version?: unknown }).version !== 1 ||
+        !Array.isArray((parsed as { paths?: unknown }).paths) ||
+        !(parsed as { paths: unknown[] }).paths.every(validManagedPath)
+      ) {
+        throw new Error("invalid");
+      }
+      previousPaths = [...new Set((parsed as { paths: string[] }).paths)];
+    } catch {
+      throw new PublisherManualAttentionError(
+        "Generated repository managed-file manifest is invalid; manual attention is required."
+      );
+    }
+  }
+  const current = new Set(paths);
+  return {
+    deletePaths: previousPaths.filter(path => !current.has(path)).sort(),
+    manifestContent: encryptSetupValue(JSON.stringify({ version: 1, paths })),
+  };
+}
 
 function requireValue(value: string | null, message: string): string {
   if (!value) throw new Error(message);
@@ -185,18 +275,20 @@ function requireValue(value: string | null, message: string): string {
 
 function splitFullName(value: string): { owner: string; repository: string } {
   const [owner, repository, extra] = value.split("/");
-  if (!owner || !repository || extra) throw new Error("Published repository name is invalid.");
+  if (!owner || !repository || extra)
+    throw new Error("Published repository name is invalid.");
   return { owner, repository };
 }
 
 async function bounded<T>(
   timeoutMs: number,
-  operation: (signal: AbortSignal) => Promise<T>,
+  operation: (signal: AbortSignal) => Promise<T>
 ): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(
-    () => controller.abort(new Error("Publisher external operation timed out.")),
-    timeoutMs,
+    () =>
+      controller.abort(new Error("Publisher external operation timed out.")),
+    timeoutMs
   );
   try {
     return await operation(controller.signal);
@@ -207,21 +299,24 @@ async function bounded<T>(
 
 function assertWorkflow(
   result: { displayTitle: string; headSha: string },
-  job: GenericPaidFunnelPublishJob,
+  job: GenericPaidFunnelPublishJob
 ): void {
-  const sourceSha = requireValue(job.commitSha, "Published source commit is missing.");
+  const sourceSha = requireValue(
+    job.commitSha,
+    "Published source commit is missing."
+  );
   if (
     result.displayTitle !== expectedWorkflowDisplayTitle(job.id, sourceSha) ||
     result.headSha !== sourceSha
   ) {
     throw new PublisherManualAttentionError(
-      "Workflow run does not match the paid funnel publish job and source commit; manual attention is required.",
+      "Workflow run does not match the paid funnel publish job and source commit; manual attention is required."
     );
   }
 }
 
 export function toGenericPaidFunnelPublishStatus(
-  job: GenericPaidFunnelPublishJob,
+  job: GenericPaidFunnelPublishJob
 ): GenericPaidFunnelPublishStatusView {
   return {
     id: job.id,
@@ -242,7 +337,10 @@ export function toGenericPaidFunnelPublishStatus(
   };
 }
 
-async function current(input: OwnerInput, store: GenericPaidFunnelPublishStore) {
+async function current(
+  input: OwnerInput,
+  store: GenericPaidFunnelPublishStore
+) {
   const job = await store.get(input.clientId, input.funnelId);
   if (!job) throw new Error("Paid funnel publish job not found.");
   return toGenericPaidFunnelPublishStatus(job);
@@ -253,7 +351,7 @@ async function complete(
   job: GenericPaidFunnelPublishJob,
   leaseToken: string,
   completion: Completion,
-  deps: GenericPaidFunnelPublishDependencies,
+  deps: GenericPaidFunnelPublishDependencies
 ) {
   const result = await deps.store.complete({
     jobId: job.id,
@@ -262,14 +360,16 @@ async function complete(
     completion,
     now: deps.now(),
   });
-  return result ? toGenericPaidFunnelPublishStatus(result) : current(input, deps.store);
+  return result
+    ? toGenericPaidFunnelPublishStatus(result)
+    : current(input, deps.store);
 }
 
 async function execute(
   input: OwnerInput,
   job: GenericPaidFunnelPublishJob,
   leaseToken: string,
-  deps: GenericPaidFunnelPublishDependencies,
+  deps: GenericPaidFunnelPublishDependencies
 ): Promise<GenericPaidFunnelPublishStatusView> {
   switch (job.step) {
     case "create_repository": {
@@ -287,15 +387,30 @@ async function execute(
             if (!marked) throw new Error("Paid funnel publish lease was lost.");
           },
           signal,
-        }),
+        })
       );
-      return complete(input, job, leaseToken, { nextStep: "ensure_resources", values: result }, deps);
+      return complete(
+        input,
+        job,
+        leaseToken,
+        { nextStep: "ensure_resources", values: result },
+        deps
+      );
     }
     case "ensure_resources": {
       const result = await bounded(deps.externalTimeoutMs, signal =>
-        deps.external.ensureResources({ definitions: job.resourceDefinitions, signal }),
+        deps.external.ensureResources({
+          definitions: job.resourceDefinitions,
+          signal,
+        })
       );
-      return complete(input, job, leaseToken, { nextStep: "commit_source", values: result }, deps);
+      return complete(
+        input,
+        job,
+        leaseToken,
+        { nextStep: "commit_source", values: result },
+        deps
+      );
     }
     case "commit_source": {
       const resources = job.provisionedResources;
@@ -306,61 +421,99 @@ async function execute(
           definition =>
             !resources.d1.some(
               resource =>
-                resource.binding === definition.binding && resource.name === definition.name,
-            ),
+                resource.binding === definition.binding &&
+                resource.name === definition.name
+            )
         )
       ) {
-        throw new Error("Provisioned paid funnel resources are missing or do not match the publish job.");
+        throw new Error(
+          "Provisioned paid funnel resources are missing or do not match the publish job."
+        );
       }
-      const material = await deps.loadMaterial(input.clientId, input.funnelId);
+      const material = openGenericPaidFunnelMaterialSnapshot(
+        job.materialSnapshotEncrypted
+      );
       const result = await bounded(deps.externalTimeoutMs, signal =>
         deps.external.commitSource({
           publishJobId: job.id,
           releaseNumber: job.releaseNumber,
-          repositoryFullName: requireValue(job.repositoryFullName, "Published repository is missing."),
-          defaultBranch: requireValue(job.defaultBranch, "Published repository branch is missing."),
+          repositoryFullName: requireValue(
+            job.repositoryFullName,
+            "Published repository is missing."
+          ),
+          defaultBranch: requireValue(
+            job.defaultBranch,
+            "Published repository branch is missing."
+          ),
           workerName: job.workerName,
           files: material.files,
           runtimeVars: material.runtimeVars,
           resources,
           signal,
-        }),
+        })
       );
-      return complete(input, job, leaseToken, { nextStep: "dispatch_workflow", values: result }, deps);
+      return complete(
+        input,
+        job,
+        leaseToken,
+        { nextStep: "dispatch_workflow", values: result },
+        deps
+      );
     }
     case "dispatch_workflow": {
-      const sourceSha = requireValue(job.commitSha, "Published source commit is missing.");
+      const sourceSha = requireValue(
+        job.commitSha,
+        "Published source commit is missing."
+      );
       if (job.dispatchRequestedAt) {
         const run = await bounded(deps.externalTimeoutMs, signal =>
           deps.external.findWorkflowRun({
-            repositoryFullName: requireValue(job.repositoryFullName, "Published repository is missing."),
+            repositoryFullName: requireValue(
+              job.repositoryFullName,
+              "Published repository is missing."
+            ),
             publishJobId: job.id,
             sourceSha,
             afterWorkflowRunId: job.workflowRunId,
             signal,
-          }),
+          })
         );
         const checkedAt = deps.now();
         if (!run) {
-          if (checkedAt.getTime() - job.dispatchRequestedAt.getTime() <= RECONCILIATION_WINDOW_MS) {
-            return complete(input, job, leaseToken, {
-              nextStep: "dispatch_workflow",
-              values: { workflowCheckedAt: checkedAt },
-            }, deps);
+          if (
+            checkedAt.getTime() - job.dispatchRequestedAt.getTime() <=
+            RECONCILIATION_WINDOW_MS
+          ) {
+            return complete(
+              input,
+              job,
+              leaseToken,
+              {
+                nextStep: "dispatch_workflow",
+                values: { workflowCheckedAt: checkedAt },
+              },
+              deps
+            );
           }
           throw new PublisherManualAttentionError(
-            "Workflow dispatch cannot be correlated; automatic redispatch is disabled.",
+            "Workflow dispatch cannot be correlated; automatic redispatch is disabled."
           );
         }
         assertWorkflow(run, job);
-        return complete(input, job, leaseToken, {
-          nextStep: "monitor_workflow",
-          values: {
-            workflowRunId: run.workflowRunId,
-            workflowStatus: run.status,
-            workflowCheckedAt: checkedAt,
+        return complete(
+          input,
+          job,
+          leaseToken,
+          {
+            nextStep: "monitor_workflow",
+            values: {
+              workflowRunId: run.workflowRunId,
+              workflowStatus: run.status,
+              workflowCheckedAt: checkedAt,
+            },
           },
-        }, deps);
+          deps
+        );
       }
       const requestedAt = deps.now();
       const marked = await deps.store.markDispatchRequested({
@@ -371,39 +524,67 @@ async function execute(
       if (!marked) return current(input, deps.store);
       await bounded(deps.externalTimeoutMs, signal =>
         deps.external.dispatchWorkflow({
-          repositoryFullName: requireValue(marked.repositoryFullName, "Published repository is missing."),
-          defaultBranch: requireValue(marked.defaultBranch, "Published repository branch is missing."),
+          repositoryFullName: requireValue(
+            marked.repositoryFullName,
+            "Published repository is missing."
+          ),
+          defaultBranch: requireValue(
+            marked.defaultBranch,
+            "Published repository branch is missing."
+          ),
           commitSha: sourceSha,
           publishJobId: marked.id,
           signal,
-        }),
+        })
       );
-      return complete(input, marked, leaseToken, {
-        nextStep: "dispatch_workflow",
-        values: { dispatchRequestedAt: requestedAt },
-      }, deps);
+      return complete(
+        input,
+        marked,
+        leaseToken,
+        {
+          nextStep: "dispatch_workflow",
+          values: { dispatchRequestedAt: requestedAt },
+        },
+        deps
+      );
     }
     case "monitor_workflow": {
       const run = await bounded(deps.externalTimeoutMs, signal =>
         deps.external.getWorkflowRun({
-          repositoryFullName: requireValue(job.repositoryFullName, "Published repository is missing."),
-          workflowRunId: requireValue(job.workflowRunId, "Workflow run ID is missing."),
+          repositoryFullName: requireValue(
+            job.repositoryFullName,
+            "Published repository is missing."
+          ),
+          workflowRunId: requireValue(
+            job.workflowRunId,
+            "Workflow run ID is missing."
+          ),
           signal,
-        }),
+        })
       );
       assertWorkflow(run, job);
       const checkedAt = deps.now();
       if (run.status !== "completed") {
-        return complete(input, job, leaseToken, {
-          nextStep: "monitor_workflow",
-          values: { workflowStatus: run.status, workflowCheckedAt: checkedAt },
-        }, deps);
+        return complete(
+          input,
+          job,
+          leaseToken,
+          {
+            nextStep: "monitor_workflow",
+            values: {
+              workflowStatus: run.status,
+              workflowCheckedAt: checkedAt,
+            },
+          },
+          deps
+        );
       }
       if (run.conclusion !== "success") {
         const failed = await deps.store.fail({
           jobId: job.id,
           leaseToken,
-          message: "Deployment workflow failed. Retry to redeploy the existing paid funnel source.",
+          message:
+            "Deployment workflow failed. Retry to redeploy the existing paid funnel source.",
           now: checkedAt,
           resumeStep: "dispatch_workflow",
           values: {
@@ -412,39 +593,64 @@ async function execute(
             workflowCheckedAt: checkedAt,
           },
         });
-        return failed ? toGenericPaidFunnelPublishStatus(failed) : current(input, deps.store);
+        return failed
+          ? toGenericPaidFunnelPublishStatus(failed)
+          : current(input, deps.store);
       }
-      return complete(input, job, leaseToken, {
-        nextStep: "patch_runtime_secrets",
-        values: { workflowStatus: "success", workflowCheckedAt: checkedAt },
-      }, deps);
+      return complete(
+        input,
+        job,
+        leaseToken,
+        {
+          nextStep: "patch_runtime_secrets",
+          values: { workflowStatus: "success", workflowCheckedAt: checkedAt },
+        },
+        deps
+      );
     }
     case "patch_runtime_secrets": {
-      const material = await deps.loadMaterial(input.clientId, input.funnelId);
+      const material = openGenericPaidFunnelMaterialSnapshot(
+        job.materialSnapshotEncrypted
+      );
       await bounded(deps.externalTimeoutMs, signal =>
         deps.external.patchRuntimeSecrets({
           workerName: job.workerName,
           runtimeSecrets: material.runtimeSecrets,
           signal,
-        }),
+        })
       );
-      return complete(input, job, leaseToken, {
-        nextStep: "get_live_url",
-        values: { runtimeSecretsPatchedAt: deps.now() },
-      }, deps);
+      return complete(
+        input,
+        job,
+        leaseToken,
+        {
+          nextStep: "get_live_url",
+          values: { runtimeSecretsPatchedAt: deps.now() },
+        },
+        deps
+      );
     }
     case "get_live_url": {
       const result = await bounded(deps.externalTimeoutMs, signal =>
-        deps.external.getWorkersDevStatus({ workerName: job.workerName, signal }),
+        deps.external.getWorkersDevStatus({
+          workerName: job.workerName,
+          signal,
+        })
       );
       const url = new URL(result.liveUrl);
       if (url.protocol !== "https:" || !url.hostname.endsWith(".workers.dev")) {
         throw new Error("A workers.dev deployment URL is required.");
       }
-      return complete(input, job, leaseToken, {
-        nextStep: "published",
-        values: { liveUrl: result.liveUrl },
-      }, deps);
+      return complete(
+        input,
+        job,
+        leaseToken,
+        {
+          nextStep: "published",
+          values: { liveUrl: result.liveUrl },
+        },
+        deps
+      );
     }
     case "published":
       return toGenericPaidFunnelPublishStatus(job);
@@ -453,16 +659,26 @@ async function execute(
 
 export async function startGenericPaidFunnelPublish(
   input: { clientId: number; funnelId: number },
-  deps: GenericPaidFunnelPublishDependencies,
+  deps: GenericPaidFunnelPublishDependencies
 ): Promise<GenericPaidFunnelPublishStatusView> {
+  await bounded(deps.externalTimeoutMs, signal =>
+    deps.external.preflightDeploymentCredentials({ signal })
+  );
   const material = await deps.loadMaterial(input.clientId, input.funnelId);
-  const names = genericPaidFunnelResourceNames(material.clientShortName, input.funnelId);
+  const names = genericPaidFunnelResourceNames(
+    material.clientShortName,
+    input.funnelId
+  );
   const job = await deps.store.start({
     ...input,
     ...names,
     templateKey: material.templateKey,
     templateVersion: material.templateVersion,
-    resourceDefinitions: genericPaidFunnelResourceDefinitions(material.package, names.resourceName),
+    resourceDefinitions: genericPaidFunnelResourceDefinitions(
+      material.package,
+      names.resourceName
+    ),
+    materialSnapshotEncrypted: sealGenericPaidFunnelMaterialSnapshot(material),
     now: deps.now(),
   });
   return toGenericPaidFunnelPublishStatus(job);
@@ -470,7 +686,7 @@ export async function startGenericPaidFunnelPublish(
 
 export async function advanceGenericPaidFunnelPublish(
   input: OwnerInput,
-  deps: GenericPaidFunnelPublishDependencies,
+  deps: GenericPaidFunnelPublishDependencies
 ): Promise<GenericPaidFunnelPublishStatusView> {
   const now = deps.now();
   const leaseToken = deps.createLeaseToken();
@@ -486,6 +702,20 @@ export async function advanceGenericPaidFunnelPublish(
   try {
     return await execute(input, job, leaseToken, deps);
   } catch (error) {
+    const provenNoEffect = error instanceof PublisherProvenNoEffectError;
+    const recovery = provenNoEffect
+      ? job.step === "create_repository"
+        ? {
+            resumeStep: "create_repository" as const,
+            values: { repositoryCreateRequestedAt: null },
+          }
+        : job.step === "dispatch_workflow"
+          ? {
+              resumeStep: "dispatch_workflow" as const,
+              values: { dispatchRequestedAt: null },
+            }
+          : {}
+      : {};
     const failed = await deps.store.fail({
       jobId: job.id,
       leaseToken,
@@ -494,8 +724,11 @@ export async function advanceGenericPaidFunnelPublish(
           ? error.message
           : "Paid funnel publish step failed. Retry to resume.",
       now: deps.now(),
+      ...recovery,
     });
-    return failed ? toGenericPaidFunnelPublishStatus(failed) : current(input, deps.store);
+    return failed
+      ? toGenericPaidFunnelPublishStatus(failed)
+      : current(input, deps.store);
   }
 }
 
@@ -505,6 +738,24 @@ function createRuntimeExternal(): GenericPaidFunnelPublishExternal {
   const github = createGitHubApiClient({ token: githubEnvironment.token });
   const cloudflare = createCloudflareApiClient(cloudflareEnvironment);
   return {
+    async preflightDeploymentCredentials(input) {
+      for (const secretName of REQUIRED_ACTIONS_SECRETS) {
+        const secret = await github.getOrganizationActionsSecret({
+          organization: githubEnvironment.owner,
+          secretName,
+          signal: input.signal,
+        });
+        if (
+          !secret ||
+          secret.name !== secretName ||
+          secret.visibility !== "all"
+        ) {
+          throw new PublisherManualAttentionError(
+            `GitHub Actions credential ${secretName} is not available to all generated repositories; manual attention is required.`
+          );
+        }
+      }
+    },
     async ensureRepository(input) {
       const description = `Generated generic paid funnel ${input.externalFunnelId}`;
       const repository = await reconcilePublicGeneratedRepository({
@@ -526,7 +777,10 @@ function createRuntimeExternal(): GenericPaidFunnelPublishExternal {
     async ensureResources(input) {
       const d1 = [] as GenericPaidFunnelProvisionedResources["d1"];
       for (const definition of input.definitions.d1) {
-        const database = await cloudflare.ensureD1Database(definition.name, input.signal);
+        const database = await cloudflare.ensureD1Database(
+          definition.name,
+          input.signal
+        );
         d1.push({ ...definition, id: database.id });
       }
       return { provisionedResources: { d1 } };
@@ -556,29 +810,55 @@ function createRuntimeExternal(): GenericPaidFunnelPublishExternal {
           content: renderGenericPaidFunnelDeployWorkflow(),
         },
       ];
+      const previousManifest = await github.getFileText({
+        ...repository,
+        path: MANAGED_FILES_MANIFEST,
+        ref: input.defaultBranch,
+        signal: input.signal,
+      });
+      const managed = genericPaidFunnelManagedFilePlan(
+        files.map(file => file.path),
+        previousManifest
+      );
+      files.push({
+        path: MANAGED_FILES_MANIFEST,
+        content: managed.manifestContent,
+      });
       const commit = await github.commitFiles({
         ...repository,
         branch: input.defaultBranch,
         message,
         files,
+        deletePaths: managed.deletePaths,
         signal: input.signal,
       });
       return { commitSha: commit.commitSha };
     },
     async dispatchWorkflow(input) {
       const repository = splitFullName(input.repositoryFullName);
-      await github.dispatchWorkflow({
-        ...repository,
-        workflow: DEPLOY_WORKFLOW,
-        ref: input.defaultBranch,
-        publishJobId: input.publishJobId,
-        sourceSha: input.commitSha,
-        signal: input.signal,
-      });
+      try {
+        await github.dispatchWorkflow({
+          ...repository,
+          workflow: DEPLOY_WORKFLOW,
+          ref: input.defaultBranch,
+          publishJobId: input.publishJobId,
+          sourceSha: input.commitSha,
+          signal: input.signal,
+        });
+      } catch (error) {
+        if (isProvenNoEffectGitHubError(error)) {
+          throw new PublisherProvenNoEffectError(
+            "Workflow dispatch was rejected before taking effect."
+          );
+        }
+        throw error;
+      }
     },
     async findWorkflowRun(input) {
       const repository = splitFullName(input.repositoryFullName);
-      const cursor = input.afterWorkflowRunId ? Number(input.afterWorkflowRunId) : undefined;
+      const cursor = input.afterWorkflowRunId
+        ? Number(input.afterWorkflowRunId)
+        : undefined;
       const run = await github.findWorkflowRun({
         ...repository,
         workflow: DEPLOY_WORKFLOW,
@@ -595,12 +875,19 @@ function createRuntimeExternal(): GenericPaidFunnelPublishExternal {
       if (!Number.isSafeInteger(workflowRunId) || workflowRunId <= 0) {
         throw new Error("Workflow run ID is invalid.");
       }
-      return github.getWorkflowRun({ ...repository, workflowRunId, signal: input.signal });
+      return github.getWorkflowRun({
+        ...repository,
+        workflowRunId,
+        signal: input.signal,
+      });
     },
     async patchRuntimeSecrets(input) {
       await cloudflare.patchWorkerSecrets({
         scriptName: input.workerName,
-        secrets: Object.entries(input.runtimeSecrets).map(([name, value]) => ({ name, value })),
+        secrets: Object.entries(input.runtimeSecrets).map(([name, value]) => ({
+          name,
+          value,
+        })),
         signal: input.signal,
       });
     },
@@ -610,7 +897,9 @@ function createRuntimeExternal(): GenericPaidFunnelPublishExternal {
         signal: input.signal,
       });
       if (!status.enabled || !status.url) {
-        throw new Error("workers.dev is not enabled for the paid funnel Worker.");
+        throw new Error(
+          "workers.dev is not enabled for the paid funnel Worker."
+        );
       }
       return { liveUrl: status.url };
     },
@@ -620,7 +909,7 @@ function createRuntimeExternal(): GenericPaidFunnelPublishExternal {
 let configuredExternal: GenericPaidFunnelPublishExternal | null = null;
 
 export function configureGenericPaidFunnelPublishExternal(
-  external: GenericPaidFunnelPublishExternal,
+  external: GenericPaidFunnelPublishExternal
 ): void {
   configuredExternal = external;
 }
@@ -639,25 +928,28 @@ function runtimeDependencies(): GenericPaidFunnelPublishDependencies {
 
 export async function startPublish(
   clientId: number,
-  funnelId: number,
+  funnelId: number
 ): Promise<GenericPaidFunnelPublishStatusView> {
-  return startGenericPaidFunnelPublish({ clientId, funnelId }, runtimeDependencies());
+  return startGenericPaidFunnelPublish(
+    { clientId, funnelId },
+    runtimeDependencies()
+  );
 }
 
 export async function advancePublish(
   clientId: number,
   funnelId: number,
-  retryFailed = false,
+  retryFailed = false
 ): Promise<GenericPaidFunnelPublishStatusView> {
   return advanceGenericPaidFunnelPublish(
     { clientId, funnelId, retryFailed },
-    runtimeDependencies(),
+    runtimeDependencies()
   );
 }
 
 export async function publishStatus(
   clientId: number,
-  funnelId: number,
+  funnelId: number
 ): Promise<GenericPaidFunnelPublishStatusView | null> {
   const job = await genericPaidFunnelPublishStore.get(clientId, funnelId);
   return job ? toGenericPaidFunnelPublishStatus(job) : null;

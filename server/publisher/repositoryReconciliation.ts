@@ -1,4 +1,8 @@
-import type { GitHubApiClient, Repository } from "./githubApi";
+import {
+  GitHubApiError,
+  type GitHubApiClient,
+  type Repository,
+} from "./githubApi";
 
 export type ReconciledRepository = Repository;
 
@@ -14,6 +18,22 @@ export class PublisherManualAttentionError extends Error {
     super(message);
     this.name = "PublisherManualAttentionError";
   }
+}
+
+export class PublisherProvenNoEffectError extends Error {
+  readonly code = "PUBLISHER_PROVEN_NO_EFFECT";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "PublisherProvenNoEffectError";
+  }
+}
+
+function isProvenNoEffectGitHubError(error: unknown): boolean {
+  return (
+    error instanceof GitHubApiError &&
+    (error.status === 403 || error.status === 404 || error.status === 422)
+  );
 }
 
 type ReconciliationInput = {
@@ -114,7 +134,7 @@ type GeneratedRepositoryReconciliationInput = {
 
 function requireExactGeneratedRepository(
   repository: ReconciledRepository,
-  input: GeneratedRepositoryReconciliationInput,
+  input: GeneratedRepositoryReconciliationInput
 ): ReconciledRepository {
   const exactFullName = `${input.owner}/${input.repository}`;
   if (
@@ -126,14 +146,14 @@ function requireExactGeneratedRepository(
     repository.description !== input.description
   ) {
     throw new PublisherManualAttentionError(
-      `Repository ${exactFullName} does not have the exact generated-funnel identity; manual attention is required.`,
+      `Repository ${exactFullName} does not have the exact generated-funnel identity; manual attention is required.`
     );
   }
   return repository;
 }
 
 async function lookupExactGeneratedRepository(
-  input: GeneratedRepositoryReconciliationInput,
+  input: GeneratedRepositoryReconciliationInput
 ): Promise<ReconciledRepository | null> {
   input.signal.throwIfAborted();
   const repository = await input.github.getRepository({
@@ -150,13 +170,13 @@ async function lookupExactGeneratedRepository(
  * durable ownership marker. A timed-out create is never repeated blindly.
  */
 export async function reconcilePublicGeneratedRepository(
-  input: GeneratedRepositoryReconciliationInput,
+  input: GeneratedRepositoryReconciliationInput
 ): Promise<ReconciledRepository> {
   const existing = await lookupExactGeneratedRepository(input);
   if (existing) return existing;
   if (!input.allowCreate) {
     throw new PublisherManualAttentionError(
-      `Repository ${input.owner}/${input.repository} was not found after an indeterminate create attempt; manual attention is required.`,
+      `Repository ${input.owner}/${input.repository} was not found after an indeterminate create attempt; manual attention is required.`
     );
   }
 
@@ -179,8 +199,15 @@ export async function reconcilePublicGeneratedRepository(
   input.signal.throwIfAborted();
   const reconciled = await lookupExactGeneratedRepository(input);
   if (reconciled) return reconciled;
-  if (createError) throw createError;
+  if (createError) {
+    if (isProvenNoEffectGitHubError(createError)) {
+      throw new PublisherProvenNoEffectError(
+        "Repository creation was rejected before taking effect."
+      );
+    }
+    throw createError;
+  }
   throw new PublisherManualAttentionError(
-    `Repository ${input.owner}/${input.repository} was created but its generated-funnel identity could not be proven; manual attention is required.`,
+    `Repository ${input.owner}/${input.repository} was created but its generated-funnel identity could not be proven; manual attention is required.`
   );
 }

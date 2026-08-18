@@ -750,11 +750,11 @@ export type InsertFunnelPublish = typeof funnelPublishes.$inferInsert;
 
 export const astroSitePublishStepEnum = pgEnum(
   "astro_site_publish_step",
-  astroSitePublishStepValues,
+  astroSitePublishStepValues
 );
 export const astroSitePublishStatusEnum = pgEnum(
   "astro_site_publish_status",
-  astroSitePublishStatusValues,
+  astroSitePublishStatusValues
 );
 
 export const astroSitePublishes = pgTable(
@@ -822,11 +822,11 @@ export const astroSitePublishes = pgTable(
   table => [
     uniqueIndex("astro_site_publishes_client_unique").on(table.clientId),
     uniqueIndex("astro_site_publishes_external_site_unique").on(
-      table.externalSiteId,
+      table.externalSiteId
     ),
     index("astro_site_publishes_status_idx").on(table.status),
     index("astro_site_publishes_lease_until_idx").on(table.leaseUntil),
-  ],
+  ]
 ).enableRLS();
 
 export type AstroSitePublish = typeof astroSitePublishes.$inferSelect;
@@ -1309,11 +1309,11 @@ export type InsertPaidFunnelPublishRow =
 
 export const genericPaidFunnelPublishStepEnum = pgEnum(
   "generic_paid_funnel_publish_step",
-  genericPaidFunnelPublishStepValues,
+  genericPaidFunnelPublishStepValues
 );
 export const genericPaidFunnelPublishStatusEnum = pgEnum(
   "generic_paid_funnel_publish_status",
-  genericPaidFunnelPublishStatusValues,
+  genericPaidFunnelPublishStatusValues
 );
 
 export const genericPaidFunnelPublishes = pgTable(
@@ -1335,8 +1335,10 @@ export const genericPaidFunnelPublishes = pgTable(
     resourceDefinitions: jsonb("resourceDefinitions")
       .$type<GenericPaidFunnelResourceDefinitions>()
       .notNull(),
-    provisionedResources: jsonb("provisionedResources")
-      .$type<GenericPaidFunnelProvisionedResources>(),
+    provisionedResources: jsonb(
+      "provisionedResources"
+    ).$type<GenericPaidFunnelProvisionedResources>(),
+    materialSnapshotEncrypted: text("materialSnapshotEncrypted"),
     releaseNumber: integer("releaseNumber").default(1).notNull(),
     step: genericPaidFunnelPublishStepEnum("step")
       .default("create_repository")
@@ -1384,11 +1386,15 @@ export const genericPaidFunnelPublishes = pgTable(
       .notNull(),
   },
   table => [
-    uniqueIndex("generic_paid_funnel_publishes_funnel_unique").on(table.funnelId),
-    uniqueIndex("generic_paid_funnel_publishes_external_unique").on(table.externalFunnelId),
+    uniqueIndex("generic_paid_funnel_publishes_funnel_unique").on(
+      table.funnelId
+    ),
+    uniqueIndex("generic_paid_funnel_publishes_external_unique").on(
+      table.externalFunnelId
+    ),
     index("generic_paid_funnel_publishes_status_idx").on(table.status),
     index("generic_paid_funnel_publishes_lease_until_idx").on(table.leaseUntil),
-  ],
+  ]
 ).enableRLS();
 
 export type GenericPaidFunnelPublish =

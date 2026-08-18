@@ -25,7 +25,7 @@ async function requireDb() {
 async function getWithDb(
   db: ReadClient,
   clientId: number,
-  funnelId: number,
+  funnelId: number
 ): Promise<GenericPaidFunnelPublish | null> {
   const rows = await db
     .select()
@@ -33,8 +33,8 @@ async function getWithDb(
     .where(
       and(
         eq(genericPaidFunnelPublishes.clientId, clientId),
-        eq(genericPaidFunnelPublishes.funnelId, funnelId),
-      ),
+        eq(genericPaidFunnelPublishes.funnelId, funnelId)
+      )
     )
     .limit(1);
   return rows[0] ?? null;
@@ -46,7 +46,7 @@ function sameJson(left: unknown, right: unknown): boolean {
 
 async function startWithDb(
   db: InsertClient,
-  input: Parameters<GenericPaidFunnelPublishStore["start"]>[0],
+  input: Parameters<GenericPaidFunnelPublishStore["start"]>[0]
 ): Promise<GenericPaidFunnelPublish> {
   const inserted = await db
     .insert(genericPaidFunnelPublishes)
@@ -60,12 +60,14 @@ async function startWithDb(
       repositoryName: input.repositoryName,
       workerName: input.workerName,
       resourceDefinitions: input.resourceDefinitions,
+      materialSnapshotEncrypted: input.materialSnapshotEncrypted,
       createdAt: input.now,
       updatedAt: input.now,
     })
     .onConflictDoNothing({ target: genericPaidFunnelPublishes.funnelId })
     .returning();
-  let job = inserted[0] ?? (await getWithDb(db, input.clientId, input.funnelId));
+  let job =
+    inserted[0] ?? (await getWithDb(db, input.clientId, input.funnelId));
   if (!job) throw new Error("Paid funnel publish job could not be started.");
   if (
     job.clientId !== input.clientId ||
@@ -74,7 +76,7 @@ async function startWithDb(
     !sameJson(job.resourceDefinitions, input.resourceDefinitions)
   ) {
     throw new Error(
-      "Existing paid funnel publish job uses a different template contract; manual attention is required.",
+      "Existing paid funnel publish job uses a different template contract; manual attention is required."
     );
   }
   if (job.status !== "published") return job;
@@ -91,6 +93,7 @@ async function startWithDb(
       workflowStatus: null,
       workflowCheckedAt: null,
       runtimeSecretsPatchedAt: null,
+      materialSnapshotEncrypted: input.materialSnapshotEncrypted,
       leaseToken: null,
       leaseUntil: null,
       lastError: null,
@@ -100,17 +103,20 @@ async function startWithDb(
     .where(
       and(
         eq(genericPaidFunnelPublishes.id, job.id),
-        eq(genericPaidFunnelPublishes.status, "published"),
-      ),
+        eq(genericPaidFunnelPublishes.status, "published")
+      )
     )
     .returning();
-  job = restarted[0] ?? (await getWithDb(db, input.clientId, input.funnelId)) ?? job;
+  job =
+    restarted[0] ??
+    (await getWithDb(db, input.clientId, input.funnelId)) ??
+    job;
   return job;
 }
 
 function setStepValues(
   target: Partial<InsertGenericPaidFunnelPublish>,
-  values: GenericPaidFunnelPublishStepValues | undefined,
+  values: GenericPaidFunnelPublishStepValues | undefined
 ): void {
   if (!values) return;
   for (const key of [
@@ -126,6 +132,7 @@ function setStepValues(
     "workflowStatus",
     "workflowCheckedAt",
     "runtimeSecretsPatchedAt",
+    "repositoryCreateRequestedAt",
   ] as const) {
     if (key in values) target[key] = values[key] as never;
   }
@@ -133,7 +140,7 @@ function setStepValues(
 
 async function completeWithDb(
   db: UpdateClient,
-  input: Parameters<GenericPaidFunnelPublishStore["complete"]>[0],
+  input: Parameters<GenericPaidFunnelPublishStore["complete"]>[0]
 ): Promise<GenericPaidFunnelPublish | null> {
   const set: Partial<InsertGenericPaidFunnelPublish> = {
     step: input.completion.nextStep,
@@ -141,7 +148,8 @@ async function completeWithDb(
     leaseToken: null,
     leaseUntil: null,
     lastError: null,
-    completedAt: input.completion.nextStep === "published" ? input.now : undefined,
+    completedAt:
+      input.completion.nextStep === "published" ? input.now : undefined,
     updatedAt: input.now,
   };
   setStepValues(set, input.completion.values);
@@ -152,8 +160,8 @@ async function completeWithDb(
       and(
         eq(genericPaidFunnelPublishes.id, input.jobId),
         eq(genericPaidFunnelPublishes.leaseToken, input.leaseToken),
-        eq(genericPaidFunnelPublishes.step, input.expectedStep),
-      ),
+        eq(genericPaidFunnelPublishes.step, input.expectedStep)
+      )
     )
     .returning();
   return rows[0] ?? null;
@@ -186,13 +194,13 @@ export const genericPaidFunnelPublishStore: GenericPaidFunnelPublishStore = {
             ? ne(genericPaidFunnelPublishes.status, "published")
             : or(
                 eq(genericPaidFunnelPublishes.status, "pending"),
-                eq(genericPaidFunnelPublishes.status, "running"),
+                eq(genericPaidFunnelPublishes.status, "running")
               ),
           or(
             isNull(genericPaidFunnelPublishes.leaseUntil),
-            lt(genericPaidFunnelPublishes.leaseUntil, input.now),
-          ),
-        ),
+            lt(genericPaidFunnelPublishes.leaseUntil, input.now)
+          )
+        )
       )
       .returning();
     return rows[0] ?? null;
@@ -201,14 +209,17 @@ export const genericPaidFunnelPublishStore: GenericPaidFunnelPublishStore = {
     const db = await requireDb();
     const rows = await db
       .update(genericPaidFunnelPublishes)
-      .set({ repositoryCreateRequestedAt: input.requestedAt, updatedAt: input.requestedAt })
+      .set({
+        repositoryCreateRequestedAt: input.requestedAt,
+        updatedAt: input.requestedAt,
+      })
       .where(
         and(
           eq(genericPaidFunnelPublishes.id, input.jobId),
           eq(genericPaidFunnelPublishes.leaseToken, input.leaseToken),
           eq(genericPaidFunnelPublishes.step, "create_repository"),
-          isNull(genericPaidFunnelPublishes.repositoryCreateRequestedAt),
-        ),
+          isNull(genericPaidFunnelPublishes.repositoryCreateRequestedAt)
+        )
       )
       .returning();
     return rows[0] ?? null;
@@ -217,14 +228,17 @@ export const genericPaidFunnelPublishStore: GenericPaidFunnelPublishStore = {
     const db = await requireDb();
     const rows = await db
       .update(genericPaidFunnelPublishes)
-      .set({ dispatchRequestedAt: input.requestedAt, updatedAt: input.requestedAt })
+      .set({
+        dispatchRequestedAt: input.requestedAt,
+        updatedAt: input.requestedAt,
+      })
       .where(
         and(
           eq(genericPaidFunnelPublishes.id, input.jobId),
           eq(genericPaidFunnelPublishes.leaseToken, input.leaseToken),
           eq(genericPaidFunnelPublishes.step, "dispatch_workflow"),
-          isNull(genericPaidFunnelPublishes.dispatchRequestedAt),
-        ),
+          isNull(genericPaidFunnelPublishes.dispatchRequestedAt)
+        )
       )
       .returning();
     return rows[0] ?? null;
@@ -261,8 +275,8 @@ export const genericPaidFunnelPublishStore: GenericPaidFunnelPublishStore = {
       .where(
         and(
           eq(genericPaidFunnelPublishes.id, input.jobId),
-          eq(genericPaidFunnelPublishes.leaseToken, input.leaseToken),
-        ),
+          eq(genericPaidFunnelPublishes.leaseToken, input.leaseToken)
+        )
       )
       .returning();
     return rows[0] ?? null;

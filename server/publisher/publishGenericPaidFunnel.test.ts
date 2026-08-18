@@ -3,7 +3,14 @@ import type {
   GenericPaidFunnelPublishDependencies,
   GenericPaidFunnelPublishJob,
 } from "./publishGenericPaidFunnel";
-import { advanceGenericPaidFunnelPublish } from "./publishGenericPaidFunnel";
+import {
+  PublisherProvenNoEffectError,
+  advanceGenericPaidFunnelPublish,
+  genericPaidFunnelManagedFilePlan,
+  startGenericPaidFunnelPublish,
+} from "./publishGenericPaidFunnel";
+import { decryptSetupValue } from "../clientSecurity";
+import { sealGenericPaidFunnelMaterialSnapshot } from "./genericPaidFunnelMaterial";
 
 function jobFixture(): GenericPaidFunnelPublishJob {
   const now = new Date("2026-08-18T12:00:00.000Z");
@@ -21,7 +28,9 @@ function jobFixture(): GenericPaidFunnelPublishJob {
       d1: [{ binding: "FUNNEL_DB", name: "funnel-north-star-7-1" }],
     },
     provisionedResources: {
-      d1: [{ binding: "FUNNEL_DB", name: "funnel-north-star-7-1", id: "d1-id" }],
+      d1: [
+        { binding: "FUNNEL_DB", name: "funnel-north-star-7-1", id: "d1-id" },
+      ],
     },
     releaseNumber: 1,
     step: "monitor_workflow",
@@ -38,6 +47,7 @@ function jobFixture(): GenericPaidFunnelPublishJob {
     workflowStatus: "in_progress",
     workflowCheckedAt: now,
     runtimeSecretsPatchedAt: null,
+    materialSnapshotEncrypted: "v2.test.snapshot.payload",
     leaseToken: null,
     leaseUntil: null,
     lastError: null,
@@ -65,14 +75,19 @@ function inMemoryDependencies(initial: GenericPaidFunnelPublishJob) {
     headSha: "source-sha",
     displayTitle: `Deploy ${initial.id} source-sha`,
   });
-  const unused = vi.fn().mockRejectedValue(new Error("unexpected external call"));
+  const unused = vi
+    .fn()
+    .mockRejectedValue(new Error("unexpected external call"));
   const deps: GenericPaidFunnelPublishDependencies = {
     now: () => new Date(++clock),
     createLeaseToken: () => "22222222-2222-4222-8222-222222222222",
     leaseDurationMs: 30_000,
     externalTimeoutMs: 5_000,
-    loadMaterial: vi.fn().mockRejectedValue(new Error("unexpected material load")),
+    loadMaterial: vi
+      .fn()
+      .mockRejectedValue(new Error("unexpected material load")),
     external: {
+      preflightDeploymentCredentials: vi.fn().mockResolvedValue(undefined),
       ensureRepository: unused,
       ensureResources: unused,
       commitSource: unused,
@@ -86,7 +101,11 @@ function inMemoryDependencies(initial: GenericPaidFunnelPublishJob) {
       start: vi.fn(),
       get: async () => ({ ...job }),
       claim: async input => {
-        if (job.status === "published" || (job.status === "failed" && !input.allowFailed)) return null;
+        if (
+          job.status === "published" ||
+          (job.status === "failed" && !input.allowFailed)
+        )
+          return null;
         job = {
           ...job,
           status: "running",
@@ -98,19 +117,41 @@ function inMemoryDependencies(initial: GenericPaidFunnelPublishJob) {
         };
         return { ...job };
       },
-      markRepositoryCreateRequested: vi.fn(),
+      markRepositoryCreateRequested: async input => {
+        if (
+          job.repositoryCreateRequestedAt ||
+          job.leaseToken !== input.leaseToken
+        )
+          return null;
+        job = {
+          ...job,
+          repositoryCreateRequestedAt: input.requestedAt,
+          updatedAt: input.requestedAt,
+        };
+        return { ...job };
+      },
       markDispatchRequested: async input => {
-        if (job.dispatchRequestedAt || job.leaseToken !== input.leaseToken) return null;
-        job = { ...job, dispatchRequestedAt: input.requestedAt, updatedAt: input.requestedAt };
+        if (job.dispatchRequestedAt || job.leaseToken !== input.leaseToken)
+          return null;
+        job = {
+          ...job,
+          dispatchRequestedAt: input.requestedAt,
+          updatedAt: input.requestedAt,
+        };
         return { ...job };
       },
       complete: async input => {
-        if (job.leaseToken !== input.leaseToken || job.step !== input.expectedStep) return null;
+        if (
+          job.leaseToken !== input.leaseToken ||
+          job.step !== input.expectedStep
+        )
+          return null;
         job = {
           ...job,
           ...input.completion.values,
           step: input.completion.nextStep,
-          status: input.completion.nextStep === "published" ? "published" : "pending",
+          status:
+            input.completion.nextStep === "published" ? "published" : "pending",
           leaseToken: null,
           leaseUntil: null,
           lastError: null,
@@ -134,7 +175,13 @@ function inMemoryDependencies(initial: GenericPaidFunnelPublishJob) {
       },
     },
   };
-  return { deps, dispatchWorkflow, findWorkflowRun, getWorkflowRun, current: () => job };
+  return {
+    deps,
+    dispatchWorkflow,
+    findWorkflowRun,
+    getWorkflowRun,
+    current: () => job,
+  };
 }
 
 describe("generic Astro paid funnel workflow Retry", () => {
@@ -143,7 +190,7 @@ describe("generic Astro paid funnel workflow Retry", () => {
 
     const failed = await advanceGenericPaidFunnelPublish(
       { clientId: 5, funnelId: 7 },
-      harness.deps,
+      harness.deps
     );
     expect(failed).toMatchObject({
       status: "failed",
@@ -155,14 +202,17 @@ describe("generic Astro paid funnel workflow Retry", () => {
 
     const dispatched = await advanceGenericPaidFunnelPublish(
       { clientId: 5, funnelId: 7, retryFailed: true },
-      harness.deps,
+      harness.deps
     );
-    expect(dispatched).toMatchObject({ status: "pending", step: "dispatch_workflow" });
+    expect(dispatched).toMatchObject({
+      status: "pending",
+      step: "dispatch_workflow",
+    });
     expect(harness.dispatchWorkflow).toHaveBeenCalledTimes(1);
 
     const reconciled = await advanceGenericPaidFunnelPublish(
       { clientId: 5, funnelId: 7 },
-      harness.deps,
+      harness.deps
     );
     expect(reconciled).toMatchObject({
       status: "pending",
@@ -171,7 +221,10 @@ describe("generic Astro paid funnel workflow Retry", () => {
     });
     expect(harness.dispatchWorkflow).toHaveBeenCalledTimes(1);
     expect(harness.findWorkflowRun).toHaveBeenCalledWith(
-      expect.objectContaining({ afterWorkflowRunId: "100", sourceSha: "source-sha" }),
+      expect.objectContaining({
+        afterWorkflowRunId: "100",
+        sourceSha: "source-sha",
+      })
     );
     expect(harness.getWorkflowRun).toHaveBeenCalledTimes(1);
     expect(harness.deps.external.ensureRepository).not.toHaveBeenCalled();
@@ -192,7 +245,7 @@ describe("generic Astro paid funnel workflow Retry", () => {
 
     const result = await advanceGenericPaidFunnelPublish(
       { clientId: 5, funnelId: 7 },
-      harness.deps,
+      harness.deps
     );
 
     expect(result).toMatchObject({
@@ -202,5 +255,219 @@ describe("generic Astro paid funnel workflow Retry", () => {
     });
     expect(harness.deps.loadMaterial).not.toHaveBeenCalled();
     expect(harness.deps.external.commitSource).not.toHaveBeenCalled();
+  });
+
+  it("clears a dispatch marker after a proven no-effect failure so Retry can dispatch", async () => {
+    const harness = inMemoryDependencies({
+      ...jobFixture(),
+      step: "dispatch_workflow",
+      status: "pending",
+      dispatchRequestedAt: null,
+      workflowRunId: null,
+      workflowStatus: null,
+    });
+    harness.dispatchWorkflow
+      .mockRejectedValueOnce(
+        new PublisherProvenNoEffectError("dispatch rejected")
+      )
+      .mockResolvedValueOnce(undefined);
+
+    const failed = await advanceGenericPaidFunnelPublish(
+      { clientId: 5, funnelId: 7 },
+      harness.deps
+    );
+    expect(failed).toMatchObject({
+      status: "failed",
+      step: "dispatch_workflow",
+      dispatchRequestedAt: null,
+    });
+
+    await advanceGenericPaidFunnelPublish(
+      { clientId: 5, funnelId: 7, retryFailed: true },
+      harness.deps
+    );
+    expect(harness.dispatchWorkflow).toHaveBeenCalledTimes(2);
+  });
+
+  it("retains a dispatch marker after an ambiguous failure", async () => {
+    const harness = inMemoryDependencies({
+      ...jobFixture(),
+      step: "dispatch_workflow",
+      status: "pending",
+      dispatchRequestedAt: null,
+      workflowRunId: null,
+      workflowStatus: null,
+    });
+    harness.dispatchWorkflow.mockRejectedValueOnce(
+      new Error("connection ended")
+    );
+
+    const failed = await advanceGenericPaidFunnelPublish(
+      { clientId: 5, funnelId: 7 },
+      harness.deps
+    );
+    expect(failed).toMatchObject({
+      status: "failed",
+      step: "dispatch_workflow",
+      dispatchRequestedAt: expect.any(Date),
+    });
+  });
+
+  it("clears a repository-create marker after a proven no-effect failure", async () => {
+    const harness = inMemoryDependencies({
+      ...jobFixture(),
+      step: "create_repository",
+      status: "pending",
+      repositoryCreateRequestedAt: null,
+      repositoryId: null,
+      repositoryFullName: null,
+      repositoryUrl: null,
+      defaultBranch: null,
+      provisionedResources: null,
+      commitSha: null,
+      dispatchRequestedAt: null,
+      workflowRunId: null,
+      workflowStatus: null,
+    });
+    harness.deps.external.ensureRepository = vi.fn(async input => {
+      await input.markCreateRequested();
+      throw new PublisherProvenNoEffectError("repository rejected");
+    });
+
+    const failed = await advanceGenericPaidFunnelPublish(
+      { clientId: 5, funnelId: 7 },
+      harness.deps
+    );
+    expect(failed).toMatchObject({
+      status: "failed",
+      step: "create_repository",
+    });
+    expect(harness.current().repositoryCreateRequestedAt).toBeNull();
+  });
+
+  it("uses one encrypted snapshot for source and secret steps", async () => {
+    const previousKey = process.env.SECRETS_ENCRYPTION_KEY;
+    process.env.SECRETS_ENCRYPTION_KEY = "test-only-publisher-snapshot-key";
+    try {
+      const materialSnapshotEncrypted = sealGenericPaidFunnelMaterialSnapshot({
+        files: [{ path: "src/pages/index.astro", content: "release source" }],
+        runtimeVars: { META_PIXEL_ID: "123456789012345" },
+        runtimeSecrets: { META_CAPI_ACCESS_TOKEN: "release-secret" },
+      });
+      const commitHarness = inMemoryDependencies({
+        ...jobFixture(),
+        step: "commit_source",
+        materialSnapshotEncrypted,
+        dispatchRequestedAt: null,
+        workflowRunId: null,
+        workflowStatus: null,
+      });
+      const commitSource = vi
+        .fn()
+        .mockResolvedValue({ commitSha: "snapshot-sha" });
+      commitHarness.deps.external.commitSource = commitSource;
+      await advanceGenericPaidFunnelPublish(
+        { clientId: 5, funnelId: 7 },
+        commitHarness.deps
+      );
+      expect(commitSource).toHaveBeenCalledWith(
+        expect.objectContaining({
+          files: [{ path: "src/pages/index.astro", content: "release source" }],
+          runtimeVars: { META_PIXEL_ID: "123456789012345" },
+        })
+      );
+      expect(commitHarness.deps.loadMaterial).not.toHaveBeenCalled();
+
+      const secretHarness = inMemoryDependencies({
+        ...jobFixture(),
+        step: "patch_runtime_secrets",
+        materialSnapshotEncrypted,
+        workflowStatus: "success",
+      });
+      const patchRuntimeSecrets = vi.fn().mockResolvedValue(undefined);
+      secretHarness.deps.external.patchRuntimeSecrets = patchRuntimeSecrets;
+      await advanceGenericPaidFunnelPublish(
+        { clientId: 5, funnelId: 7 },
+        secretHarness.deps
+      );
+      expect(patchRuntimeSecrets).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runtimeSecrets: { META_CAPI_ACCESS_TOKEN: "release-secret" },
+        })
+      );
+      expect(secretHarness.deps.loadMaterial).not.toHaveBeenCalled();
+    } finally {
+      if (previousKey === undefined) delete process.env.SECRETS_ENCRYPTION_KEY;
+      else process.env.SECRETS_ENCRYPTION_KEY = previousKey;
+    }
+  });
+
+  it("preflights deployment credentials before loading material or creating a job", async () => {
+    const harness = inMemoryDependencies(jobFixture());
+    const failure = new Error("credentials unavailable");
+    vi.mocked(
+      harness.deps.external.preflightDeploymentCredentials
+    ).mockRejectedValue(failure);
+
+    await expect(
+      startGenericPaidFunnelPublish({ clientId: 5, funnelId: 7 }, harness.deps)
+    ).rejects.toBe(failure);
+    expect(harness.deps.loadMaterial).not.toHaveBeenCalled();
+    expect(harness.deps.store.start).not.toHaveBeenCalled();
+  });
+});
+
+describe("generic Astro managed-file manifest", () => {
+  it("deletes stale publisher-owned files and leaves unmanaged files alone", () => {
+    const previousKey = process.env.SECRETS_ENCRYPTION_KEY;
+    process.env.SECRETS_ENCRYPTION_KEY = "test-only-managed-files-key";
+    try {
+      const previous = genericPaidFunnelManagedFilePlan(
+        ["src/pages/index.astro", "src/pages/old.astro", "package.json"],
+        null
+      );
+      const plan = genericPaidFunnelManagedFilePlan(
+        ["src/pages/index.astro", "package.json"],
+        previous.manifestContent
+      );
+      expect(plan.deletePaths).toEqual(["src/pages/old.astro"]);
+      expect(JSON.parse(decryptSetupValue(plan.manifestContent))).toEqual({
+        version: 1,
+        paths: ["package.json", "src/pages/index.astro"],
+      });
+    } finally {
+      if (previousKey === undefined) delete process.env.SECRETS_ENCRYPTION_KEY;
+      else process.env.SECRETS_ENCRYPTION_KEY = previousKey;
+    }
+  });
+
+  it("never infers deletions when a prior publisher manifest is absent", () => {
+    const previousKey = process.env.SECRETS_ENCRYPTION_KEY;
+    process.env.SECRETS_ENCRYPTION_KEY = "test-only-managed-files-key";
+    try {
+      expect(
+        genericPaidFunnelManagedFilePlan(["src/pages/index.astro"], null)
+          .deletePaths
+      ).toEqual([]);
+    } finally {
+      if (previousKey === undefined) delete process.env.SECRETS_ENCRYPTION_KEY;
+      else process.env.SECRETS_ENCRYPTION_KEY = previousKey;
+    }
+  });
+
+  it("refuses a customer-edited manifest instead of deleting untrusted paths", () => {
+    const previousKey = process.env.SECRETS_ENCRYPTION_KEY;
+    process.env.SECRETS_ENCRYPTION_KEY = "test-only-managed-files-key";
+    try {
+      expect(() =>
+        genericPaidFunnelManagedFilePlan(
+          ["src/pages/index.astro"],
+          JSON.stringify({ version: 1, paths: ["customer-notes.txt"] })
+        )
+      ).toThrow(/manual attention/i);
+    } finally {
+      if (previousKey === undefined) delete process.env.SECRETS_ENCRYPTION_KEY;
+      else process.env.SECRETS_ENCRYPTION_KEY = previousKey;
+    }
   });
 });

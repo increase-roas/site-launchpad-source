@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { GitHubApiError } from "./githubApi";
 import {
+  PublisherProvenNoEffectError,
   reconcilePublicGeneratedRepository,
   reconcilePublicTemplateRepository,
   type RepositoryReconciliationClient,
@@ -260,37 +262,96 @@ describe("generated repository reconciliation", () => {
 
   it("reconciles a lost create response using the exact durable description marker", async () => {
     const github = {
-      getRepository: vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(repository),
-      createPublicRepository: vi.fn().mockRejectedValueOnce(new Error("response lost")),
+      getRepository: vi
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(repository),
+      createPublicRepository: vi
+        .fn()
+        .mockRejectedValueOnce(new Error("response lost")),
     };
     const markCreateRequested = vi.fn().mockResolvedValue(undefined);
-    await expect(reconcilePublicGeneratedRepository({
-      github,
-      owner: "launchpad-sites",
-      repository: "funnel-northland-7",
-      description: repository.description,
-      allowCreate: true,
-      markCreateRequested,
-      signal: new AbortController().signal,
-    })).resolves.toEqual(repository);
+    await expect(
+      reconcilePublicGeneratedRepository({
+        github,
+        owner: "launchpad-sites",
+        repository: "funnel-northland-7",
+        description: repository.description,
+        allowCreate: true,
+        markCreateRequested,
+        signal: new AbortController().signal,
+      })
+    ).resolves.toEqual(repository);
     expect(markCreateRequested).toHaveBeenCalledTimes(1);
     expect(github.createPublicRepository).toHaveBeenCalledTimes(1);
   });
 
   it("refuses an existing repository without the exact funnel ownership marker", async () => {
     const github = {
-      getRepository: vi.fn().mockResolvedValue({ ...repository, description: "someone else's repo" }),
+      getRepository: vi
+        .fn()
+        .mockResolvedValue({
+          ...repository,
+          description: "someone else's repo",
+        }),
       createPublicRepository: vi.fn(),
     };
-    await expect(reconcilePublicGeneratedRepository({
-      github,
-      owner: "launchpad-sites",
-      repository: "funnel-northland-7",
-      description: repository.description,
-      allowCreate: true,
-      markCreateRequested: vi.fn(),
-      signal: new AbortController().signal,
-    })).rejects.toThrow(/manual attention/i);
+    await expect(
+      reconcilePublicGeneratedRepository({
+        github,
+        owner: "launchpad-sites",
+        repository: "funnel-northland-7",
+        description: repository.description,
+        allowCreate: true,
+        markCreateRequested: vi.fn(),
+        signal: new AbortController().signal,
+      })
+    ).rejects.toThrow(/manual attention/i);
     expect(github.createPublicRepository).not.toHaveBeenCalled();
+  });
+
+  it("classifies a rejected create as proven no-effect only after absence is reconciled", async () => {
+    const github = {
+      getRepository: vi.fn().mockResolvedValue(null),
+      createPublicRepository: vi
+        .fn()
+        .mockRejectedValue(new GitHubApiError("create repository", 422)),
+    };
+
+    await expect(
+      reconcilePublicGeneratedRepository({
+        github,
+        owner: "launchpad-sites",
+        repository: "funnel-northland-7",
+        description: repository.description,
+        allowCreate: true,
+        markCreateRequested: vi.fn(),
+        signal: new AbortController().signal,
+      })
+    ).rejects.toBeInstanceOf(PublisherProvenNoEffectError);
+    expect(github.getRepository).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a post-create reconciliation failure ambiguous", async () => {
+    const reconciliationError = new GitHubApiError("get repository", 403);
+    const github = {
+      getRepository: vi
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockRejectedValueOnce(reconciliationError),
+      createPublicRepository: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await expect(
+      reconcilePublicGeneratedRepository({
+        github,
+        owner: "launchpad-sites",
+        repository: "funnel-northland-7",
+        description: repository.description,
+        allowCreate: true,
+        markCreateRequested: vi.fn(),
+        signal: new AbortController().signal,
+      })
+    ).rejects.toBe(reconciliationError);
   });
 });
