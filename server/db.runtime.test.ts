@@ -167,6 +167,21 @@ describe("database operation resilience", () => {
           if (currentTableIndex === 2) {
             return trackRead("secretSetups", []);
           }
+          if (currentTableIndex === 3) {
+            return trackRead("integrationProfiles", []);
+          }
+          if (currentTableIndex === 4) {
+            return trackRead("websitePublishes", []);
+          }
+          if (currentTableIndex === 5) {
+            return trackRead("funnels", []);
+          }
+          if (currentTableIndex === 6) {
+            return trackRead("simpleFormPublishes", []);
+          }
+          if (currentTableIndex === 7) {
+            return trackRead("genericFunnelPublishes", []);
+          }
           throw new Error("Unexpected table.");
         }),
       })),
@@ -181,11 +196,25 @@ describe("database operation resilience", () => {
       clients: [],
       assets: [],
       secretSetups: [],
+      integrationProfiles: [],
+      websitePublishes: [],
+      funnels: [],
+      simpleFormPublishes: [],
+      genericFunnelPublishes: [],
     });
 
     expect(database.POSTGRES_RUNTIME_OPTIONS.max).toBe(1);
     expect(maxConcurrentReads).toBe(1);
-    expect(readOrder).toEqual(["clients", "assets", "secretSetups"]);
+    expect(readOrder).toEqual([
+      "clients",
+      "assets",
+      "secretSetups",
+      "integrationProfiles",
+      "websitePublishes",
+      "funnels",
+      "simpleFormPublishes",
+      "genericFunnelPublishes",
+    ]);
     expect(client.end).not.toHaveBeenCalled();
   });
 

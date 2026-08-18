@@ -100,6 +100,19 @@ describe("readiness", () => {
     expect(readiness.items.find(item => item.key === "secret-metaPixelId")?.complete).toBe(false);
   });
 
+  it("does not let missing GA4 or Clarity block overall launch readiness", () => {
+    const readiness = buildReadiness(validClientInput, ASSET_SLOT_VALUES, {
+      ...completeSecrets,
+      ga4MeasurementId: false,
+      clarityId: false,
+    });
+    expect(readiness.total).toBe(14);
+    expect(readiness.isComplete).toBe(true);
+    expect(readiness.items.find(item => item.key === "secret-ga4MeasurementId")?.complete).toBe(
+      false,
+    );
+  });
+
   it("uses the deterministic filenames expected by the website template", () => {
     expect(ASSET_SLOT_FILENAMES).toEqual({
       logo: "logo.webp",

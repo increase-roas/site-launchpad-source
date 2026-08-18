@@ -1,6 +1,14 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import type { ClientSecretSetup } from "../../drizzle/schema";
+import type {
+  AstroSitePublish,
+  Client,
+  ClientAsset,
+  ClientIntegrationProfile,
+  ClientSecretSetup,
+  FunnelPublish,
+  GenericPaidFunnelPublish,
+} from "../../drizzle/schema";
 import {
   SECRET_FIELD_VALUES,
   buildReadiness,
@@ -21,9 +29,7 @@ import {
 import {
   createClientWithSecrets,
   createDraftClient,
-  getClientAssets,
   getClientById,
-  getClientSecretSetup,
   getClientViewData,
   listClientViewData,
   saveClientSecretSetup,
@@ -32,12 +38,14 @@ import {
 import {
   loadOrBackfillResolvedClientIntegrationProfile,
   saveClientIntegrationProfile,
+  toProfileDto,
 } from "../clientIntegrations";
 import { encryptSetupValue, hasProtectedValue } from "../clientSecurity";
 import { observeRuntimeOperation } from "../_core/operationTelemetry";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { UpdateConflictError, isDuplicateKeyError, mapRouterError } from "../trpcErrors";
-import type { Client, ClientAsset } from "../../drizzle/schema";
+import { wranglerSecretStatusFromProfile } from "../astroConfigDb";
+import { buildOperationalSummary } from "../../shared/operationalSummary";
 
 const secretColumnByField = {
   metaPixelId: "metaPixelIdEncrypted",
@@ -154,26 +162,65 @@ const saveIntegrationProfileInputSchema = z
     }
   });
 
-function clientViewFrom(client: Client, assets: ClientAsset[], secretRow: ClientSecretSetup | undefined) {
+function clientViewFrom(
+  client: Client,
+  assets: ClientAsset[],
+  secretRow: ClientSecretSetup | undefined,
+  launch: {
+    profile?: ClientIntegrationProfile;
+    websitePublish?: AstroSitePublish;
+    simpleFormPublishes?: FunnelPublish[];
+    genericFunnelPublishes?: GenericPaidFunnelPublish[];
+  } = {},
+) {
   const secretStatus = secretStatusFromRow(secretRow);
   const readiness = buildReadiness(
     client as unknown as ClientInput,
     assets.map(asset => asset.slot).filter(isAssetSlot),
     secretStatus,
   );
-  return { client, assets, secretStatus, readiness };
+  const profileDto = toProfileDto(launch.profile, client.id);
+  const funnelPublishes = [
+    ...(launch.simpleFormPublishes ?? []),
+    ...(launch.genericFunnelPublishes ?? []),
+  ].map(job => ({ status: job.status, liveUrl: job.liveUrl }));
+  const operationalSummary = buildOperationalSummary({
+    client: client as unknown as ClientInput,
+    presentAssetSlots: assets.map(asset => asset.slot).filter(isAssetSlot),
+    websiteIntegrationsReady: profileDto.readiness.websiteReady,
+    funnelIntegrationsReady: profileDto.readiness.funnelReady,
+    websitePublish: launch.websitePublish
+      ? { status: launch.websitePublish.status, liveUrl: launch.websitePublish.liveUrl }
+      : null,
+    funnelPublishes,
+    secretStatus: wranglerSecretStatusFromProfile(profileDto),
+  });
+  return { client, assets, secretStatus, readiness, operationalSummary };
 }
 
 export async function getClientView(clientId: number) {
-  const { client, assets, secretSetup } = await getClientViewData(clientId);
+  const data = await getClientViewData(clientId);
 
-  if (!client) throw new TRPCError({ code: "NOT_FOUND", message: "Client not found." });
-  return clientViewFrom(client, assets, secretSetup);
+  if (!data.client) throw new TRPCError({ code: "NOT_FOUND", message: "Client not found." });
+  return clientViewFrom(data.client, data.assets, data.secretSetup, {
+    profile: data.integrationProfile,
+    websitePublish: data.websitePublish,
+    simpleFormPublishes: data.simpleFormPublishes,
+    genericFunnelPublishes: data.genericFunnelPublishes,
+  });
 }
 
 export const clientsRouter = router({
   list: protectedProcedure.query(async () => {
-    const { clients: rows, assets, secretSetups: secretRows } =
+    const {
+      clients: rows,
+      assets,
+      secretSetups: secretRows,
+      integrationProfiles,
+      websitePublishes,
+      simpleFormPublishes,
+      genericFunnelPublishes,
+    } =
       await observeRuntimeOperation(
         "clients_list_database",
         listClientViewData,
@@ -185,7 +232,28 @@ export const clientsRouter = router({
       assetsByClient.set(asset.clientId, current);
     }
     const secretsByClient = new Map(secretRows.map(row => [row.clientId, row]));
-    return rows.map(row => clientViewFrom(row, assetsByClient.get(row.id) ?? [], secretsByClient.get(row.id)));
+    const profilesByClient = new Map(integrationProfiles.map(row => [row.clientId, row]));
+    const websiteByClient = new Map(websitePublishes.map(row => [row.clientId, row]));
+    const simpleByClient = new Map<number, FunnelPublish[]>();
+    for (const job of simpleFormPublishes) {
+      const current = simpleByClient.get(job.clientId) ?? [];
+      current.push(job);
+      simpleByClient.set(job.clientId, current);
+    }
+    const genericByClient = new Map<number, GenericPaidFunnelPublish[]>();
+    for (const job of genericFunnelPublishes) {
+      const current = genericByClient.get(job.clientId) ?? [];
+      current.push(job);
+      genericByClient.set(job.clientId, current);
+    }
+    return rows.map(row =>
+      clientViewFrom(row, assetsByClient.get(row.id) ?? [], secretsByClient.get(row.id), {
+        profile: profilesByClient.get(row.id),
+        websitePublish: websiteByClient.get(row.id),
+        simpleFormPublishes: simpleByClient.get(row.id) ?? [],
+        genericFunnelPublishes: genericByClient.get(row.id) ?? [],
+      }),
+    );
   }),
 
   get: protectedProcedure

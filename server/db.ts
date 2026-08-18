@@ -4,15 +4,25 @@ import postgres from "postgres";
 import {
   Client,
   ClientAsset,
+  ClientIntegrationProfile,
   ClientSecretSetup,
+  Funnel,
+  FunnelPublish,
+  GenericPaidFunnelPublish,
   InsertClient,
   InsertClientSecretSetup,
   InsertUser,
   User,
+  astroSitePublishes,
   clientAssets,
+  clientIntegrationProfiles,
   clientSecretSetups,
   clients,
+  funnelPublishes,
+  funnels,
+  genericPaidFunnelPublishes,
   users,
+  type AstroSitePublish,
 } from "../drizzle/schema";
 import { CLOSED_BUSINESS_HOURS, sanitizeClientFolder } from "../shared/client";
 import {
@@ -221,6 +231,11 @@ export type ClientListViewData = {
   clients: Client[];
   assets: ClientAsset[];
   secretSetups: ClientSecretSetup[];
+  integrationProfiles: ClientIntegrationProfile[];
+  websitePublishes: AstroSitePublish[];
+  funnels: Funnel[];
+  simpleFormPublishes: FunnelPublish[];
+  genericFunnelPublishes: GenericPaidFunnelPublish[];
 };
 
 export async function listClientViewData(): Promise<ClientListViewData> {
@@ -231,7 +246,21 @@ export async function listClientViewData(): Promise<ClientListViewData> {
       .orderBy(desc(clients.updatedAt));
     const assets = await database.select().from(clientAssets);
     const secretSetups = await database.select().from(clientSecretSetups);
-    return { clients: clientRows, assets, secretSetups };
+    const integrationProfiles = await database.select().from(clientIntegrationProfiles);
+    const websitePublishes = await database.select().from(astroSitePublishes);
+    const funnelRows = await database.select().from(funnels);
+    const simpleFormPublishes = await database.select().from(funnelPublishes);
+    const genericFunnelPublishes = await database.select().from(genericPaidFunnelPublishes);
+    return {
+      clients: clientRows,
+      assets,
+      secretSetups,
+      integrationProfiles,
+      websitePublishes,
+      funnels: funnelRows,
+      simpleFormPublishes,
+      genericFunnelPublishes,
+    };
   });
 }
 
@@ -320,6 +349,11 @@ export type ClientViewData = {
   client: Client | undefined;
   assets: ClientAsset[];
   secretSetup: ClientSecretSetup | undefined;
+  integrationProfile: ClientIntegrationProfile | undefined;
+  websitePublish: AstroSitePublish | undefined;
+  funnels: Funnel[];
+  simpleFormPublishes: FunnelPublish[];
+  genericFunnelPublishes: GenericPaidFunnelPublish[];
 };
 
 export async function getClientViewData(
@@ -340,10 +374,37 @@ export async function getClientViewData(
       .from(clientSecretSetups)
       .where(eq(clientSecretSetups.clientId, clientId))
       .limit(1);
+    const profileRows = await database
+      .select()
+      .from(clientIntegrationProfiles)
+      .where(eq(clientIntegrationProfiles.clientId, clientId))
+      .limit(1);
+    const websiteRows = await database
+      .select()
+      .from(astroSitePublishes)
+      .where(eq(astroSitePublishes.clientId, clientId))
+      .limit(1);
+    const funnelRows = await database
+      .select()
+      .from(funnels)
+      .where(eq(funnels.clientId, clientId));
+    const simpleFormPublishes = await database
+      .select()
+      .from(funnelPublishes)
+      .where(eq(funnelPublishes.clientId, clientId));
+    const genericFunnelPublishes = await database
+      .select()
+      .from(genericPaidFunnelPublishes)
+      .where(eq(genericPaidFunnelPublishes.clientId, clientId));
     return {
       client: clientRows[0],
       assets,
       secretSetup: secretRows[0],
+      integrationProfile: profileRows[0],
+      websitePublish: websiteRows[0],
+      funnels: funnelRows,
+      simpleFormPublishes,
+      genericFunnelPublishes,
     };
   });
 }

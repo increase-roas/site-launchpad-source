@@ -86,6 +86,11 @@ export const CLIENT_READINESS_SECRET_FIELD_VALUES = [
   "cloudflareProjectName",
 ] as const satisfies readonly SecretField[];
 
+export const OPTIONAL_CLIENT_READINESS_SECRET_FIELDS = [
+  "ga4MeasurementId",
+  "clarityId",
+] as const satisfies readonly SecretField[];
+
 export const SECRET_FIELD_LABELS: Record<SecretField, string> = {
   metaPixelId: "Meta Pixel ID",
   ga4MeasurementId: "GA4 Measurement ID",
@@ -287,7 +292,7 @@ export type ReadinessSummary = {
   isComplete: boolean;
 };
 
-const businessInformationSchema = clientInputSchema.omit({ theme: true });
+export const businessInformationSchema = clientInputSchema.omit({ theme: true });
 
 export function buildReadiness(
   client: Partial<ClientInput>,
@@ -330,13 +335,19 @@ export function buildReadiness(
 
   const completed = items.filter(item => item.complete).length;
   const total = items.length;
+  const optionalSecretKeys = new Set(
+    OPTIONAL_CLIENT_READINESS_SECRET_FIELDS.map(field => `secret-${field}`),
+  );
+  const blockingIncomplete = items.some(
+    item => !item.complete && !optionalSecretKeys.has(item.key),
+  );
 
   return {
     items,
     completed,
     total,
     percent: Math.round((completed / total) * 100),
-    isComplete: completed === total,
+    isComplete: !blockingIncomplete,
   };
 }
 

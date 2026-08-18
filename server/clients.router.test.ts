@@ -140,7 +140,16 @@ describe("client launch gating", () => {
       const clients = await mocks.listClients();
       const assets = await mocks.listClientAssets();
       const secretSetups = await mocks.listClientSecretSetups();
-      return { clients, assets, secretSetups };
+      return {
+        clients,
+        assets,
+        secretSetups,
+        integrationProfiles: [],
+        websitePublishes: [],
+        funnels: [],
+        simpleFormPublishes: [],
+        genericFunnelPublishes: [],
+      };
     });
     mocks.createClientWithSecrets.mockResolvedValue(7);
     mocks.createDraftClient.mockResolvedValue(7);
@@ -160,6 +169,8 @@ describe("client launch gating", () => {
     expect(list[0]?.client.id).toBe(7);
     expect(detail.client.businessName).toBe("Paradise Spas");
     expect(detail.readiness.isComplete).toBe(false);
+    expect(detail.operationalSummary.statusLabel).toBe("Setup needed");
+    expect(detail.operationalSummary.items).toHaveLength(6);
     expect(mocks.listClientViewData).toHaveBeenCalledTimes(1);
     expect(mocks.getClientViewData).toHaveBeenCalledWith(7);
   });
