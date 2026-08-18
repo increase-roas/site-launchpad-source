@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { dropIndexFromPointer } from "./canvas";
 import { findNode } from "./graph";
 import { setButtonAction } from "./ops";
+import { studioToStorageGraph } from "./persist";
 import {
   addStudioSurveyQuestion,
   canDeleteStudioSurveyQuestion,
@@ -16,6 +17,22 @@ import {
 } from "./store";
 
 describe("paid funnel builder session helpers", () => {
+  it("keeps generated node ids unique across separate palette insert actions", () => {
+    let state = createStudioState(createDocumentFromFixture(2, "session-unique-ids"));
+    state = insertPaletteOnCanvas(state, { source: "section", preset: "image-choice-hero" });
+    state = insertPaletteOnCanvas(state, { source: "section", preset: "numbered-steps" });
+
+    expect(() => studioToStorageGraph(state.document.graph)).not.toThrow();
+    const ids = state.document.graph.pages.landing.sections.flatMap(section => [
+      section.id,
+      ...section.rows.flatMap(row => [
+        row.id,
+        ...row.columns.flatMap(column => [column.id, ...column.elements.map(element => element.id)]),
+      ]),
+    ]);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   it("computes insertion indexes from pointer position", () => {
     expect(dropIndexFromPointer(0, 10, 0, 100)).toBe(0);
     expect(dropIndexFromPointer(4, 0, 0, 100)).toBe(0);

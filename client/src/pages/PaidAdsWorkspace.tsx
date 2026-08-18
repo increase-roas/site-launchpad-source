@@ -383,6 +383,18 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
 
   useEffect(() => {
     if (!studio) return;
+    if (
+      studio.document.saveStatus === "saving" &&
+      (!studio.document.funnelId || !studio.document.stepId || !studio.document.expectedUpdatedAt)
+    ) {
+      setStudio(current =>
+        current
+          ? { ...current, document: { ...current.document, saveStatus: "error", conflict: false } }
+          : current,
+      );
+      toast.error("This funnel is missing its saved identity. Reload it before editing again.");
+      return;
+    }
     if (!shouldStartAutosave({
       document: studio.document,
       flight: autosaveFlight.current,
@@ -398,14 +410,24 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
         stepId: snapshot.document.stepId,
         editSeq: snapshot.document.editSeq,
       };
+      let storageGraph: ReturnType<typeof studioToStorageGraph>;
+      let persistSteps: ReturnType<typeof studioToPersistSteps>;
+      try {
+        storageGraph = studioToStorageGraph(snapshot.document.graph);
+        persistSteps = studioToPersistSteps(snapshot.document.graph);
+      } catch (error) {
+        markAutosaveError(request, false);
+        toast.error(error instanceof Error ? error.message : "This funnel could not be prepared for saving.");
+        return;
+      }
       autosaveFlight.current = beginAutosave(request);
       saveGraphMutation.mutate({
         clientId,
         funnelId: request.funnelId,
         stepId: request.stepId,
         expectedUpdatedAt: new Date(snapshot.document.expectedUpdatedAt),
-        graph: studioToStorageGraph(snapshot.document.graph),
-        steps: studioToPersistSteps(snapshot.document.graph),
+        graph: storageGraph,
+        steps: persistSteps,
       }, {
         onSuccess: async detail => {
           const flight = autosaveFlight.current;

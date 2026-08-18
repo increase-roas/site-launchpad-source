@@ -134,6 +134,27 @@ function retargetIds<T>(value: T, nextId: () => string): T {
   return walk(value) as T;
 }
 
+function createGraphIdFactory(graph: PaidFunnelGraph, prefix: string): () => string {
+  const used = new Set<string>();
+  const visit = (node: GraphNode) => {
+    used.add(node.id);
+    if (node.kind === "page") node.sections.forEach(visit);
+    if (node.kind === "section") node.rows.forEach(visit);
+    if (node.kind === "row") node.columns.forEach(visit);
+    if (node.kind === "column") node.elements.forEach(visit);
+  };
+  Object.values(graph.pages).forEach(visit);
+  graph.reusableSections.forEach(section => used.add(section.id));
+
+  const candidate = createIdFactory(prefix);
+  return () => {
+    let id = candidate();
+    while (used.has(id)) id = candidate();
+    used.add(id);
+    return id;
+  };
+}
+
 function mutatePage(graph: PaidFunnelGraph, pageId: string, update: (page: FunnelPage) => FunnelPage): PaidFunnelGraph {
   const next = cloneNode(graph);
   for (const [key, page] of Object.entries(next.pages)) {
@@ -163,7 +184,7 @@ export function insertPaletteItem(
   target: DropTarget,
   item: PaletteItem,
   createPreset: (preset: PaidFunnelSectionPreset, nextId: () => string) => FunnelSection,
-  nextId = createIdFactory("ins"),
+  nextId = createGraphIdFactory(graph, "ins"),
 ): PaidFunnelGraph {
   if (!isValidDrop(target, item)) {
     throw new Error("That block cannot be dropped on this target.");
@@ -323,7 +344,7 @@ export function moveNode(graph: PaidFunnelGraph, id: string, target: DropTarget)
   });
 }
 
-export function duplicateNode(graph: PaidFunnelGraph, id: string, nextId = createIdFactory("dup")): PaidFunnelGraph {
+export function duplicateNode(graph: PaidFunnelGraph, id: string, nextId = createGraphIdFactory(graph, "dup")): PaidFunnelGraph {
   const found = findNode(graph, id);
   if (!found?.parent) throw new Error("The page cannot be duplicated.");
   const clone = retargetIds(cloneNode(found.node), nextId);
@@ -486,7 +507,7 @@ export function saveReusableSection(
   sectionId: string,
   name: string,
   now = new Date().toISOString(),
-  nextId = createIdFactory("reuse"),
+  nextId = createGraphIdFactory(graph, "reuse"),
 ): PaidFunnelGraph {
   const found = findNode(graph, sectionId);
   if (!found || found.node.kind !== "section") throw new Error("Only sections can be saved as reusable.");
@@ -559,7 +580,7 @@ export function pasteNode(
   graph: PaidFunnelGraph,
   target: DropTarget,
   clipboard: StudioClipboard,
-  nextId = createIdFactory("paste"),
+  nextId = createGraphIdFactory(graph, "paste"),
 ): PaidFunnelGraph {
   if (!isValidDrop(target, clipboard)) {
     throw new Error("Clipboard contents cannot be pasted on this target.");
