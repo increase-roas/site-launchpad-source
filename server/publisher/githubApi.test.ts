@@ -473,6 +473,13 @@ describe("GitHub publisher client", () => {
             head_sha: "newer-branch-sha",
             display_title: EXPECTED_WORKFLOW_TITLE,
           },
+          {
+            id: 4,
+            status: "queued",
+            conclusion: null,
+            head_sha: "newer-branch-sha",
+            display_title: EXPECTED_WORKFLOW_TITLE,
+          },
         ],
       }),
     ]);
@@ -488,11 +495,12 @@ describe("GitHub publisher client", () => {
         workflow: "deploy.yml",
         publishJobId: "publish-job-123",
         sourceSha: PERSISTED_SOURCE_SHA,
+        afterWorkflowRunId: 3,
         signal: abortSignal(),
       })
     ).resolves.toEqual({
-      id: 3,
-      status: "in_progress",
+      id: 4,
+      status: "queued",
       conclusion: null,
       headSha: "newer-branch-sha",
       displayTitle: EXPECTED_WORKFLOW_TITLE,

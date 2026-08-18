@@ -955,7 +955,7 @@ describe("Simple Form publish state machine", () => {
     expect(external.findWorkflowRun).toHaveBeenCalledTimes(2);
   });
 
-  it("never redispatches after a correlated workflow run fails", async () => {
+  it("retries a correlated failed workflow from dispatch without recreating prior work", async () => {
     const store = new MemoryPublishStore();
     const external = externalMocks();
     vi.mocked(external.getWorkflowRun).mockResolvedValue({
@@ -976,11 +976,53 @@ describe("Simple Form publish state machine", () => {
     );
     expect(failed).toMatchObject({
       status: "failed",
-      step: "monitor_workflow",
-      error: expect.stringMatching(/manual attention/i),
+      step: "dispatch_workflow",
+      dispatchRequestedAt: null,
+      workflowRunId: "run-501",
+      error: expect.stringMatching(/retry/i),
     });
-    await advanceSimpleFormPublish({ clientId: 5, funnelId: 11 }, deps);
-    expect(external.dispatchWorkflow).toHaveBeenCalledTimes(1);
+
+    const retried = await advanceSimpleFormPublish(
+      { clientId: 5, funnelId: 11 },
+      deps
+    );
+
+    expect(retried).toMatchObject({
+      id: failed.id,
+      status: "pending",
+      step: "dispatch_workflow",
+      dispatchRequestedAt: FIRST_NOW,
+      workflowRunId: "run-501",
+    });
+    vi.mocked(external.findWorkflowRun).mockResolvedValueOnce({
+      workflowRunId: "run-502",
+      status: "queued",
+      conclusion: null,
+      headSha: "newer-default-branch-head",
+      displayTitle: EXPECTED_WORKFLOW_TITLE,
+    });
+
+    const reconciledRetry = await advanceSimpleFormPublish(
+      { clientId: 5, funnelId: 11 },
+      deps
+    );
+
+    expect(reconciledRetry).toMatchObject({
+      id: failed.id,
+      status: "pending",
+      step: "monitor_workflow",
+      workflowRunId: "run-502",
+    });
+    expect(external.ensureRepository).toHaveBeenCalledTimes(1);
+    expect(external.ensureKvNamespace).toHaveBeenCalledTimes(1);
+    expect(external.ensureD1Database).toHaveBeenCalledTimes(1);
+    expect(external.ensureQueues).toHaveBeenCalledTimes(1);
+    expect(external.commitSource).toHaveBeenCalledTimes(1);
+    expect(external.dispatchWorkflow).toHaveBeenCalledTimes(2);
+    expect(external.getWorkflowRun).toHaveBeenCalledTimes(1);
+    expect(external.findWorkflowRun).toHaveBeenLastCalledWith(
+      expect.objectContaining({ afterWorkflowRunId: "run-501" })
+    );
   });
 
   it("rejects a workflow run whose display title has a different source SHA", async () => {

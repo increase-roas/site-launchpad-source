@@ -180,6 +180,7 @@ export interface SimpleFormPublishExternal {
     workflow: string;
     publishJobId: string;
     sourceSha: string;
+    afterWorkflowRunId: string | null;
     signal: AbortSignal;
   }): Promise<{
     workflowRunId: string;
@@ -696,6 +697,7 @@ async function runDispatchStep(
           workflow: "deploy.yml",
           publishJobId: claimed.id,
           sourceSha,
+          afterWorkflowRunId: claimed.workflowRunId,
           signal,
         })
     );
@@ -841,9 +843,11 @@ async function runMonitorWorkflowStep(
       jobId: claimed.id,
       leaseToken,
       message:
-        "Deployment workflow failed; manual attention is required and automatic redispatch is disabled.",
+        "Deployment workflow failed. Retry to redeploy the existing published source.",
       now: checkedAt,
+      resumeStep: "dispatch_workflow",
       values: {
+        dispatchRequestedAt: null,
         workflowStatus: result.conclusion ?? "failure",
         workflowCheckedAt: checkedAt,
       },
@@ -1146,12 +1150,22 @@ function createRuntimeExternal(): SimpleFormPublishExternal {
     },
     async findWorkflowRun(input) {
       const repository = splitRepositoryFullName(input.repositoryFullName);
+      const afterWorkflowRunId = input.afterWorkflowRunId
+        ? Number(input.afterWorkflowRunId)
+        : undefined;
+      if (
+        afterWorkflowRunId !== undefined &&
+        (!Number.isSafeInteger(afterWorkflowRunId) || afterWorkflowRunId <= 0)
+      ) {
+        throw new Error("Previous workflow run ID is invalid.");
+      }
       const run = await github.findWorkflowRun({
         owner: repository.owner,
         repository: repository.repository,
         workflow: input.workflow,
         publishJobId: input.publishJobId,
         sourceSha: input.sourceSha,
+        afterWorkflowRunId,
         signal: input.signal,
       });
       return run

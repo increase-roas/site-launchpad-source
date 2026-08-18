@@ -102,6 +102,7 @@ export type GitHubApiClient = {
     workflow: string;
     publishJobId: string;
     sourceSha: string;
+    afterWorkflowRunId?: number;
     signal: AbortSignal;
   }): Promise<WorkflowRun | null>;
 };
@@ -518,7 +519,9 @@ export function createGitHubApiClient(options: {
       );
       return (
         parseWorkflowRuns(response).find(
-          run => run.displayTitle === expectedDisplayTitle
+          run =>
+            run.id > (input.afterWorkflowRunId ?? 0) &&
+            run.displayTitle === expectedDisplayTitle
         ) ?? null
       );
     },
