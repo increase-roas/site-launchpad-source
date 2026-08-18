@@ -198,11 +198,14 @@ export const clientLeadIntegrations = pgTable(
       .defaultNow()
       .notNull(),
   },
-  table => [index("client_lead_integrations_updated_at_idx").on(table.updatedAt)]
+  table => [
+    index("client_lead_integrations_updated_at_idx").on(table.updatedAt),
+  ]
 ).enableRLS();
 
 export type ClientLeadIntegration = typeof clientLeadIntegrations.$inferSelect;
-export type InsertClientLeadIntegration = typeof clientLeadIntegrations.$inferInsert;
+export type InsertClientLeadIntegration =
+  typeof clientLeadIntegrations.$inferInsert;
 
 export const assetSlotValues = [
   "logo",
@@ -785,3 +788,426 @@ export const homepageSections = pgTable(
 
 export type HomepageSection = typeof homepageSections.$inferSelect;
 export type InsertHomepageSection = typeof homepageSections.$inferInsert;
+
+export const clientIntegrationReconciliationStatusValues = [
+  "pending",
+  "ready",
+  "conflict",
+] as const;
+export type ClientIntegrationReconciliationStatusValue =
+  (typeof clientIntegrationReconciliationStatusValues)[number];
+
+export const clientIntegrationReconciliationStatusEnum = pgEnum(
+  "client_integration_reconciliation_status",
+  clientIntegrationReconciliationStatusValues
+);
+
+export const clientIntegrationProfiles = pgTable(
+  "client_integration_profiles",
+  {
+    clientId: integer("clientId")
+      .primaryKey()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    profileVersion: integer("profileVersion").default(1).notNull(),
+    ghlLocationId: text("ghlLocationId"),
+    googleSheetsId: text("googleSheetsId"),
+    metaPixelId: text("metaPixelId"),
+    secretsEncrypted: text("secretsEncrypted"),
+    reconciliationStatus: clientIntegrationReconciliationStatusEnum(
+      "reconciliationStatus"
+    )
+      .default("pending")
+      .notNull(),
+    conflictedKeys: jsonb("conflictedKeys").$type<string[]>().notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  table => [
+    index("client_integration_profiles_updated_at_idx").on(table.updatedAt),
+  ]
+).enableRLS();
+
+export type ClientIntegrationProfile =
+  typeof clientIntegrationProfiles.$inferSelect;
+export type InsertClientIntegrationProfile =
+  typeof clientIntegrationProfiles.$inferInsert;
+
+export const paidFunnelFrameworkValues = [
+  "static-html",
+  "astro",
+  "unknown",
+] as const;
+export type PaidFunnelFrameworkValue =
+  (typeof paidFunnelFrameworkValues)[number];
+
+export const paidFunnelVersionStatusValues = [
+  "draft",
+  "ready",
+  "unsupported",
+] as const;
+export type PaidFunnelVersionStatus =
+  (typeof paidFunnelVersionStatusValues)[number];
+
+export const paidFunnelSourceValues = ["fixture", "zip", "template"] as const;
+export type PaidFunnelSource = (typeof paidFunnelSourceValues)[number];
+
+export const paidFunnelStepKindValues = [
+  "landing",
+  "form",
+  "thankYou",
+  "booking",
+  "upsell",
+  "custom",
+] as const;
+export type PaidFunnelStepKind = (typeof paidFunnelStepKindValues)[number];
+
+export const paidFunnelStepStateValues = [
+  "draft",
+  "preview",
+  "published",
+] as const;
+export type PaidFunnelStepState = (typeof paidFunnelStepStateValues)[number];
+
+export const paidFunnelPublishAdapterValues = [
+  "generic-paid-funnel",
+  "legacy-simple-form",
+] as const;
+export type PaidFunnelPublishAdapterValue =
+  (typeof paidFunnelPublishAdapterValues)[number];
+
+export const paidFunnelPublishJobStatusValues = [
+  "pending",
+  "running",
+  "failed",
+  "published",
+] as const;
+export type PaidFunnelPublishJobStatus =
+  (typeof paidFunnelPublishJobStatusValues)[number];
+
+export const paidFunnelArtifactKindValues = [
+  "zip",
+  "asset",
+  "preview",
+] as const;
+export type PaidFunnelArtifactKind =
+  (typeof paidFunnelArtifactKindValues)[number];
+
+export const paidFunnelFrameworkEnum = pgEnum(
+  "paid_funnel_framework",
+  paidFunnelFrameworkValues
+);
+export const paidFunnelVersionStatusEnum = pgEnum(
+  "paid_funnel_version_status",
+  paidFunnelVersionStatusValues
+);
+export const paidFunnelSourceEnum = pgEnum(
+  "paid_funnel_source",
+  paidFunnelSourceValues
+);
+export const paidFunnelStepKindEnum = pgEnum(
+  "paid_funnel_step_kind",
+  paidFunnelStepKindValues
+);
+export const paidFunnelStepStateEnum = pgEnum(
+  "paid_funnel_step_state",
+  paidFunnelStepStateValues
+);
+export const paidFunnelPublishAdapterEnum = pgEnum(
+  "paid_funnel_publish_adapter",
+  paidFunnelPublishAdapterValues
+);
+export const paidFunnelPublishJobStatusEnum = pgEnum(
+  "paid_funnel_publish_job_status",
+  paidFunnelPublishJobStatusValues
+);
+export const paidFunnelArtifactKindEnum = pgEnum(
+  "paid_funnel_artifact_kind",
+  paidFunnelArtifactKindValues
+);
+
+export const paidFunnelTemplates = pgTable(
+  "paid_funnel_templates",
+  {
+    id: serial("id").primaryKey(),
+    templateKey: varchar("templateKey", { length: 80 }).notNull(),
+    name: varchar("name", { length: 160 }).notNull(),
+    kind: varchar("kind", { length: 40 }).default("paid-funnel").notNull(),
+    active: integer("active").default(1).notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  table => [
+    uniqueIndex("paid_funnel_templates_key_unique").on(table.templateKey),
+  ]
+).enableRLS();
+
+export type PaidFunnelTemplate = typeof paidFunnelTemplates.$inferSelect;
+export type InsertPaidFunnelTemplate = typeof paidFunnelTemplates.$inferInsert;
+
+export const paidFunnelTemplateVersions = pgTable(
+  "paid_funnel_template_versions",
+  {
+    id: serial("id").primaryKey(),
+    templateId: integer("templateId")
+      .notNull()
+      .references(() => paidFunnelTemplates.id, { onDelete: "cascade" }),
+    version: varchar("version", { length: 40 }).notNull(),
+    framework: paidFunnelFrameworkEnum("framework").notNull(),
+    packageJson: jsonb("packageJson")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    status: paidFunnelVersionStatusEnum("status").default("draft").notNull(),
+    unsupportedErrors: jsonb("unsupportedErrors")
+      .$type<Array<{ path: string; reason: string }>>()
+      .notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  table => [
+    uniqueIndex("paid_funnel_template_versions_unique").on(
+      table.templateId,
+      table.version
+    ),
+    index("paid_funnel_template_versions_template_idx").on(table.templateId),
+  ]
+).enableRLS();
+
+export type PaidFunnelTemplateVersion =
+  typeof paidFunnelTemplateVersions.$inferSelect;
+export type InsertPaidFunnelTemplateVersion =
+  typeof paidFunnelTemplateVersions.$inferInsert;
+
+export const paidFunnelTemplateArtifacts = pgTable(
+  "paid_funnel_template_artifacts",
+  {
+    id: serial("id").primaryKey(),
+    versionId: integer("versionId")
+      .notNull()
+      .references(() => paidFunnelTemplateVersions.id, { onDelete: "cascade" }),
+    storageKey: varchar("storageKey", { length: 800 }).notNull(),
+    filename: varchar("filename", { length: 240 }).notNull(),
+    mimeType: varchar("mimeType", { length: 120 }).notNull(),
+    byteSize: integer("byteSize").notNull(),
+    kind: paidFunnelArtifactKindEnum("kind").default("zip").notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  table => [
+    index("paid_funnel_template_artifacts_version_idx").on(table.versionId),
+  ]
+).enableRLS();
+
+export type PaidFunnelTemplateArtifact =
+  typeof paidFunnelTemplateArtifacts.$inferSelect;
+export type InsertPaidFunnelTemplateArtifact =
+  typeof paidFunnelTemplateArtifacts.$inferInsert;
+
+export const paidFunnels = pgTable(
+  "paid_funnels",
+  {
+    id: serial("id").primaryKey(),
+    clientId: integer("clientId")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    templateVersionId: integer("templateVersionId").references(
+      () => paidFunnelTemplateVersions.id,
+      { onDelete: "set null" }
+    ),
+    name: varchar("name", { length: 160 }).notNull(),
+    slug: varchar("slug", { length: 240 }).notNull(),
+    source: paidFunnelSourceEnum("source").notNull(),
+    status: workspaceStatusEnum("status").default("draft").notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  table => [
+    uniqueIndex("paid_funnels_client_slug_unique").on(
+      table.clientId,
+      table.slug
+    ),
+    index("paid_funnels_client_idx").on(table.clientId),
+  ]
+).enableRLS();
+
+export type PaidFunnel = typeof paidFunnels.$inferSelect;
+export type InsertPaidFunnel = typeof paidFunnels.$inferInsert;
+
+export const paidFunnelSteps = pgTable(
+  "paid_funnel_steps",
+  {
+    id: serial("id").primaryKey(),
+    funnelId: integer("funnelId")
+      .notNull()
+      .references(() => paidFunnels.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    key: varchar("key", { length: 80 }).notNull(),
+    stepType: paidFunnelStepKindEnum("stepType").notNull(),
+    slug: varchar("slug", { length: 240 }).notNull(),
+    title: varchar("title", { length: 160 }).notNull(),
+    seo: jsonb("seo").$type<Record<string, unknown>>().notNull(),
+    nextStep: varchar("nextStep", { length: 80 }),
+    previewState: paidFunnelStepStateEnum("previewState")
+      .default("draft")
+      .notNull(),
+    publishState: paidFunnelStepStateEnum("publishState")
+      .default("draft")
+      .notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  table => [
+    uniqueIndex("paid_funnel_steps_position_unique").on(
+      table.funnelId,
+      table.position
+    ),
+    uniqueIndex("paid_funnel_steps_key_unique").on(table.funnelId, table.key),
+    index("paid_funnel_steps_funnel_idx").on(table.funnelId),
+  ]
+).enableRLS();
+
+export type PaidFunnelStepRow = typeof paidFunnelSteps.$inferSelect;
+export type InsertPaidFunnelStepRow = typeof paidFunnelSteps.$inferInsert;
+
+export const paidFunnelGraphs = pgTable(
+  "paid_funnel_graphs",
+  {
+    id: serial("id").primaryKey(),
+    funnelId: integer("funnelId")
+      .notNull()
+      .references(() => paidFunnels.id, { onDelete: "cascade" }),
+    stepId: integer("stepId")
+      .notNull()
+      .references(() => paidFunnelSteps.id, { onDelete: "cascade" }),
+    graphVersion: integer("graphVersion").default(1).notNull(),
+    graphJson: jsonb("graphJson").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  table => [
+    uniqueIndex("paid_funnel_graphs_step_unique").on(table.stepId),
+    index("paid_funnel_graphs_funnel_idx").on(table.funnelId),
+  ]
+).enableRLS();
+
+export type PaidFunnelGraphRow = typeof paidFunnelGraphs.$inferSelect;
+export type InsertPaidFunnelGraphRow = typeof paidFunnelGraphs.$inferInsert;
+
+export const paidFunnelGraphRevisions = pgTable(
+  "paid_funnel_graph_revisions",
+  {
+    id: serial("id").primaryKey(),
+    graphId: integer("graphId")
+      .notNull()
+      .references(() => paidFunnelGraphs.id, { onDelete: "cascade" }),
+    revision: integer("revision").notNull(),
+    graphJson: jsonb("graphJson").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  table => [
+    uniqueIndex("paid_funnel_graph_revisions_unique").on(
+      table.graphId,
+      table.revision
+    ),
+    index("paid_funnel_graph_revisions_graph_idx").on(table.graphId),
+  ]
+).enableRLS();
+
+export type PaidFunnelGraphRevision =
+  typeof paidFunnelGraphRevisions.$inferSelect;
+export type InsertPaidFunnelGraphRevision =
+  typeof paidFunnelGraphRevisions.$inferInsert;
+
+export const paidFunnelReusableSections = pgTable(
+  "paid_funnel_reusable_sections",
+  {
+    id: serial("id").primaryKey(),
+    clientId: integer("clientId")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 160 }).notNull(),
+    sectionJson: jsonb("sectionJson")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  table => [
+    index("paid_funnel_reusable_sections_client_idx").on(table.clientId),
+  ]
+).enableRLS();
+
+export type PaidFunnelReusableSection =
+  typeof paidFunnelReusableSections.$inferSelect;
+export type InsertPaidFunnelReusableSection =
+  typeof paidFunnelReusableSections.$inferInsert;
+
+export const paidFunnelPublishes = pgTable(
+  "paid_funnel_publishes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    clientId: integer("clientId")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    funnelId: integer("funnelId")
+      .notNull()
+      .references(() => paidFunnels.id, { onDelete: "cascade" }),
+    stepId: integer("stepId").references(() => paidFunnelSteps.id, {
+      onDelete: "set null",
+    }),
+    adapter: paidFunnelPublishAdapterEnum("adapter").notNull(),
+    status: paidFunnelPublishJobStatusEnum("status")
+      .default("pending")
+      .notNull(),
+    previewUrl: varchar("previewUrl", { length: 1000 }),
+    liveUrl: varchar("liveUrl", { length: 1000 }),
+    lastError: text("lastError"),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  table => [
+    index("paid_funnel_publishes_funnel_idx").on(table.funnelId),
+    index("paid_funnel_publishes_status_idx").on(table.status),
+  ]
+).enableRLS();
+
+export type PaidFunnelPublishRow = typeof paidFunnelPublishes.$inferSelect;
+export type InsertPaidFunnelPublishRow =
+  typeof paidFunnelPublishes.$inferInsert;

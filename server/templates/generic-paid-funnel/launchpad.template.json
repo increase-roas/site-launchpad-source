@@ -1,0 +1,620 @@
+{
+  "schemaVersion": 1,
+  "templateKey": "generic-paid-funnel",
+  "name": "Generic Multi-Step Paid Funnel",
+  "version": "1.0.0",
+  "kind": "paid-funnel",
+  "framework": "static-html",
+  "steps": [
+    {
+      "key": "landing",
+      "type": "landing",
+      "slug": "landing",
+      "title": "Landing",
+      "seo": {
+        "title": "Landing",
+        "description": "Paid ad landing page"
+      },
+      "nextStep": "form"
+    },
+    {
+      "key": "form",
+      "type": "form",
+      "slug": "form",
+      "title": "Form",
+      "seo": {
+        "title": "Get your offer"
+      },
+      "nextStep": "thank-you"
+    },
+    {
+      "key": "thank-you",
+      "type": "thankYou",
+      "slug": "thank-you",
+      "title": "Thank You",
+      "seo": {
+        "title": "Thank you"
+      },
+      "nextStep": "booking"
+    },
+    {
+      "key": "booking",
+      "type": "booking",
+      "slug": "booking",
+      "title": "Booking",
+      "seo": {
+        "title": "Book a visit"
+      },
+      "nextStep": "upsell"
+    },
+    {
+      "key": "upsell",
+      "type": "upsell",
+      "slug": "upsell",
+      "title": "Upsell",
+      "seo": {
+        "title": "Upgrade your offer"
+      }
+    }
+  ],
+  "previewEntry": "landing.html",
+  "sectionPresets": [
+    {
+      "key": "blank",
+      "name": "Blank"
+    },
+    {
+      "key": "full-width",
+      "name": "Full width"
+    },
+    {
+      "key": "boxed",
+      "name": "Boxed"
+    },
+    {
+      "key": "hero",
+      "name": "Hero"
+    },
+    {
+      "key": "two-column",
+      "name": "Two column"
+    },
+    {
+      "key": "three-column",
+      "name": "Three column"
+    },
+    {
+      "key": "form",
+      "name": "Form"
+    },
+    {
+      "key": "testimonial",
+      "name": "Testimonial"
+    },
+    {
+      "key": "faq",
+      "name": "FAQ"
+    },
+    {
+      "key": "cta",
+      "name": "Call to action"
+    },
+    {
+      "key": "pricing",
+      "name": "Pricing"
+    },
+    {
+      "key": "footer",
+      "name": "Footer"
+    }
+  ],
+  "assets": [],
+  "configSchema": {},
+  "defaults": {
+    "fonts": {
+      "heading": "Inter",
+      "body": "Inter"
+    },
+    "colors": {
+      "primary": "#0f766e",
+      "background": "#0b1220",
+      "text": "#f8fafc"
+    },
+    "containerWidths": {
+      "desktop": "1120px",
+      "tablet": "768px",
+      "mobile": "100%"
+    }
+  },
+  "integrations": [
+    {
+      "key": "ghl",
+      "kind": "ghl"
+    },
+    {
+      "key": "sheets",
+      "kind": "sheets"
+    },
+    {
+      "key": "meta",
+      "kind": "meta"
+    },
+    {
+      "key": "consent",
+      "kind": "consent"
+    }
+  ],
+  "requiredRuntimeSecrets": [
+    "GHL_API_KEY",
+    "GHL_LOCATION_ID",
+    "GOOGLE_SHEETS_ID",
+    "GOOGLE_SERVICE_ACCOUNT_EMAIL",
+    "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
+    "META_PIXEL_ID",
+    "META_CAPI_ACCESS_TOKEN",
+    "STAGE_WEBHOOK_SECRET"
+  ],
+  "readinessRules": [
+    {
+      "id": "steps",
+      "description": "Every funnel step is complete.",
+      "check": "step-complete"
+    },
+    {
+      "id": "form-mapping",
+      "description": "Form maps to the lead contract.",
+      "check": "form-mapping"
+    },
+    {
+      "id": "navigation",
+      "description": "Every next-step target exists.",
+      "check": "navigation-target"
+    },
+    {
+      "id": "integrations",
+      "description": "Required integrations are configured.",
+      "check": "integration"
+    },
+    {
+      "id": "tracking",
+      "description": "Pixel and UTM preservation are configured.",
+      "check": "tracking"
+    },
+    {
+      "id": "secrets",
+      "description": "Required runtime secrets are present.",
+      "check": "runtime-secret-presence"
+    },
+    {
+      "id": "package",
+      "description": "Package contract is valid.",
+      "check": "package"
+    },
+    {
+      "id": "build",
+      "description": "Build command and output directory are set.",
+      "check": "build"
+    },
+    {
+      "id": "adapter",
+      "description": "Publish adapter check passes.",
+      "check": "adapter"
+    }
+  ],
+  "build": {
+    "command": "echo generic-paid-funnel",
+    "outputDir": "dist"
+  },
+  "publishAdapter": "generic-paid-funnel",
+  "resources": [],
+  "offlineConversionContract": {
+    "version": 1,
+    "joinKey": "leadUuid",
+    "callback": {
+      "method": "POST",
+      "route": "/api/lead-stage",
+      "authentication": "Bearer STAGE_WEBHOOK_SECRET"
+    },
+    "stageMappings": [
+      {
+        "pipelineStage": "Hot Pursuit",
+        "callbackStage": "qualified",
+        "metaEvent": "QualifiedLead"
+      },
+      {
+        "pipelineStage": "Appointment Set",
+        "callbackStage": "appointment",
+        "metaEvent": "Schedule"
+      },
+      {
+        "pipelineStage": "Showed",
+        "callbackStage": "show",
+        "metaEvent": "Showed"
+      },
+      {
+        "pipelineStage": "Sold",
+        "callbackStage": "sale",
+        "metaEvent": "Purchase"
+      }
+    ],
+    "requiredRuntimeSecrets": [
+      "GHL_API_KEY",
+      "GHL_LOCATION_ID",
+      "GOOGLE_SHEETS_ID",
+      "GOOGLE_SERVICE_ACCOUNT_EMAIL",
+      "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
+      "META_PIXEL_ID",
+      "META_CAPI_ACCESS_TOKEN",
+      "STAGE_WEBHOOK_SECRET"
+    ],
+    "deduplication": {
+      "idempotencyKey": "downstream_conversions.external_id",
+      "eventId": "downstream_conversions.event_id"
+    },
+    "originalAttribution": {
+      "reuse": true,
+      "fields": [
+        "first_url",
+        "original_query_string",
+        "fbc",
+        "fbp",
+        "ip_address",
+        "user_agent"
+      ]
+    },
+    "purchase": {
+      "requiresExplicitPositiveValue": true
+    }
+  },
+  "graph": {
+    "version": 1,
+    "pages": [
+      {
+        "id": "page-landing",
+        "stepKey": "landing",
+        "sections": [
+          {
+            "id": "section-landing-hero",
+            "preset": "hero",
+            "rows": [
+              {
+                "id": "row-landing-hero",
+                "columns": [
+                  {
+                    "id": "col-landing-hero",
+                    "width": {
+                      "desktop": 12
+                    },
+                    "elements": [
+                      {
+                        "id": "el-landing-heading",
+                        "type": "heading",
+                        "props": {
+                          "text": "See today's special offer",
+                          "level": 1
+                        }
+                      },
+                      {
+                        "id": "el-landing-text",
+                        "type": "text",
+                        "props": {
+                          "text": "A complete generic paid-ad funnel. No fabricated customer quotes."
+                        }
+                      },
+                      {
+                        "id": "el-landing-cta",
+                        "type": "button",
+                        "props": {
+                          "label": "Get started",
+                          "action": "next-step"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "section-landing-split",
+            "preset": "two-column",
+            "rows": [
+              {
+                "id": "row-landing-split",
+                "columns": [
+                  {
+                    "id": "col-landing-image",
+                    "width": {
+                      "desktop": 6
+                    },
+                    "elements": [
+                      {
+                        "id": "el-landing-image",
+                        "type": "image",
+                        "props": {
+                          "alt": "Showroom placeholder",
+                          "src": ""
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "col-landing-benefits",
+                    "width": {
+                      "desktop": 6
+                    },
+                    "elements": [
+                      {
+                        "id": "el-landing-list",
+                        "type": "list",
+                        "props": {
+                          "items": [
+                            "Local delivery",
+                            "In-stock models",
+                            "Financing options"
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "section-landing-cta",
+            "preset": "cta",
+            "rows": [
+              {
+                "id": "row-landing-cta",
+                "columns": [
+                  {
+                    "id": "col-landing-cta",
+                    "width": {
+                      "desktop": 12
+                    },
+                    "elements": [
+                      {
+                        "id": "el-landing-phone",
+                        "type": "phoneCta",
+                        "props": {
+                          "label": "Call now"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "section-landing-footer",
+            "preset": "footer",
+            "rows": [
+              {
+                "id": "row-landing-footer",
+                "columns": [
+                  {
+                    "id": "col-landing-footer",
+                    "width": {
+                      "desktop": 12
+                    },
+                    "elements": [
+                      {
+                        "id": "el-landing-footer",
+                        "type": "text",
+                        "props": {
+                          "text": "Paid ads funnel fixture"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "page-form",
+        "stepKey": "form",
+        "sections": [
+          {
+            "id": "section-form",
+            "preset": "form",
+            "rows": [
+              {
+                "id": "row-form",
+                "columns": [
+                  {
+                    "id": "col-form",
+                    "width": {
+                      "desktop": 12
+                    },
+                    "elements": [
+                      {
+                        "id": "el-form-heading",
+                        "type": "heading",
+                        "props": {
+                          "text": "Tell us how to reach you",
+                          "level": 2
+                        }
+                      },
+                      {
+                        "id": "el-form",
+                        "type": "form",
+                        "props": {
+                          "fields": [
+                            "firstName",
+                            "lastName",
+                            "email",
+                            "phone",
+                            "consent"
+                          ],
+                          "joinKey": "leadUuid"
+                        }
+                      },
+                      {
+                        "id": "el-form-submit",
+                        "type": "button",
+                        "props": {
+                          "label": "Submit",
+                          "action": "form-submit"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "page-thank-you",
+        "stepKey": "thank-you",
+        "sections": [
+          {
+            "id": "section-thank-you",
+            "preset": "boxed",
+            "rows": [
+              {
+                "id": "row-thank-you",
+                "columns": [
+                  {
+                    "id": "col-thank-you",
+                    "width": {
+                      "desktop": 12
+                    },
+                    "elements": [
+                      {
+                        "id": "el-thank-you-heading",
+                        "type": "heading",
+                        "props": {
+                          "text": "Thanks \u2014 we got your request",
+                          "level": 2
+                        }
+                      },
+                      {
+                        "id": "el-thank-you-text",
+                        "type": "text",
+                        "props": {
+                          "text": "A specialist will follow up. You can book a time now."
+                        }
+                      },
+                      {
+                        "id": "el-thank-you-button",
+                        "type": "button",
+                        "props": {
+                          "label": "Book a visit",
+                          "action": "next-step"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "page-booking",
+        "stepKey": "booking",
+        "sections": [
+          {
+            "id": "section-booking",
+            "preset": "boxed",
+            "rows": [
+              {
+                "id": "row-booking",
+                "columns": [
+                  {
+                    "id": "col-booking",
+                    "width": {
+                      "desktop": 12
+                    },
+                    "elements": [
+                      {
+                        "id": "el-booking-heading",
+                        "type": "heading",
+                        "props": {
+                          "text": "Pick a time",
+                          "level": 2
+                        }
+                      },
+                      {
+                        "id": "el-booking-text",
+                        "type": "text",
+                        "props": {
+                          "text": "Choose a showroom or delivery window."
+                        }
+                      },
+                      {
+                        "id": "el-booking-button",
+                        "type": "button",
+                        "props": {
+                          "label": "Open booking",
+                          "action": "booking"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "page-upsell",
+        "stepKey": "upsell",
+        "sections": [
+          {
+            "id": "section-upsell-pricing",
+            "preset": "pricing",
+            "rows": [
+              {
+                "id": "row-upsell",
+                "columns": [
+                  {
+                    "id": "col-upsell",
+                    "width": {
+                      "desktop": 12
+                    },
+                    "elements": [
+                      {
+                        "id": "el-upsell-heading",
+                        "type": "heading",
+                        "props": {
+                          "text": "Add delivery and setup",
+                          "level": 2
+                        }
+                      },
+                      {
+                        "id": "el-upsell-text",
+                        "type": "text",
+                        "props": {
+                          "text": "Optional upgrade. No invented pricing claims."
+                        }
+                      },
+                      {
+                        "id": "el-upsell-button",
+                        "type": "button",
+                        "props": {
+                          "label": "Continue",
+                          "action": "url",
+                          "href": "/"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
