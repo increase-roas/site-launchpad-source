@@ -36,3 +36,13 @@ describe("selected-client workspace navigation", () => {
     expect(settingsRedirectFromLegacyClientPath("/workspace/5/settings")).toBeNull();
   });
 });
+
+describe("Paid Ads funnel destinations stay under Funnels", () => {
+  it("does not add a top-level website Templates route", () => {
+    expect(workspaceRoute("funnels", 4)).toBe("/workspace/4/funnels");
+    expect(workspaceRoute("funnels", 4)).not.toContain("/templates");
+    expect(getWorkspaceArea("/templates")).toBe("clients");
+    expect(getWorkspaceArea("/workspace/4/funnels?tab=templates")).toBe("funnels");
+    expect(getWorkspaceArea("/workspace/4/funnels?studio=generic-paid-funnel")).toBe("funnels");
+  });
+});

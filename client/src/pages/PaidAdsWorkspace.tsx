@@ -27,6 +27,9 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { PaidAdsFunnelLibrary } from "@/components/funnels/studio/PaidAdsFunnelLibrary";
+import { PaidFunnelBuilder } from "@/components/funnels/studio/PaidFunnelBuilder";
+import { commitAutosave, createDocumentFromFixture, createStudioState, parsePaidAdsFunnelSearch, type PaidAdsFunnelTab, type StudioState } from "@shared/paidFunnel";
 import { selectedFunnelForClient } from "./editorIsolation";
 
 type Step = {
@@ -171,6 +174,9 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
   const workspaceQuery = trpc.workspace.get.useQuery({ clientId });
   const [selectedStep, setSelectedStep] = useState<Step | null>(null);
   const [selectedFunnelId, setSelectedFunnelId] = useState<number | null>(null);
+  const parsedSearch = parsePaidAdsFunnelSearch(typeof window === "undefined" ? "" : window.location.search);
+  const [libraryTab, setLibraryTab] = useState<PaidAdsFunnelTab>(parsedSearch.tab);
+  const [studio, setStudio] = useState<StudioState | null>(() => parsedSearch.studioKey ? createStudioState(createDocumentFromFixture(clientId, parsedSearch.studioKey)) : null);
 
   useEffect(() => {
     setSelectedStep(null);
@@ -198,6 +204,25 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
     setSelectedFunnelId(null);
     window.history.replaceState(null, "", window.location.pathname);
   };
+
+  const openStudio = (key: string) => {
+    setStudio(createStudioState(createDocumentFromFixture(clientId, key)));
+    setSelectedFunnelId(null);
+    window.history.replaceState(null, "", `${window.location.pathname}?studio=${encodeURIComponent(key)}`);
+  };
+
+  const closeStudio = () => {
+    setStudio(null);
+    window.history.replaceState(null, "", `${window.location.pathname}?tab=${libraryTab}`);
+  };
+
+  useEffect(() => {
+    if (!studio || studio.document.saveStatus !== "saving") return;
+    const handle = window.setTimeout(() => {
+      setStudio(current => (current ? commitAutosave(current, current.document.revision) : current));
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [studio]);
 
   const shapeMutation = trpc.workspace.setFunnelShape.useMutation({
     onSuccess: async () => {
@@ -244,7 +269,9 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
         <WorkspaceModeTabs clientId={clientId} active="paidAds" />
       </section>
 
-      {selectedFunnelId ? (
+      {studio ? (
+        <PaidFunnelBuilder clientId={clientId} initialGraph={studio.document.graph} onBack={closeStudio} />
+      ) : selectedFunnelId ? (
         selectedIsSimpleForm ? (
           <SimpleFormFunnelEditor
             clientId={clientId}
@@ -259,10 +286,22 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
           />
         )
       ) : (
-        <FunnelBuilderList clientId={clientId} onEdit={openFunnel} />
+        <div className="space-y-8">
+          <PaidAdsFunnelLibrary
+            tab={libraryTab}
+            creating={false}
+            onTabChange={tab => {
+              setLibraryTab(tab);
+              window.history.replaceState(null, "", `${window.location.pathname}?tab=${tab}`);
+            }}
+            onCreateFromFixture={() => openStudio(`client-${clientId}-paid-funnel`)}
+            onOpenBuilder={openStudio}
+          />
+          <FunnelBuilderList clientId={clientId} onEdit={openFunnel} />
+        </div>
       )}
 
-      {legacyFunnels.length > 0 ? (
+      {!studio && legacyFunnels.length > 0 ? (
       <>
       <section className="pt-2">
         <div className="mb-4">
