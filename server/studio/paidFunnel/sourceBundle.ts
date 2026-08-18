@@ -9,7 +9,7 @@ import {
   isProfileKey,
 } from "../../../shared/clientIntegrationProfile";
 import { SIMPLE_FORM_CLOUDFLARE_INFRA } from "../../../shared/simpleFormContract";
-import type { PaidFunnelPackage } from "../../../shared/studio/paidFunnelPackage";
+import type { PaidFunnelPackage } from "../../../shared/paidFunnelContract";
 import { mapGenericPaidFunnelProfileBindings } from "./publishAdapter";
 import type {
   ClientIntegrationProfileResolver,

@@ -14,6 +14,7 @@ import {
   type ClientIntegrationProfileResolver,
   type PaidFunnelAdapterBindings,
   type PaidFunnelPublishAction,
+  type PaidFunnelRuntimeSecretContract,
 } from "./profileMapping";
 import {
   buildPaidFunnelReadiness,
@@ -269,7 +270,7 @@ export function genericPaidFunnelUsesForcedInfra(
 
 export function mapGenericPaidFunnelProfileBindings(input: {
   clientId: number;
-  package: PaidFunnelPackage;
+  package: PaidFunnelRuntimeSecretContract;
   resolver: ClientIntegrationProfileResolver;
 }):
   | { ok: true; bindings: PaidFunnelAdapterBindings }

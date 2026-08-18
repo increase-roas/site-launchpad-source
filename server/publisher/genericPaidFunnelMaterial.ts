@@ -5,14 +5,13 @@ import type { PaidFunnelGraph } from "../../shared/paidFunnel/graph";
 import {
   parsePaidFunnelPackage,
   type PaidFunnelPackage,
-} from "../../shared/studio/paidFunnelPackage";
+} from "../../shared/paidFunnelContract";
 import {
   createClientIntegrationProfileResolver,
   loadOrBackfillResolvedClientIntegrationProfile,
 } from "../clientIntegrations";
 import { getClientById, getDb } from "../db";
 import { getPaidFunnelDetail } from "../paidFunnelDb";
-import { selectPaidFunnelPublishAdapter } from "../studio/paidFunnel/publishAdapter";
 import { buildGenericPaidFunnelSourceBundle } from "../studio/paidFunnel/sourceBundle";
 import { decryptSetupValue, encryptSetupValue } from "../clientSecurity";
 
@@ -112,19 +111,14 @@ function requireSupportedResources(
   pkg: PaidFunnelPackage,
   resourceName: string
 ): GenericPaidFunnelResourceDefinitions {
-  const resources = pkg.resources ?? {};
-  if (
-    (resources.kvNamespaces?.length ?? 0) > 0 ||
-    (resources.queues?.producers?.length ?? 0) > 0 ||
-    (resources.queues?.consumers?.length ?? 0) > 0 ||
-    (resources.assets?.length ?? 0) > 0
-  ) {
+  const resources = pkg.resources ?? [];
+  if (resources.some(resource => resource.type !== "d1")) {
     throw new Error(
       "This paid funnel declares infrastructure that the generic Astro publisher does not support."
     );
   }
-  const d1 = (resources.d1Databases ?? []).map((database, index) => ({
-    binding: database.binding,
+  const d1 = resources.map((database, index) => ({
+    binding: database.binding ?? "",
     name: `${resourceName}-${index + 1}`,
   }));
   if (d1.length !== 1 || d1[0]?.binding !== "FUNNEL_DB") {
@@ -165,12 +159,18 @@ export async function getGenericPaidFunnelPublishMaterial(
     .limit(1);
   const version = versions[0];
   if (!version) throw new Error("Paid funnel template version was not found.");
-  const parsed = parsePaidFunnelPackage(version.packageJson);
-  if (!parsed.success)
+  let pkg: PaidFunnelPackage;
+  try {
+    pkg = parsePaidFunnelPackage(version.packageJson);
+  } catch {
     throw new Error("Paid funnel template package is invalid.");
-  const pkg = parsed.data;
-  const selected = selectPaidFunnelPublishAdapter(pkg);
-  if (!selected.ok) throw new Error(selected.error);
+  }
+  if (pkg.publishAdapter === "legacy-simple-form") {
+    throw new Error("Use the specialized Simple Form adapter.");
+  }
+  if (pkg.publishAdapter !== "generic-paid-funnel") {
+    throw new Error("Unknown paid-funnel publish adapter.");
+  }
 
   const graph = detail.studio.graph;
   const bundle = buildGenericPaidFunnelSourceBundle({

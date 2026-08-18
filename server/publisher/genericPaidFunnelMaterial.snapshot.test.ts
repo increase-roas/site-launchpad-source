@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  genericPaidFunnelResourceDefinitions,
   openGenericPaidFunnelMaterialSnapshot,
   sealGenericPaidFunnelMaterialSnapshot,
 } from "./genericPaidFunnelMaterial";
+import { GENERIC_PAID_FUNNEL_PACKAGE } from "../../shared/paidFunnelFixture";
 
 describe("generic paid funnel material snapshots", () => {
   const previousKey = process.env.SECRETS_ENCRYPTION_KEY;
@@ -32,6 +34,22 @@ describe("generic paid funnel material snapshots", () => {
       ],
       runtimeVars: { META_PIXEL_ID: "123456789012345" },
       runtimeSecrets: { META_CAPI_ACCESS_TOKEN: "opaque-meta-token" },
+    });
+  });
+
+  it("uses the canonical persisted package contract for generic funnel resources", () => {
+    expect(
+      genericPaidFunnelResourceDefinitions(
+        GENERIC_PAID_FUNNEL_PACKAGE,
+        "funnel-example-1"
+      )
+    ).toEqual({
+      d1: [
+        {
+          binding: "FUNNEL_DB",
+          name: "funnel-example-1-1",
+        },
+      ],
     });
   });
 });

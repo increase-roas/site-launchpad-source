@@ -13,7 +13,6 @@ import {
   type ClientIntegrationSecretKey,
   type ClientIntegrationSecretPresence,
 } from "../../../shared/clientIntegrationProfile";
-import type { PaidFunnelPackage } from "../../../shared/studio/paidFunnelPackage";
 import {
   decryptSetupValue,
   encryptSetupValue,
@@ -55,12 +54,19 @@ function unique(values: readonly string[]): string[] {
   return Array.from(new Set(values));
 }
 
+export type PaidFunnelRuntimeSecretContract = {
+  requiredRuntimeSecrets: readonly string[];
+  offlineConversionContract?: {
+    requiredRuntimeSecrets: readonly string[];
+  };
+};
+
 export function requiredPaidFunnelSecretNames(
-  pkg: PaidFunnelPackage
+  pkg: PaidFunnelRuntimeSecretContract
 ): string[] {
   return unique([
     ...pkg.requiredRuntimeSecrets,
-    ...pkg.offlineConversionContract.requiredRuntimeSecrets,
+    ...(pkg.offlineConversionContract?.requiredRuntimeSecrets ?? []),
     ...FUNNEL_REQUIRED_PROFILE_KEYS,
   ]);
 }
