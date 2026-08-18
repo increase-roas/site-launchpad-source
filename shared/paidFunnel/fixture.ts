@@ -99,6 +99,7 @@ export const GENERIC_PAID_FUNNEL_PACKAGE = {
   graph: true,
   sectionPresets: Object.keys(PAID_ADS_SECTION_PRESET_LABELS),
   integrations: ["meta-pixel", "ghl", "google-sheets"],
+  resources: [{ type: "d1", name: "paid-funnel-events", binding: "FUNNEL_DB" }],
   requiredRuntimeSecrets: CANONICAL_OFFLINE_CONVERSION_CONTRACT.requiredRuntimeSecrets,
   readinessRules: ["steps", "form-mapping", "navigation", "package", "adapter"],
   publishAdapter: "generic-paid-funnel" as const,

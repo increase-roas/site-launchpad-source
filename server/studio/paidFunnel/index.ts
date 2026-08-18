@@ -32,3 +32,7 @@ export {
   type PaidFunnelPublishAction,
   type PaidFunnelResolvedProfile,
 } from "./profileMapping";
+export {
+  buildGenericPaidFunnelSourceBundle,
+  type GenericPaidFunnelSourceBundle,
+} from "./sourceBundle";

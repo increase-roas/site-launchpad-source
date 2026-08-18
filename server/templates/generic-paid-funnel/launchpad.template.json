@@ -232,7 +232,13 @@
     "outputDir": "dist"
   },
   "publishAdapter": "generic-paid-funnel",
-  "resources": [],
+  "resources": [
+    {
+      "type": "d1",
+      "name": "paid-funnel-events",
+      "binding": "FUNNEL_DB"
+    }
+  ],
   "offlineConversionContract": {
     "version": 1,
     "joinKey": "leadUuid",
@@ -296,12 +302,12 @@
     "version": 1,
     "pages": [
       {
-        "id": "manifest_1",
+        "id": "fixture_1",
         "kind": "page",
         "stepKey": "landing",
         "sections": [
           {
-            "id": "manifest_38",
+            "id": "fixture_38",
             "kind": "section",
             "preset": "hero",
             "layout": "full",
@@ -349,7 +355,7 @@
             },
             "rows": [
               {
-                "id": "manifest_37",
+                "id": "fixture_37",
                 "kind": "row",
                 "gap": 16,
                 "valign": "top",
@@ -367,7 +373,7 @@
                 },
                 "columns": [
                   {
-                    "id": "manifest_36",
+                    "id": "fixture_36",
                     "kind": "column",
                     "widths": {
                       "desktop": 100,
@@ -396,11 +402,11 @@
                     },
                     "elements": [
                       {
-                        "id": "manifest_33",
+                        "id": "fixture_33",
                         "kind": "element",
                         "type": "heading",
                         "props": {
-                          "text": "This weekend only: in-stock hot tubs",
+                          "text": "Get a personalized recommendation in minutes",
                           "tag": "h1"
                         },
                         "styles": {
@@ -444,11 +450,11 @@
                         }
                       },
                       {
-                        "id": "manifest_34",
+                        "id": "fixture_34",
                         "kind": "element",
                         "type": "text",
                         "props": {
-                          "text": "See live inventory, lock the advertised price, and book a showroom visit."
+                          "text": "Answer a few quick questions and get the right next step for your needs."
                         },
                         "styles": {
                           "fontSize": {
@@ -490,11 +496,11 @@
                         }
                       },
                       {
-                        "id": "manifest_35",
+                        "id": "fixture_35",
                         "kind": "element",
                         "type": "button",
                         "props": {
-                          "label": "Check availability",
+                          "label": "Get started",
                           "action": {
                             "type": "nextStep"
                           }
@@ -544,7 +550,7 @@
             ]
           },
           {
-            "id": "manifest_44",
+            "id": "fixture_44",
             "kind": "section",
             "preset": "form",
             "layout": "boxed",
@@ -585,7 +591,7 @@
             },
             "rows": [
               {
-                "id": "manifest_43",
+                "id": "fixture_43",
                 "kind": "row",
                 "gap": 16,
                 "valign": "top",
@@ -603,7 +609,7 @@
                 },
                 "columns": [
                   {
-                    "id": "manifest_42",
+                    "id": "fixture_42",
                     "kind": "column",
                     "widths": {
                       "desktop": 100,
@@ -632,11 +638,11 @@
                     },
                     "elements": [
                       {
-                        "id": "manifest_39",
+                        "id": "fixture_39",
                         "kind": "element",
                         "type": "heading",
                         "props": {
-                          "text": "Get today's price",
+                          "text": "Get your personalized next step",
                           "tag": "h2"
                         },
                         "styles": {
@@ -680,11 +686,11 @@
                         }
                       },
                       {
-                        "id": "manifest_40",
+                        "id": "fixture_40",
                         "kind": "element",
                         "type": "text",
                         "props": {
-                          "text": "ZIP + contact maps to the existing lead and offline-conversion contract."
+                          "text": "Share your contact details and we will follow up with the right recommendation."
                         },
                         "styles": {
                           "fontSize": {
@@ -726,7 +732,7 @@
                         }
                       },
                       {
-                        "id": "manifest_41",
+                        "id": "fixture_41",
                         "kind": "element",
                         "type": "form",
                         "props": {
@@ -736,9 +742,10 @@
                             "firstName",
                             "lastName",
                             "email",
-                            "phone"
+                            "phone",
+                            "consent"
                           ],
-                          "submitLabel": "See my price"
+                          "submitLabel": "Get my recommendation"
                         },
                         "styles": {
                           "fontSize": {
@@ -786,12 +793,12 @@
         ]
       },
       {
-        "id": "manifest_2",
+        "id": "fixture_2",
         "kind": "page",
         "stepKey": "survey-homeowner",
         "sections": [
           {
-            "id": "manifest_7",
+            "id": "fixture_7",
             "kind": "section",
             "preset": "boxed",
             "layout": "boxed",
@@ -833,7 +840,7 @@
             },
             "rows": [
               {
-                "id": "manifest_6",
+                "id": "fixture_6",
                 "kind": "row",
                 "gap": 16,
                 "valign": "top",
@@ -851,7 +858,7 @@
                 },
                 "columns": [
                   {
-                    "id": "manifest_5",
+                    "id": "fixture_5",
                     "kind": "column",
                     "widths": {
                       "desktop": 100,
@@ -880,7 +887,7 @@
                     },
                     "elements": [
                       {
-                        "id": "manifest_3",
+                        "id": "fixture_3",
                         "kind": "element",
                         "type": "heading",
                         "props": {
@@ -925,7 +932,7 @@
                         }
                       },
                       {
-                        "id": "manifest_4",
+                        "id": "fixture_4",
                         "kind": "element",
                         "type": "multipleChoice",
                         "props": {
@@ -984,12 +991,12 @@
         ]
       },
       {
-        "id": "manifest_8",
+        "id": "fixture_8",
         "kind": "page",
         "stepKey": "survey-timeline",
         "sections": [
           {
-            "id": "manifest_13",
+            "id": "fixture_13",
             "kind": "section",
             "preset": "boxed",
             "layout": "boxed",
@@ -1031,7 +1038,7 @@
             },
             "rows": [
               {
-                "id": "manifest_12",
+                "id": "fixture_12",
                 "kind": "row",
                 "gap": 16,
                 "valign": "top",
@@ -1049,7 +1056,7 @@
                 },
                 "columns": [
                   {
-                    "id": "manifest_11",
+                    "id": "fixture_11",
                     "kind": "column",
                     "widths": {
                       "desktop": 100,
@@ -1078,7 +1085,7 @@
                     },
                     "elements": [
                       {
-                        "id": "manifest_9",
+                        "id": "fixture_9",
                         "kind": "element",
                         "type": "heading",
                         "props": {
@@ -1123,7 +1130,7 @@
                         }
                       },
                       {
-                        "id": "manifest_10",
+                        "id": "fixture_10",
                         "kind": "element",
                         "type": "multipleChoice",
                         "props": {
@@ -1182,12 +1189,12 @@
         ]
       },
       {
-        "id": "manifest_14",
+        "id": "fixture_14",
         "kind": "page",
         "stepKey": "form",
         "sections": [
           {
-            "id": "manifest_20",
+            "id": "fixture_20",
             "kind": "section",
             "preset": "form",
             "layout": "boxed",
@@ -1228,7 +1235,7 @@
             },
             "rows": [
               {
-                "id": "manifest_19",
+                "id": "fixture_19",
                 "kind": "row",
                 "gap": 16,
                 "valign": "top",
@@ -1246,7 +1253,7 @@
                 },
                 "columns": [
                   {
-                    "id": "manifest_18",
+                    "id": "fixture_18",
                     "kind": "column",
                     "widths": {
                       "desktop": 100,
@@ -1275,11 +1282,11 @@
                     },
                     "elements": [
                       {
-                        "id": "manifest_15",
+                        "id": "fixture_15",
                         "kind": "element",
                         "type": "heading",
                         "props": {
-                          "text": "Get today's price",
+                          "text": "Get your personalized next step",
                           "tag": "h2"
                         },
                         "styles": {
@@ -1323,11 +1330,11 @@
                         }
                       },
                       {
-                        "id": "manifest_16",
+                        "id": "fixture_16",
                         "kind": "element",
                         "type": "text",
                         "props": {
-                          "text": "ZIP + contact maps to the existing lead and offline-conversion contract."
+                          "text": "Share your contact details and we will follow up with the right recommendation."
                         },
                         "styles": {
                           "fontSize": {
@@ -1369,7 +1376,7 @@
                         }
                       },
                       {
-                        "id": "manifest_17",
+                        "id": "fixture_17",
                         "kind": "element",
                         "type": "form",
                         "props": {
@@ -1379,9 +1386,10 @@
                             "firstName",
                             "lastName",
                             "email",
-                            "phone"
+                            "phone",
+                            "consent"
                           ],
-                          "submitLabel": "See my price"
+                          "submitLabel": "Get my recommendation"
                         },
                         "styles": {
                           "fontSize": {
@@ -1427,7 +1435,7 @@
             ]
           },
           {
-            "id": "manifest_25",
+            "id": "fixture_25",
             "kind": "section",
             "preset": "faq",
             "layout": "boxed",
@@ -1468,7 +1476,7 @@
             },
             "rows": [
               {
-                "id": "manifest_24",
+                "id": "fixture_24",
                 "kind": "row",
                 "gap": 16,
                 "valign": "top",
@@ -1486,7 +1494,7 @@
                 },
                 "columns": [
                   {
-                    "id": "manifest_23",
+                    "id": "fixture_23",
                     "kind": "column",
                     "widths": {
                       "desktop": 100,
@@ -1515,7 +1523,7 @@
                     },
                     "elements": [
                       {
-                        "id": "manifest_21",
+                        "id": "fixture_21",
                         "kind": "element",
                         "type": "heading",
                         "props": {
@@ -1563,14 +1571,14 @@
                         }
                       },
                       {
-                        "id": "manifest_22",
+                        "id": "fixture_22",
                         "kind": "element",
                         "type": "faq",
                         "props": {
                           "items": [
                             {
-                              "question": "Is the ad price real?",
-                              "answer": "Yes. The landing page only shows current inventory."
+                              "question": "What happens after I submit?",
+                              "answer": "A specialist reviews your request and follows up with the best next step."
                             },
                             {
                               "question": "Do you keep the click IDs?",
@@ -1624,12 +1632,12 @@
         ]
       },
       {
-        "id": "manifest_26",
+        "id": "fixture_26",
         "kind": "page",
         "stepKey": "thankYou",
         "sections": [
           {
-            "id": "manifest_32",
+            "id": "fixture_32",
             "kind": "section",
             "preset": "hero",
             "layout": "full",
@@ -1677,7 +1685,7 @@
             },
             "rows": [
               {
-                "id": "manifest_31",
+                "id": "fixture_31",
                 "kind": "row",
                 "gap": 16,
                 "valign": "top",
@@ -1695,7 +1703,7 @@
                 },
                 "columns": [
                   {
-                    "id": "manifest_30",
+                    "id": "fixture_30",
                     "kind": "column",
                     "widths": {
                       "desktop": 100,
@@ -1724,11 +1732,11 @@
                     },
                     "elements": [
                       {
-                        "id": "manifest_27",
+                        "id": "fixture_27",
                         "kind": "element",
                         "type": "heading",
                         "props": {
-                          "text": "This weekend only: in-stock hot tubs",
+                          "text": "Get a personalized recommendation in minutes",
                           "tag": "h1"
                         },
                         "styles": {
@@ -1772,11 +1780,11 @@
                         }
                       },
                       {
-                        "id": "manifest_28",
+                        "id": "fixture_28",
                         "kind": "element",
                         "type": "text",
                         "props": {
-                          "text": "See live inventory, lock the advertised price, and book a showroom visit."
+                          "text": "Answer a few quick questions and get the right next step for your needs."
                         },
                         "styles": {
                           "fontSize": {
@@ -1818,11 +1826,11 @@
                         }
                       },
                       {
-                        "id": "manifest_29",
+                        "id": "fixture_29",
                         "kind": "element",
                         "type": "button",
                         "props": {
-                          "label": "Check availability",
+                          "label": "Get started",
                           "action": {
                             "type": "nextStep"
                           }

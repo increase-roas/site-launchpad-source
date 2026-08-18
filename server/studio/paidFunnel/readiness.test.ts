@@ -29,6 +29,17 @@ describe("paid-funnel readiness", () => {
     expect(readiness.sections.every(section => section.ready)).toBe(true);
   });
 
+  it("authorizes a real customer audience with the same fail-closed checks", () => {
+    const pkg = buildGenericPaidFunnelPackageFixture();
+    const settings = { ...buildGenericPaidFunnelSettingsFixture(pkg), audience: "client" as const };
+    const readiness = buildPaidFunnelReadiness(
+      pkg,
+      settings,
+      buildReadyPaidFunnelProfileDto(settings.clientId),
+    );
+    expect(readiness.configurationReady).toBe(true);
+  });
+
   it("fail-closes every check when the package is invalid", () => {
     const readiness = buildPaidFunnelReadiness(
       { kind: "website" },

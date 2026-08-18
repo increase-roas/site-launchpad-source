@@ -13,7 +13,11 @@ import {
   type SecretSetupInput,
   type SecretStatus,
 } from "../../shared/client";
-import { CLIENT_INTEGRATION_SECRET_KEYS } from "../../shared/clientIntegrationProfile";
+import {
+  CLIENT_INTEGRATION_SECRET_KEYS,
+  clientIntegrationFieldError,
+  type ClientIntegrationProfileKey,
+} from "../../shared/clientIntegrationProfile";
 import {
   createClientWithSecrets,
   createDraftClient,
@@ -131,6 +135,22 @@ const saveIntegrationProfileInputSchema = z
         path: ["rotateStageWebhookSecret"],
         message: "STAGE_WEBHOOK_SECRET cannot be rotated and cleared in the same save.",
       });
+    }
+    for (const [key, value] of Object.entries({
+      ...input.identifiers,
+      ...input.replaceSecrets,
+    })) {
+      const message = clientIntegrationFieldError(
+        key as ClientIntegrationProfileKey,
+        value,
+      );
+      if (message) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: key in input.identifiers ? ["identifiers", key] : ["replaceSecrets", key],
+          message,
+        });
+      }
     }
   });
 

@@ -14,6 +14,7 @@ export const OPT_IN_TEMPLATE_VALUES = [
   "hero-with-form",
   "split-image-form",
   "simple-button",
+  "hot-tub-promotion",
 ] as const;
 export type OptInTemplate = (typeof OPT_IN_TEMPLATE_VALUES)[number];
 
@@ -21,7 +22,36 @@ export const OPT_IN_TEMPLATE_LABELS: Record<OptInTemplate, string> = {
   "hero-with-form": "Hero + embedded form",
   "split-image-form": "Split image + form",
   "simple-button": "Simple opt-in button",
+  "hot-tub-promotion": "Hot tub promotion",
 };
+
+function hotTubPromotion(nextId: () => string) {
+  return createSection(nextId, {
+    preset: "hero",
+    layout: "full",
+    minHeight: 560,
+    alignment: "center",
+    background: { kind: "color", color: "#eef5ff" },
+    rows: [
+      createRow(nextId, [
+        createColumn(nextId, [
+          createElement(nextId, "heading", {
+            text: "This weekend only: in-stock hot tubs",
+            tag: "h1",
+          }),
+          createElement(nextId, "text", {
+            text: "See live inventory, get current pricing, and book a showroom visit.",
+          }),
+          createElement(nextId, "form", {
+            formId: "hot-tub-opt-in",
+            fields: ["zip", "firstName", "email", "phone", "consent"],
+            submitLabel: "Check availability",
+          }),
+        ]),
+      ]),
+    ],
+  });
+}
 
 function landingKey(graph: PaidFunnelGraph): string {
   return graph.steps.find(step => step.type === "landing")?.key ?? graph.steps[0]?.key ?? "landing";
@@ -62,7 +92,7 @@ export function applyOptInTemplate(
               createElement(nextId, "text", { text: "Answer a few quick questions and see the best option for you." }),
               createElement(nextId, "form", {
                 formId: "opt-in-form",
-                fields: ["firstName", "email"],
+                fields: ["firstName", "email", "consent"],
                 submitLabel: "Start my recommendation",
               }),
             ], 2),
@@ -70,7 +100,7 @@ export function applyOptInTemplate(
         ],
       }),
     ];
-  } else {
+  } else if (template === "simple-button") {
     sections = [
       createSection(nextId, {
         preset: "boxed",
@@ -88,6 +118,8 @@ export function applyOptInTemplate(
         ],
       }),
     ];
+  } else {
+    sections = [hotTubPromotion(nextId)];
   }
 
   return {

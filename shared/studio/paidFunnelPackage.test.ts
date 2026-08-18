@@ -22,7 +22,11 @@ describe("paid-funnel package contract", () => {
     expect(pkg.offlineConversionContract).toEqual(
       SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT
     );
-    expect(pkg.resources).toBeUndefined();
+    expect(pkg.resources).toEqual({
+      d1Databases: [
+        { binding: "FUNNEL_DB", databaseName: "paid-funnel-events" },
+      ],
+    });
   });
 
   it("rejects a website kind", () => {

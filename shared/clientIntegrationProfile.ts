@@ -74,6 +74,23 @@ export const CLIENT_INTEGRATION_PROFILE_KEYS = [
 export type ClientIntegrationProfileKey =
   (typeof CLIENT_INTEGRATION_PROFILE_KEYS)[number];
 
+export const CLIENT_INTEGRATION_FIELD_LABELS: Record<ClientIntegrationProfileKey, string> = {
+  GHL_LOCATION_ID: "GHL location ID",
+  GOOGLE_SHEETS_ID: "Google Sheet ID",
+  META_PIXEL_ID: "Meta Pixel ID",
+  GHL_API_KEY: "GHL private integration token",
+  META_CAPI_ACCESS_TOKEN: "Meta Conversions API token",
+  STAGE_WEBHOOK_SECRET: "Lead-stage webhook secret",
+  GOOGLE_SERVICE_ACCOUNT_EMAIL: "Google service-account email",
+  GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: "Google service-account private key",
+  ALERT_WEBHOOK_URL: "Alert webhook URL",
+  ADMIN_PASSWORD: "Website admin password",
+  ADMIN_SESSION_SECRET: "Website admin session secret",
+  META_VALUE_QUALIFIED: "Meta qualified-lead value",
+  META_VALUE_SCHEDULE: "Meta scheduled-lead value",
+  META_VALUE_SHOWED: "Meta showed-lead value",
+};
+
 export const FORBIDDEN_PROFILE_KEYS = ["GHL_WEBHOOK_URL", "CRM_CALLBACK_SECRET"] as const;
 export const LEGACY_SECRET_KEY_ALIASES = {
   GHL_WEBHOOK_URL: "GHL_API_KEY",
@@ -238,6 +255,61 @@ export function canonicalizeLegacyKey(key: string): string {
 
 export function presenceFromValue(value: string | null | undefined): SecretPresence {
   return value && value.trim() ? "SET" : "NOT SET";
+}
+
+function validHttpsUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" ||
+      (url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname));
+  } catch {
+    return false;
+  }
+}
+
+/** Validates only newly entered values; stored secret values are never returned to the client. */
+export function clientIntegrationFieldError(
+  key: ClientIntegrationProfileKey,
+  rawValue: string | null | undefined,
+): string | null {
+  const value = rawValue?.trim() ?? "";
+  if (!value) return null;
+  const label = CLIENT_INTEGRATION_FIELD_LABELS[key];
+  if (key === "META_PIXEL_ID" && !/^\d{8,20}$/.test(value)) {
+    return `${label} must contain 8 to 20 digits.`;
+  }
+  if ((key === "GHL_LOCATION_ID" || key === "GOOGLE_SHEETS_ID") && !/^[A-Za-z0-9_-]+$/.test(value)) {
+    return `${label} is not in the expected ID format.`;
+  }
+  if (key === "GOOGLE_SERVICE_ACCOUNT_EMAIL" && !/^[^\s@]+@[^\s@]+\.iam\.gserviceaccount\.com$/i.test(value)) {
+    return `${label} must be a service-account address ending in iam.gserviceaccount.com.`;
+  }
+  if (
+    key === "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY" &&
+    !/^-----BEGIN (?:RSA )?PRIVATE KEY-----[\s\S]+-----END (?:RSA )?PRIVATE KEY-----$/.test(
+      value.replace(/\\n/g, "\n"),
+    )
+  ) {
+    return `${label} must be a complete PEM private key.`;
+  }
+  if (key === "ALERT_WEBHOOK_URL" && !validHttpsUrl(value)) {
+    return `${label} must be an HTTPS URL.`;
+  }
+  if (
+    (key === "META_VALUE_QUALIFIED" ||
+      key === "META_VALUE_SCHEDULE" ||
+      key === "META_VALUE_SHOWED") &&
+    (!Number.isFinite(Number(value)) || Number(value) < 0)
+  ) {
+    return `${label} must be a non-negative number.`;
+  }
+  if ((key === "GHL_API_KEY" || key === "META_CAPI_ACCESS_TOKEN") && value.length < 8) {
+    return `${label} is too short.`;
+  }
+  if ((key === "STAGE_WEBHOOK_SECRET" || key === "ADMIN_SESSION_SECRET") && value.length < 16) {
+    return `${label} must be at least 16 characters.`;
+  }
+  return null;
 }
 
 export function computeClientIntegrationReadiness(input: {

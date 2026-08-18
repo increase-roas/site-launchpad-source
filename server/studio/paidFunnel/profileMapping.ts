@@ -238,8 +238,9 @@ export function buildReadyPaidFunnelSecrets(): Partial<
     GHL_API_KEY: "ghl-live-api-key-AAA",
     META_CAPI_ACCESS_TOKEN: "meta-capi-token-BBB",
     STAGE_WEBHOOK_SECRET: "stage-webhook-secret-CCC",
-    GOOGLE_SERVICE_ACCOUNT_EMAIL: "sa@example.com",
-    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----secret",
+    GOOGLE_SERVICE_ACCOUNT_EMAIL: "launchpad@sample-project.iam.gserviceaccount.com",
+    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY:
+      "-----BEGIN PRIVATE KEY-----\nsample-private-key-material\n-----END PRIVATE KEY-----",
     ALERT_WEBHOOK_URL: "https://alerts.example/hook",
     ADMIN_PASSWORD: "admin-password-XYZ",
     ADMIN_SESSION_SECRET: "admin-session-secret-XYZ",

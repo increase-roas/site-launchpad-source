@@ -20,6 +20,7 @@ import {
   assertDtoOmitsSecretValues,
   buildClientIntegrationProfileDto,
   canonicalizeLegacyKey,
+  clientIntegrationFieldError,
   cloneProfileReference,
   computeClientIntegrationReadiness,
   emptyIdentifiers,
@@ -56,6 +57,18 @@ describe("ClientIntegrationProfile contract", () => {
     expect(LEGACY_SECRET_KEY_ALIASES.CRM_CALLBACK_SECRET).toBe("STAGE_WEBHOOK_SECRET");
     expect(canonicalizeLegacyKey("GHL_WEBHOOK_URL")).toBe("GHL_API_KEY");
     expect(canonicalizeLegacyKey("CRM_CALLBACK_SECRET")).toBe("STAGE_WEBHOOK_SECRET");
+  });
+
+  it("rejects malformed customer settings before they can block a live funnel", () => {
+    expect(clientIntegrationFieldError("META_PIXEL_ID", "pixel-123")).toMatch(/digits/);
+    expect(clientIntegrationFieldError("GOOGLE_SHEETS_ID", "https://docs.google.com/sheets/d/abc")).toMatch(/ID format/);
+    expect(clientIntegrationFieldError("GOOGLE_SERVICE_ACCOUNT_EMAIL", "person@example.com")).toMatch(/service-account/);
+    expect(clientIntegrationFieldError("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY", "not-a-key")).toMatch(/PEM/);
+    expect(clientIntegrationFieldError("ALERT_WEBHOOK_URL", "http://example.com/hook")).toMatch(/HTTPS/);
+    expect(clientIntegrationFieldError("META_VALUE_QUALIFIED", "-1")).toMatch(/non-negative/);
+    expect(clientIntegrationFieldError("META_PIXEL_ID", "123456789012345")).toBeNull();
+    expect(clientIntegrationFieldError("GOOGLE_SERVICE_ACCOUNT_EMAIL", "launch@project.iam.gserviceaccount.com")).toBeNull();
+    expect(clientIntegrationFieldError("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY", "-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----")).toBeNull();
   });
 
   it("omits secret values from DTOs and only reports SET / NOT SET", () => {

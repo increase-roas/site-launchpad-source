@@ -294,9 +294,6 @@ function checkAdapter(
   if (isSunPoolName(settings.clientKey) || isSunPoolName(settings.templateKey)) {
     missing.push("Sun Pool is forbidden");
   }
-  if (settings.audience !== "qa") {
-    missing.push("QA client/template only");
-  }
   return unique(missing);
 }
 

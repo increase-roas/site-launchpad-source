@@ -83,9 +83,9 @@ export function createSectionPreset(preset: PaidFunnelSectionPreset, nextId = cr
       rows: [
         createRow(nextId, [
           createColumn(nextId, [
-            heading(nextId, "This weekend only: in-stock hot tubs", "h1"),
-            body(nextId, "See live inventory, lock the advertised price, and book a showroom visit."),
-            button(nextId, "Check availability"),
+            heading(nextId, "Get a personalized recommendation in minutes", "h1"),
+            body(nextId, "Answer a few quick questions and get the right next step for your needs."),
+            button(nextId, "Get started"),
           ]),
         ]),
       ],
@@ -96,15 +96,15 @@ export function createSectionPreset(preset: PaidFunnelSectionPreset, nextId = cr
       preset,
       rows: [
         createRow(nextId, [
-          createColumn(nextId, [heading(nextId, "Why buyers click"), body(nextId, "Lead with the offer, delivery promise, and financing.")], 2),
-          createColumn(nextId, [createElement(nextId, "image", { src: "", alt: "Showroom", filename: "" })], 2),
+          createColumn(nextId, [heading(nextId, "Why customers choose you"), body(nextId, "Explain the offer, the outcome, and what makes the process easy.")], 2),
+          createColumn(nextId, [createElement(nextId, "image", { src: "", alt: "Customer success", filename: "" })], 2),
         ]),
       ],
     });
   }
   if (preset === "three-column") {
-    const cards = ["Free delivery", "Same-week set", "Financing"].map(title =>
-      createColumn(nextId, [heading(nextId, title, "h3"), body(nextId, "Keep this benefit specific to the ad account.")], 3),
+    const cards = ["Clear process", "Fast response", "Flexible options"].map(title =>
+      createColumn(nextId, [heading(nextId, title, "h3"), body(nextId, "Replace this with a specific benefit for the campaign.")], 3),
     );
     return createSection(nextId, { preset, rows: [createRow(nextId, cards)] });
   }
@@ -115,12 +115,12 @@ export function createSectionPreset(preset: PaidFunnelSectionPreset, nextId = cr
       rows: [
         createRow(nextId, [
           createColumn(nextId, [
-            heading(nextId, "Get today's price"),
-            body(nextId, "ZIP + contact maps to the existing lead and offline-conversion contract."),
+            heading(nextId, "Get your personalized next step"),
+            body(nextId, "Share your contact details and we will follow up with the right recommendation."),
             createElement(nextId, "form", {
               formId: "lead-form",
-              fields: ["zip", "firstName", "lastName", "email", "phone"],
-              submitLabel: "See my price",
+              fields: ["zip", "firstName", "lastName", "email", "phone", "consent"],
+              submitLabel: "Get my recommendation",
             }),
           ]),
         ]),
@@ -135,9 +135,9 @@ export function createSectionPreset(preset: PaidFunnelSectionPreset, nextId = cr
         createRow(nextId, [
           createColumn(nextId, [
             createElement(nextId, "testimonial", {
-              quote: "We went from the ad to a delivered spa in 11 days.",
+              quote: "The process was simple, fast, and exactly what we needed.",
               author: "Chris M.",
-              role: "Homeowner",
+              role: "Customer",
             }),
           ]),
         ]),
@@ -153,7 +153,7 @@ export function createSectionPreset(preset: PaidFunnelSectionPreset, nextId = cr
             heading(nextId, "Before you book"),
             createElement(nextId, "faq", {
               items: [
-                { question: "Is the ad price real?", answer: "Yes. The landing page only shows current inventory." },
+                { question: "What happens after I submit?", answer: "A specialist reviews your request and follows up with the best next step." },
                 { question: "Do you keep the click IDs?", answer: "UTM and click IDs are preserved through the form step." },
               ],
             }),
@@ -170,7 +170,7 @@ export function createSectionPreset(preset: PaidFunnelSectionPreset, nextId = cr
       rows: [
         createRow(nextId, [
           createColumn(nextId, [
-            heading(nextId, "Ready to lock this weekend's price?"),
+            heading(nextId, "Ready to take the next step?"),
             button(nextId, "Continue to the form"),
           ]),
         ]),
@@ -182,9 +182,9 @@ export function createSectionPreset(preset: PaidFunnelSectionPreset, nextId = cr
       preset,
       rows: [
         createRow(nextId, [
-          createColumn(nextId, [heading(nextId, "Good", "h3"), body(nextId, "In-stock 5-person"), button(nextId, "Choose Good")], 3),
-          createColumn(nextId, [heading(nextId, "Better", "h3"), body(nextId, "Lounge + jets"), button(nextId, "Choose Better")], 3),
-          createColumn(nextId, [heading(nextId, "Best", "h3"), body(nextId, "Party tub + cover"), button(nextId, "Choose Best")], 3),
+          createColumn(nextId, [heading(nextId, "Starter", "h3"), body(nextId, "A simple entry option"), button(nextId, "Choose Starter")], 3),
+          createColumn(nextId, [heading(nextId, "Popular", "h3"), body(nextId, "The most common customer choice"), button(nextId, "Choose Popular")], 3),
+          createColumn(nextId, [heading(nextId, "Premium", "h3"), body(nextId, "The complete service option"), button(nextId, "Choose Premium")], 3),
         ]),
       ],
     });
@@ -198,7 +198,7 @@ export function createSectionPreset(preset: PaidFunnelSectionPreset, nextId = cr
       createRow(nextId, [
         createColumn(nextId, [
           body(nextId, "By submitting you agree to be contacted about this offer."),
-          createElement(nextId, "phoneCta", { label: "Call the showroom", tel: "", action: { type: "phone", tel: "" } }),
+          createElement(nextId, "phoneCta", { label: "Call now", tel: "", action: { type: "phone", tel: "" } }),
         ]),
       ]),
     ],

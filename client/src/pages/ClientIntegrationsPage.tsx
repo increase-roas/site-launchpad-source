@@ -8,7 +8,9 @@ import { WRANGLER_SECRET_DESCRIPTIONS } from "@shared/astroConfig";
 import { integrationPresenceRows } from "@shared/paidFunnel/integrationPresence";
 import {
   CLIENT_INTEGRATION_IDENTIFIER_KEYS,
+  CLIENT_INTEGRATION_FIELD_LABELS,
   CLIENT_INTEGRATION_SECRET_KEYS,
+  clientIntegrationFieldError,
   isIdentifierKey,
   isSecretKey,
   type ClientIntegrationIdentifierKey,
@@ -51,6 +53,20 @@ function IntegrationEditor({ dto }: { dto: ClientIntegrationProfileDto }) {
   const hasSecretChanges = CLIENT_INTEGRATION_SECRET_KEYS.some(
     key => Boolean(secrets[key]?.trim()),
   );
+  const fieldErrors = useMemo(() => {
+    const errors = new Map<string, string>();
+    for (const key of CLIENT_INTEGRATION_IDENTIFIER_KEYS) {
+      const error = clientIntegrationFieldError(key, identifiers[key]);
+      if (error) errors.set(key, error);
+    }
+    for (const key of CLIENT_INTEGRATION_SECRET_KEYS) {
+      const value = secrets[key];
+      if (!value?.trim()) continue;
+      const error = clientIntegrationFieldError(key, value);
+      if (error) errors.set(key, error);
+    }
+    return errors;
+  }, [identifiers, secrets]);
   const saveMutation = trpc.clients.saveIntegrationProfile.useMutation({
     onSuccess: saved => {
       setIdentifiers(identifierDraftsFrom(saved));
@@ -83,6 +99,10 @@ function IntegrationEditor({ dto }: { dto: ClientIntegrationProfileDto }) {
   });
 
   const save = () => {
+    if (fieldErrors.size > 0) {
+      toast.error("Fix the highlighted integration fields before saving.");
+      return;
+    }
     const replaceSecrets = Object.fromEntries(
       CLIENT_INTEGRATION_SECRET_KEYS.flatMap(key => {
         const value = secrets[key]?.trim();
@@ -111,15 +131,15 @@ function IntegrationEditor({ dto }: { dto: ClientIntegrationProfileDto }) {
   return (
     <>
       <section className="grid gap-3 sm:grid-cols-3">
-        <Card className="border-white/8 bg-card/70 p-4">
+        <Card className="border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-bold text-muted-foreground">Website ready</p>
           <p className="mt-1 text-xl font-extrabold">{dto.readiness.websiteReady ? "SET" : "NOT SET"}</p>
         </Card>
-        <Card className="border-white/8 bg-card/70 p-4">
+        <Card className="border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-bold text-muted-foreground">Every funnel ready</p>
           <p className="mt-1 text-xl font-extrabold">{dto.readiness.funnelReady ? "SET" : "NOT SET"}</p>
         </Card>
-        <Card className="border-white/8 bg-card/70 p-4">
+        <Card className="border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-bold text-muted-foreground">Reconciliation</p>
           <p className="mt-1 text-xl font-extrabold capitalize">{dto.reconciliationStatus}</p>
         </Card>
@@ -127,7 +147,7 @@ function IntegrationEditor({ dto }: { dto: ClientIntegrationProfileDto }) {
 
       <div className="grid gap-4 md:grid-cols-2">
         {groups.map(group => (
-          <Card key={group.id} className="border-white/8 bg-card/70 p-5">
+          <Card key={group.id} className="border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-extrabold">{group.label}</h2>
             <div className="mt-4 space-y-4">
               {group.fields.map(field => {
@@ -141,8 +161,8 @@ function IntegrationEditor({ dto }: { dto: ClientIntegrationProfileDto }) {
                   <div key={field.key} className="space-y-2">
                     <label className="block space-y-2">
                       <span className="flex items-center justify-between gap-3 text-xs font-extrabold">
-                        <span className="truncate text-muted-foreground">{field.key}</span>
-                        <span className={field.presence === "SET" ? "text-emerald-300" : "text-red-300"}>
+                        <span className="truncate text-slate-700">{CLIENT_INTEGRATION_FIELD_LABELS[field.key as keyof typeof CLIENT_INTEGRATION_FIELD_LABELS]}</span>
+                        <span className={field.presence === "SET" ? "text-emerald-600" : "text-red-600"}>
                           {field.presence}
                         </span>
                       </span>
@@ -174,8 +194,15 @@ function IntegrationEditor({ dto }: { dto: ClientIntegrationProfileDto }) {
                             }
                           }
                         }}
-                        className="h-11 rounded-xl border-white/10 bg-white/[0.035] font-mono text-sm"
+                        aria-invalid={fieldErrors.has(field.key)}
+                        aria-describedby={fieldErrors.has(field.key) ? `${field.key}-error` : undefined}
+                        className="h-11 rounded-xl border-slate-300 bg-white font-mono text-sm text-slate-950"
                       />
+                      {fieldErrors.has(field.key) ? (
+                        <span id={`${field.key}-error`} role="alert" className="block text-xs font-semibold text-red-600">
+                          {fieldErrors.get(field.key)}
+                        </span>
+                      ) : null}
                       <span className="block text-[11px] font-medium text-muted-foreground">
                         {WRANGLER_SECRET_DESCRIPTIONS[identifierKey ?? secretKey!]}
                       </span>
@@ -239,12 +266,13 @@ function IntegrationEditor({ dto }: { dto: ClientIntegrationProfileDto }) {
           onClick={save}
           disabled={
             saveMutation.isPending ||
+            fieldErrors.size > 0 ||
             (!identifiersChanged &&
               !hasSecretChanges &&
               !rotateStageWebhookSecret &&
               clearSecrets.length === 0)
           }
-          className="h-12 gap-2 rounded-xl bg-cyan-300 px-6 font-extrabold text-slate-950 hover:bg-cyan-200"
+          className="h-12 gap-2 rounded-xl bg-blue-600 px-6 font-extrabold text-white hover:bg-blue-700"
         >
           {saveMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
           Save once for website + funnels
@@ -261,7 +289,7 @@ export default function ClientIntegrationsPage({ clientId }: { clientId: number 
   if (query.isLoading) {
     return (
       <div className="grid min-h-[60vh] place-items-center">
-        <Loader2 className="h-8 w-8 animate-spin text-cyan-300" />
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
   }
@@ -280,7 +308,7 @@ export default function ClientIntegrationsPage({ clientId }: { clientId: number 
 
   return (
     <div className="mx-auto w-full max-w-[1100px] space-y-6">
-      <header className="rounded-3xl border border-white/8 bg-[radial-gradient(circle_at_88%_-10%,rgba(34,211,238,0.14),transparent_35%),rgba(17,26,37,0.88)] p-6">
+      <header className="rounded-3xl border border-slate-200 bg-[radial-gradient(circle_at_88%_-10%,rgba(37,99,235,0.10),transparent_35%),white] p-6 shadow-sm">
         <Button
           type="button"
           variant="ghost"
@@ -291,11 +319,11 @@ export default function ClientIntegrationsPage({ clientId }: { clientId: number 
           Back to settings
         </Button>
         <div className="mt-3 flex items-start gap-3">
-          <span className="grid h-12 w-12 place-items-center rounded-2xl bg-cyan-400/10 text-cyan-300 ring-1 ring-cyan-300/12">
+          <span className="grid h-12 w-12 place-items-center rounded-2xl bg-blue-50 text-blue-600 ring-1 ring-blue-100">
             <PlugZap className="h-6 w-6" />
           </span>
           <div>
-            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-300">Client integrations</p>
+            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-blue-600">Client integrations</p>
             <h1 className="mt-1 text-3xl font-extrabold tracking-[-0.03em]">Enter once. Reuse everywhere.</h1>
             <p className="mt-2 max-w-2xl text-sm font-medium text-muted-foreground">
               These client-level values power the website and every funnel. Secret fields stay blank after saving and are never returned. Path: {integrationsRoute(clientId)}

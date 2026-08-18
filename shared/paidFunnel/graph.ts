@@ -423,7 +423,7 @@ export function defaultElementProps(
     list: { items: ["Benefit one", "Benefit two"] },
     form: {
       formId: "lead-form",
-      fields: ["firstName", "lastName", "email", "phone"],
+      fields: ["firstName", "lastName", "email", "phone", "consent"],
       submitLabel: "Get pricing",
     },
     multipleChoice: {
@@ -440,13 +440,13 @@ export function defaultElementProps(
     },
     phoneCta: { label: "Call now", tel: "" },
     countdown: { endsAt: "", label: "Offer ends" },
-    testimonial: { quote: "The showroom visit was worth it.", author: "Jordan", role: "Homeowner" },
+    testimonial: { quote: "The process was straightforward and the team followed through.", author: "Jordan", role: "Customer" },
     faq: {
       items: [
-        { question: "Do you deliver?", answer: "Yes, delivery and set are included in the quote." },
+        { question: "What happens next?", answer: "A specialist reviews your request and contacts you with the right next step." },
       ],
     },
-    inventory: { slots: 5, heading: "In-stock models" },
+    inventory: { slots: 5, heading: "Available options" },
     map: { address: "" },
     html: { markup: "" },
   };

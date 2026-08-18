@@ -285,7 +285,13 @@ export function mapGenericPaidFunnelProfileBindings(input: {
       clientId: input.clientId,
       identifiers: resolved.profile.dto.identifiers,
       secrets: resolved.profile.secrets,
-      requiredNames: requiredPaidFunnelSecretNames(input.package),
+      requiredNames: [
+        ...requiredPaidFunnelSecretNames(input.package),
+        "ALERT_WEBHOOK_URL",
+        "META_VALUE_QUALIFIED",
+        "META_VALUE_SCHEDULE",
+        "META_VALUE_SHOWED",
+      ],
     }),
   };
 }

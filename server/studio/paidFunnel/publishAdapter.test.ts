@@ -25,7 +25,7 @@ function readyContext() {
 }
 
 describe("generic paid-funnel publish adapter", () => {
-  it("selects the generic adapter and plans no forced KV/D1/queues", () => {
+  it("selects the generic adapter and plans only its declared attribution database", () => {
     const { pkg, settings, profile } = readyContext();
     const selected = selectPaidFunnelPublishAdapter(pkg);
     const planned = planGenericPaidFunnelPublish(pkg, settings, profile);
@@ -38,7 +38,11 @@ describe("generic paid-funnel publish adapter", () => {
     if (!planned.ok || !planned.plan) throw new Error("expected a plan");
     expect(planned.plan.adapter).toBe(GENERIC_PAID_FUNNEL_ADAPTER);
     expect(planned.plan.forcedCloudflareInfra).toBe(false);
-    expect(planned.plan.resources).toEqual({});
+    expect(planned.plan.resources).toEqual({
+      d1Databases: [
+        { binding: "FUNNEL_DB", databaseName: "paid-funnel-events" },
+      ],
+    });
     expect(planned.plan.clientId).toBe(settings.clientId);
     expect(planned.plan.bindingNames).toEqual(
       expect.arrayContaining([
@@ -50,6 +54,7 @@ describe("generic paid-funnel publish adapter", () => {
     expect(planned.plan.steps).toEqual([
       "validate_readiness",
       "create_repository",
+      "ensure_d1_database",
       "commit_source",
       "dispatch_workflow",
       "monitor_workflow",
@@ -195,6 +200,12 @@ describe("generic paid-funnel publish adapter", () => {
     if (!mapped.ok) throw new Error(mapped.error);
     expect(mapped.bindings.env.GHL_LOCATION_ID).toBe("location-123");
     expect(mapped.bindings.secrets.GHL_API_KEY).toBe("ghl-live-api-key-AAA");
+    expect(mapped.bindings.secrets.ALERT_WEBHOOK_URL).toBe(
+      "https://alerts.example/hook"
+    );
+    expect(mapped.bindings.secrets.META_VALUE_QUALIFIED).toBe("50");
+    expect(mapped.bindings.secrets.META_VALUE_SCHEDULE).toBe("75");
+    expect(mapped.bindings.secrets.META_VALUE_SHOWED).toBe("100");
     expect(JSON.stringify(planned)).not.toContain("ghl-live-api-key-AAA");
   });
 });

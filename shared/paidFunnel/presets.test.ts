@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CANONICAL_OFFLINE_CONVERSION_CONTRACT, PAID_FUNNEL_SECTION_PRESETS, visitNodes } from "./graph";
 import { createSectionPreset } from "./presets";
 import { createGenericPaidFunnelFixture, fixtureRequiresOfflineConversion } from "./fixture";
+import { applyOptInTemplate } from "./templates";
 
 describe("paid-ad section presets and fixture", () => {
   it("ships every required section preset", () => {
@@ -30,5 +31,14 @@ describe("paid-ad section presets and fixture", () => {
       if (node.kind === "element" && node.type === "form") formCount += 1;
     });
     expect(formCount).toBeGreaterThan(0);
+    expect(JSON.stringify(graph)).toContain('"consent"');
+    expect(JSON.stringify(graph)).not.toMatch(/hot tubs?|showroom|delivered spa/i);
+  });
+
+  it("keeps hot-tub copy available only as an explicit opt-in template", () => {
+    const generic = createGenericPaidFunnelFixture("generic");
+    const hotTub = applyOptInTemplate(generic, "hot-tub-promotion");
+    expect(JSON.stringify(hotTub)).toMatch(/hot tubs|showroom/i);
+    expect(JSON.stringify(generic)).not.toMatch(/hot tubs|showroom/i);
   });
 });

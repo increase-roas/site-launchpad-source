@@ -32,7 +32,9 @@ describe("paid funnel package contract", () => {
       "form",
       "thankYou",
     ]);
-    expect(GENERIC_PAID_FUNNEL_PACKAGE.resources).toEqual([]);
+    expect(GENERIC_PAID_FUNNEL_PACKAGE.resources).toEqual([
+      { type: "d1", name: "paid-funnel-events", binding: "FUNNEL_DB" },
+    ]);
     expect(GENERIC_PAID_FUNNEL_PACKAGE.offlineConversionContract).toEqual(
       SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT
     );

@@ -247,7 +247,7 @@ export type PaidFunnelStepState = z.infer<typeof paidFunnelStepStateSchema>;
 
 export const paidFunnelPublishSettingsSchema = z
   .object({
-    audience: z.literal("qa"),
+    audience: z.enum(["qa", "client"]),
     clientId: z.number().int().positive(),
     clientKey: z.string().trim().min(1).max(80),
     templateKey: z.string().trim().min(1).max(80),
@@ -401,6 +401,11 @@ export function buildGenericPaidFunnelPackageFixture(
       outputDir: "dist",
     },
     publishAdapter: "generic-paid-funnel",
+    resources: {
+      d1Databases: [
+        { binding: "FUNNEL_DB", databaseName: "paid-funnel-events" },
+      ],
+    },
     offlineConversionContract: SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT,
   };
   return paidFunnelPackageSchema.parse({ ...fixture, ...overrides });

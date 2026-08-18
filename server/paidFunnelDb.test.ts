@@ -151,10 +151,12 @@ describe("paid funnel registry persistence", () => {
     });
   });
 
-  it("lists the generic fixture without forcing Cloudflare resources", async () => {
+  it("lists the generic fixture with only its declared attribution database", async () => {
     const templates = await listPaidFunnelTemplates(5);
     expect(templates[0]?.templateKey).toBe("generic-paid-funnel");
-    expect(templates[0]?.resources).toEqual([]);
+    expect(templates[0]?.resources).toEqual([
+      { type: "d1", name: "paid-funnel-events", binding: "FUNNEL_DB" },
+    ]);
     expect(templates[0]?.requiredRuntimeSecrets).toContain(
       "STAGE_WEBHOOK_SECRET"
     );
@@ -236,7 +238,9 @@ describe("paid funnel registry persistence", () => {
     });
     expect(result.status).toBe("ready");
     expect(result.templateKey).toBe("generic-paid-funnel");
-    expect(result.resources).toEqual([]);
+    expect(result.resources).toEqual([
+      { type: "d1", name: "paid-funnel-events", binding: "FUNNEL_DB" },
+    ]);
     expect(
       db.inserted.some(row => row.table === paidFunnelTemplateArtifacts)
     ).toBe(true);
