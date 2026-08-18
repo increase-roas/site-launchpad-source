@@ -34,4 +34,14 @@ describe("paid ads workspace error surfaces", () => {
     expect(errorIndex).toBeGreaterThan(0);
     expect(loadingIndex).toBeGreaterThan(errorIndex);
   });
+
+  it("preserves a valid studio deep link on initial mount", () => {
+    const paidAdsSource = source("pages/PaidAdsWorkspace.tsx");
+
+    expect(paidAdsSource).toContain("const previousClientIdRef = useRef(clientId)");
+    expect(paidAdsSource).toContain(
+      "if (previousClientIdRef.current === clientId) return;",
+    );
+    expect(paidAdsSource).toContain("previousClientIdRef.current = clientId;");
+  });
 });

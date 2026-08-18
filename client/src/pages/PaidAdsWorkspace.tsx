@@ -234,6 +234,7 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
   const autosaveFlight = useRef(createAutosaveFlight());
   const autosaveSessionId = useRef(1);
   const publishAdvanceInFlightRef = useRef(false);
+  const previousClientIdRef = useRef(clientId);
   const saveGraphMutation = trpc.paidFunnel.saveGraph.useMutation();
 
   const startPublishMutation = trpc.paidFunnel.startPublish.useMutation({
@@ -303,6 +304,8 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
   });
 
   useEffect(() => {
+    if (previousClientIdRef.current === clientId) return;
+    previousClientIdRef.current = clientId;
     resetAutosaveSession();
     setSelectedStep(null);
     setStudio(null);
