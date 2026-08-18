@@ -1,4 +1,7 @@
-import { compilePaidFunnelToAstro, type AstroOutputFile } from "../../../shared/paidFunnel/astroCompiler";
+import {
+  compilePaidFunnelToAstro,
+  type AstroOutputFile,
+} from "../../../shared/paidFunnel/astroCompiler";
 import type { PaidFunnelGraph } from "../../../shared/paidFunnel/graph";
 import {
   clientIntegrationFieldError,
@@ -7,9 +10,7 @@ import {
 } from "../../../shared/clientIntegrationProfile";
 import { SIMPLE_FORM_CLOUDFLARE_INFRA } from "../../../shared/simpleFormContract";
 import type { PaidFunnelPackage } from "../../../shared/studio/paidFunnelPackage";
-import {
-  mapGenericPaidFunnelProfileBindings,
-} from "./publishAdapter";
+import { mapGenericPaidFunnelProfileBindings } from "./publishAdapter";
 import type {
   ClientIntegrationProfileResolver,
   PaidFunnelAdapterBindings,
@@ -29,6 +30,7 @@ export type GenericPaidFunnelSourceBundle = {
  */
 export function buildGenericPaidFunnelSourceBundle(input: {
   clientId: number;
+  funnelId: number;
   graph: PaidFunnelGraph;
   package: PaidFunnelPackage;
   resolver: ClientIntegrationProfileResolver;
@@ -41,10 +43,12 @@ export function buildGenericPaidFunnelSourceBundle(input: {
   if (!mapped.ok) throw new Error(mapped.error);
 
   const missing = requiredPaidFunnelSecretNames(input.package).filter(
-    name => !mapped.bindings.secrets[name]?.trim(),
+    name => !mapped.bindings.secrets[name]?.trim()
   );
   if (missing.length > 0) {
-    throw new Error(`Client integration profile is missing: ${missing.join(", ")}`);
+    throw new Error(
+      `Client integration profile is missing: ${missing.join(", ")}`
+    );
   }
   for (const [name, value] of Object.entries(mapped.bindings.secrets)) {
     if (!isProfileKey(name)) continue;
@@ -63,7 +67,9 @@ export function buildGenericPaidFunnelSourceBundle(input: {
     if (isIdentifierKey(name)) continue;
     if (nonSensitiveNumericSettings.has(name)) continue;
     if (value?.trim() && serialized.includes(value)) {
-      throw new Error("A client integration secret was compiled into the Astro source bundle.");
+      throw new Error(
+        "A client integration secret was compiled into the Astro source bundle."
+      );
     }
   }
 
@@ -73,6 +79,7 @@ export function buildGenericPaidFunnelSourceBundle(input: {
     bindings: mapped.bindings,
     runtimeVars: {
       ...mapped.bindings.env,
+      FUNNEL_SHEET_TAB: `SL-${input.clientId}-${input.funnelId}`,
       META_GRAPH_API_VERSION:
         SIMPLE_FORM_CLOUDFLARE_INFRA.vars.META_GRAPH_API_VERSION,
     },

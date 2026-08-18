@@ -1,7 +1,27 @@
-import { describe, expect, it } from "vitest";
+import { ModuleKind, ScriptTarget, transpileModule } from "typescript";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createGenericPaidFunnelFixture } from "./fixture";
-import { createIdFactory, emptySpacing } from "./graph";
+import { createElement, createIdFactory, emptySpacing } from "./graph";
 import { compilePaidFunnelToAstro } from "./astroCompiler";
+
+afterEach(() => vi.unstubAllGlobals());
+
+async function testServiceAccountPrivateKey(): Promise<string> {
+  const pair = (await crypto.subtle.generateKey(
+    {
+      name: "RSASSA-PKCS1-v1_5",
+      modulusLength: 2048,
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: "SHA-256",
+    },
+    true,
+    ["sign", "verify"]
+  )) as CryptoKeyPair;
+  const bytes = new Uint8Array(
+    await crypto.subtle.exportKey("pkcs8", pair.privateKey)
+  );
+  return `-----BEGIN PRIVATE KEY-----\n${Buffer.from(bytes).toString("base64")}\n-----END PRIVATE KEY-----`;
+}
 
 describe("paid funnel Astro compiler", () => {
   it("creates one real Astro route per survey question", () => {
@@ -42,6 +62,53 @@ describe("paid funnel Astro compiler", () => {
     expect(css).toContain("p{color:var(--text)");
     expect(css).toContain("color:var(--muted)");
     expect(css.match(/padding:14px 22px/g)?.length ?? 0).toBeGreaterThan(1);
+    const compiledPages = files
+      .filter(file => file.path.endsWith(".astro"))
+      .map(file => file.contents)
+      .join("\n");
+    expect(compiledPages).toContain("What happens after I submit?");
+    expect(compiledPages).toContain(
+      "UTM and click IDs are preserved through the form step."
+    );
+    expect(compiledPages).not.toContain('data-block-type="faq"');
+  });
+
+  it("publishes every exposed palette block instead of placeholders", () => {
+    const graph = createGenericPaidFunnelFixture(createIdFactory("blocks"));
+    const column =
+      graph.pages[graph.steps[0]!.key]!.sections[0]!.rows[0]!.columns[0]!;
+    const nextId = createIdFactory("palette");
+    column.elements.push(
+      createElement(nextId, "icon", { name: "sparkles" }),
+      createElement(nextId, "video", { src: "https://cdn.example.com/ad.mp4" }),
+      createElement(nextId, "spacer", { height: 73 }),
+      createElement(nextId, "countdown", {
+        label: "Offer ends",
+        endsAt: "2026-09-01T00:00:00.000Z",
+      }),
+      createElement(nextId, "inventory", { slots: 3, heading: "In stock" }),
+      createElement(nextId, "map", { address: "123 Main St, Detroit, MI" }),
+      createElement(nextId, "html", { markup: "<strong>Custom offer</strong>" })
+    );
+
+    const files = compilePaidFunnelToAstro(graph);
+    const page =
+      files.find(file => file.path === "src/pages/index.astro")?.contents ?? "";
+    const runtime =
+      files.find(file => file.path === "public/scripts/funnel-runtime.js")
+        ?.contents ?? "";
+    expect(page).toContain('data-icon-name="sparkles"');
+    expect(page).toContain('src="https://cdn.example.com/ad.mp4"');
+    expect(page).toContain('style="height:73px"');
+    expect(page).toContain("data-countdown");
+    expect(page).toContain("In stock");
+    expect(page.match(/class="inventory-slot"/g)?.length).toBe(3);
+    expect(page).toContain(
+      "google.com/maps?q=123%20Main%20St%2C%20Detroit%2C%20MI"
+    );
+    expect(page).toContain('set:html={"<strong>Custom offer</strong>"}');
+    expect(page).not.toContain('class="funnel-element placeholder"');
+    expect(runtime).toContain('document.querySelectorAll("[data-countdown]")');
   });
 
   it("preserves attribution and reuses one event id for Pixel and CAPI deduplication", () => {
@@ -68,7 +135,8 @@ describe("paid funnel Astro compiler", () => {
     expect(runtime).toContain('window.fbq("init"');
     expect(runtime).toContain("answers: context.answers");
     expect(runtime).toContain("original_query_string");
-    expect(runtime).toContain("for (let attempt = 0; attempt < 3");
+    expect(runtime).toContain("for (let attempt = 0; attempt < 7");
+    expect(runtime).toContain("Math.min(4000, 250 * (2 ** attempt))");
     expect(runtime).toContain("event_id, event_name");
     expect(runtime).toContain(
       'kind === "answer" ? (tracking.serverEvent || "LeadSurveyAnswer") : (tracking.browserEvent || "ViewContent")'
@@ -87,13 +155,27 @@ describe("paid funnel Astro compiler", () => {
     expect(endpoint).toContain("https://oauth2.googleapis.com/token");
     expect(endpoint).toContain("sheets.googleapis.com/v4/spreadsheets");
     expect(endpoint).toContain(
-      'const deliveryKey = "google-sheets:" + text(payload.event_id)'
+      'const sheetNamespace = text(env.GOOGLE_SHEETS_ID) + ":" + String(sheetId)'
     );
-    expect(endpoint).toContain("INSERT OR IGNORE INTO delivery_claims");
     expect(endpoint).toContain(
-      "DELETE FROM delivery_claims WHERE delivery_key = ? AND status = 'pending'"
+      'const deliveryKey = "google-sheets:" + sheetNamespace + ":" + text(payload.event_id)'
     );
-    expect(migration).toContain("CREATE TABLE IF NOT EXISTS delivery_claims");
+    expect(endpoint).toContain(
+      "addSheet: { properties: { title: requestedTitle } }"
+    );
+    expect(endpoint).toContain("INSERT OR IGNORE INTO sheet_delivery_rows");
+    expect(endpoint).toContain(
+      "UPDATE sheet_delivery_counters SET next_row = next_row + 1"
+    );
+    expect(endpoint).toContain("RETURNING next_row - 1 AS sheet_row");
+    expect(endpoint).toContain('method: "PUT"');
+    expect(endpoint).not.toContain(":append?valueInputOption");
+    expect(migration).toContain(
+      "CREATE TABLE IF NOT EXISTS sheet_delivery_counters"
+    );
+    expect(migration).toContain(
+      "CREATE TABLE IF NOT EXISTS sheet_delivery_rows"
+    );
     expect(migration).toContain("delivery_key TEXT PRIMARY KEY");
     expect(endpoint).toContain("INSERT OR IGNORE INTO funnel_leads");
     expect(endpoint).toContain(
@@ -131,6 +213,144 @@ describe("paid funnel Astro compiler", () => {
     expect(stageEndpoint).toContain('conversion?.status === "sent"');
     expect(stageEndpoint).toContain("lead.fbc");
     expect(stageEndpoint).toContain("lead.fbp");
+  });
+
+  it("reuses one assigned Sheets row after a crash or concurrent replay", async () => {
+    const graph = createGenericPaidFunnelFixture(createIdFactory("lease"));
+    const endpoint =
+      compilePaidFunnelToAstro(graph).find(
+        file => file.path === "src/pages/api/funnel-event.ts"
+      )?.contents ?? "";
+    const javascript = transpileModule(endpoint, {
+      compilerOptions: {
+        module: ModuleKind.ESNext,
+        target: ScriptTarget.ES2022,
+      },
+    }).outputText;
+    const module = (await import(
+      `data:text/javascript;base64,${Buffer.from(javascript).toString("base64")}#${crypto.randomUUID()}`
+    )) as {
+      POST(input: { request: Request; locals: unknown }): Promise<Response>;
+    };
+
+    const assignment = {
+      status: "pending",
+      sheet_row: 7,
+    };
+    const database = {
+      prepare(sql: string) {
+        let values: unknown[] = [];
+        const statement = {
+          bind(...next: unknown[]) {
+            values = next;
+            return statement;
+          },
+          async first() {
+            if (sql.startsWith("SELECT sheet_row, status")) return assignment;
+            return null;
+          },
+          async run() {
+            if (
+              sql.startsWith(
+                "UPDATE sheet_delivery_rows SET status = 'delivered'"
+              )
+            ) {
+              if (values[2] === assignment.sheet_row)
+                assignment.status = "delivered";
+              return { meta: { changes: 1 } };
+            }
+            return { meta: { changes: 1 } };
+          },
+        };
+        return statement;
+      },
+    };
+    const requested: string[] = [];
+    const writtenRows = new Map<string, string>();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        requested.push(`${init?.method ?? "GET"} ${url}`);
+        if (url.includes("oauth2.googleapis.com")) {
+          return Response.json({ access_token: "test-access-token" });
+        }
+        if (url.includes("fields=sheets.properties")) {
+          return Response.json({
+            sheets: [
+              {
+                properties: {
+                  sheetId: 0,
+                  title: "SL-1-1",
+                  gridProperties: { rowCount: 1000 },
+                },
+              },
+            ],
+          });
+        }
+        if (url.includes("sheets.googleapis.com") && init?.method !== "PUT") {
+          return Response.json({ values: [] });
+        }
+        if (url.includes("sheets.googleapis.com") && init?.method === "PUT") {
+          writtenRows.set(url, String(init.body));
+        }
+        return Response.json({});
+      })
+    );
+    const privateKey = await testServiceAccountPrivateKey();
+    const eventId = "11111111-1111-4111-8111-111111111111";
+    const leadUuid = "22222222-2222-4222-8222-222222222222";
+    const createRequest = () =>
+      new Request("https://funnel.example/api/funnel-event", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://funnel.example",
+        },
+        body: JSON.stringify({
+          event_id: eventId,
+          event_name: "Lead",
+          lead_uuid: leadUuid,
+          page_url: "https://funnel.example/contact",
+          data: { fields: { firstName: "Test", email: "test@example.com" } },
+        }),
+      });
+    const locals = {
+      runtime: {
+        env: {
+          FUNNEL_DB: database,
+          GHL_API_KEY: "test-ghl-key",
+          GHL_LOCATION_ID: "test-location",
+          META_PIXEL_ID: "1234567890",
+          META_CAPI_ACCESS_TOKEN: "test-meta-token",
+          GOOGLE_SHEETS_ID: "test-sheet",
+          FUNNEL_SHEET_TAB: "SL-1-1",
+          GOOGLE_SERVICE_ACCOUNT_EMAIL: "test@example.iam.gserviceaccount.com",
+          GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: privateKey,
+        },
+      },
+    };
+    const responses = await Promise.all([
+      module.POST({
+        request: createRequest(),
+        locals,
+      }),
+      module.POST({
+        request: createRequest(),
+        locals,
+      }),
+    ]);
+
+    expect(responses.map(response => response.status)).toEqual([202, 202]);
+    expect(assignment.status).toBe("delivered");
+    expect(
+      requested.filter(
+        value =>
+          value.startsWith("PUT ") && value.includes("sheets.googleapis.com")
+      )
+    ).toHaveLength(2);
+    expect(writtenRows).toHaveLength(1);
+    expect([...writtenRows.keys()][0]).toContain("'SL-1-1'!A7%3AK7");
   });
 
   it("compiles editor styling and responsive visibility into the published Astro source", () => {

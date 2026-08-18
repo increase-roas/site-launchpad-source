@@ -175,6 +175,7 @@ export async function getGenericPaidFunnelPublishMaterial(
   const graph = detail.studio.graph;
   const bundle = buildGenericPaidFunnelSourceBundle({
     clientId,
+    funnelId,
     graph,
     package: pkg,
     resolver: createClientIntegrationProfileResolver([profile]),

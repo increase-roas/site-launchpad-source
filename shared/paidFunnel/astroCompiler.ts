@@ -93,7 +93,11 @@ function renderElement(
     return `<img ${blockAttributes} src="${html(props.src)}" alt="${html(props.alt)}" loading="lazy" decoding="async" />`;
   }
   if (element.type === "button" || element.type === "phoneCta") {
-    const action = props.action as ButtonAction | undefined;
+    const action =
+      (props.action as ButtonAction | undefined) ??
+      (element.type === "phoneCta" && String(props.tel ?? "").trim()
+        ? ({ type: "phone", tel: String(props.tel) } satisfies ButtonAction)
+        : undefined);
     const href = actionDestination(action, step, graph);
     return `<a class="${classes("funnel-element", elementClass, "funnel-button")}" data-block-id="${html(element.id)}" data-funnel-link data-destination="${html(href)}" href="${html(href || "#")}">${html(props.label ?? "Continue")}</a>`;
   }
@@ -123,10 +127,51 @@ ${options.map(option => `<button type="button" class="choice" data-answer="${htm
     return `<blockquote ${blockAttributes}>${html(props.quote)}<footer>${html(props.author)}</footer></blockquote>`;
   if (element.type === "divider") return `<hr ${blockAttributes} />`;
   if (element.type === "spacer")
-    return `<div class="${classes("funnel-element", elementClass, "spacer")}" data-block-id="${html(element.id)}" aria-hidden="true"></div>`;
+    return `<div class="${classes("funnel-element", elementClass, "spacer")}" data-block-id="${html(element.id)}" style="height:${Math.max(0, Math.min(2_000, Number(props.height) || 0))}px" aria-hidden="true"></div>`;
   if (element.type === "list") {
     const items = Array.isArray(props.items) ? props.items.map(String) : [];
     return `<ul ${blockAttributes}>${items.map(item => `<li>${html(item)}</li>`).join("")}</ul>`;
+  }
+  if (element.type === "faq") {
+    const items = Array.isArray(props.items)
+      ? props.items.filter(
+          (item): item is { question?: unknown; answer?: unknown } =>
+            Boolean(item) && typeof item === "object" && !Array.isArray(item)
+        )
+      : [];
+    return `<div class="${classes("funnel-element", elementClass, "funnel-faq")}" data-block-id="${html(element.id)}">${items.map(item => `<details><summary>${html(item.question)}</summary><p>${html(item.answer)}</p></details>`).join("")}</div>`;
+  }
+  if (element.type === "video") {
+    const src = String(props.src ?? "").trim();
+    return src
+      ? `<video ${blockAttributes} controls preload="metadata" playsinline src="${html(src)}"></video>`
+      : `<div class="${classes("funnel-element", elementClass, "media-placeholder")}" data-block-id="${html(element.id)}">Add a video</div>`;
+  }
+  if (element.type === "icon") {
+    const name = String(props.name ?? "sparkles");
+    return `<span class="${classes("funnel-element", elementClass, "funnel-icon")}" data-block-id="${html(element.id)}" data-icon-name="${html(name)}" role="img" aria-label="${html(name)}">✦</span>`;
+  }
+  if (element.type === "countdown") {
+    return `<div class="${classes("funnel-element", elementClass, "funnel-countdown")}" data-block-id="${html(element.id)}" data-countdown data-ends-at="${html(props.endsAt)}"><span>${html(props.label ?? "Offer ends")}</span><strong data-countdown-value>--:--:--</strong></div>`;
+  }
+  if (element.type === "inventory") {
+    const slots = Math.max(
+      0,
+      Math.min(24, Math.floor(Number(props.slots) || 0))
+    );
+    return `<div class="${classes("funnel-element", elementClass, "funnel-inventory")}" data-block-id="${html(element.id)}"><h3>${html(props.heading ?? "Available options")}</h3><div class="inventory-slots">${Array.from({ length: slots }, (_, index) => `<div class="inventory-slot">Option ${index + 1}</div>`).join("")}</div></div>`;
+  }
+  if (element.type === "map") {
+    const address = String(props.address ?? "").trim();
+    const src = address
+      ? `https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed`
+      : "";
+    return src
+      ? `<iframe ${blockAttributes} title="Map for ${html(address)}" src="${html(src)}" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`
+      : `<div class="${classes("funnel-element", elementClass, "media-placeholder")}" data-block-id="${html(element.id)}">Add a map address</div>`;
+  }
+  if (element.type === "html") {
+    return `<div ${blockAttributes} set:html={${JSON.stringify(String(props.markup ?? ""))}}></div>`;
   }
   return `<div class="${classes("funnel-element", elementClass, "placeholder")}" data-block-id="${html(element.id)}" data-block-type="${html(element.type)}">${html(props.label ?? element.type)}</div>`;
 }
@@ -214,12 +259,12 @@ async function loadPixel() {
   } catch {}
 }
 async function postEvent(payload) {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < 7; attempt += 1) {
     try {
       const response = await fetch("/api/funnel-event", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload), keepalive: true });
       if (response.ok) return true;
     } catch {}
-    await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)));
+    await new Promise(resolve => setTimeout(resolve, Math.min(4000, 250 * (2 ** attempt))));
   }
   return false;
 }
@@ -246,9 +291,26 @@ function rememberAnswer(field, value) {
   context.answers[field] = value;
   saveContext(context);
 }
+function startCountdown(root) {
+  const output = root.querySelector("[data-countdown-value]");
+  const end = Date.parse(root.dataset.endsAt || "");
+  if (!output || !Number.isFinite(end)) { if (output) output.textContent = "Offer active"; return; }
+  const update = () => {
+    const remaining = Math.max(0, end - Date.now());
+    const days = Math.floor(remaining / 86400000);
+    const hours = Math.floor((remaining % 86400000) / 3600000);
+    const minutes = Math.floor((remaining % 3600000) / 60000);
+    const seconds = Math.floor((remaining % 60000) / 1000);
+    output.textContent = (days ? days + "d " : "") + [hours, minutes, seconds].map(value => String(value).padStart(2, "0")).join(":");
+    return remaining;
+  };
+  update();
+  const timer = window.setInterval(() => { if (update() <= 0) window.clearInterval(timer); }, 1000);
+}
 async function start() {
   await loadPixel();
   emit("view");
+  document.querySelectorAll("[data-countdown]").forEach(startCountdown);
   document.querySelectorAll("[data-survey-question]").forEach(root => root.addEventListener("click", event => {
     const button = event.target.closest("[data-answer]");
     if (!button) return;
@@ -324,25 +386,51 @@ async function deliverGhl(payload: any, fields: Record<string, unknown>, env: Ru
 }
 async function deliverSheet(payload: any, fields: Record<string, unknown>, env: RuntimeEnv) {
   if (!env.GOOGLE_SHEETS_ID || !env.FUNNEL_DB) throw new Error("Google Sheet is not configured.");
-  const deliveryKey = "google-sheets:" + text(payload.event_id);
-  const claimedAt = new Date().toISOString();
-  const claim = await env.FUNNEL_DB.prepare("INSERT OR IGNORE INTO delivery_claims (delivery_key, event_id, destination, status, claimed_at) VALUES (?, ?, 'google-sheets', 'pending', ?)").bind(deliveryKey, text(payload.event_id), claimedAt).run();
-  if (Number(claim?.meta?.changes ?? 0) !== 1) return;
-  try {
-    const token = await googleAccessToken(env);
-    const range = "A:Z";
-    const base = \`https://sheets.googleapis.com/v4/spreadsheets/\${encodeURIComponent(env.GOOGLE_SHEETS_ID)}/values/\${encodeURIComponent(range)}\`;
-    const existing = await ok(fetch(base + "?majorDimension=ROWS", { headers: { authorization: \`Bearer \${token}\` } }));
-    const rows = (await existing.json() as { values?: unknown[][] }).values ?? [];
-    if (!rows.some(row => text(row[1]) === text(payload.event_id))) {
-      const values = [[new Date().toISOString(), text(payload.event_id), text(payload.lead_uuid), text(fields.firstName), text(fields.lastName), text(fields.email), text(fields.phone), text(fields.zip || fields.postalCode), text(payload.page_url), JSON.stringify(payload.attribution ?? {}), JSON.stringify(payload.data?.answers ?? {})]];
-      await ok(fetch(base + ":append?valueInputOption=RAW&insertDataOption=INSERT_ROWS", { method: "POST", headers: { authorization: \`Bearer \${token}\`, "content-type": "application/json" }, body: JSON.stringify({ majorDimension: "ROWS", values }) }));
-    }
-    await env.FUNNEL_DB.prepare("UPDATE delivery_claims SET status = 'delivered', delivered_at = ? WHERE delivery_key = ?").bind(new Date().toISOString(), deliveryKey).run();
-  } catch (error) {
-    await env.FUNNEL_DB.prepare("DELETE FROM delivery_claims WHERE delivery_key = ? AND status = 'pending'").bind(deliveryKey).run();
-    throw error;
+  const requestedTitle = text(env.FUNNEL_SHEET_TAB);
+  if (!requestedTitle) throw new Error("Google Sheet funnel tab is not configured.");
+  const token = await googleAccessToken(env);
+  const spreadsheetBase = \`https://sheets.googleapis.com/v4/spreadsheets/\${encodeURIComponent(env.GOOGLE_SHEETS_ID)}\`;
+  const loadSheets = async () => {
+    const metadata = await ok(fetch(spreadsheetBase + "?fields=sheets.properties(sheetId,title,gridProperties.rowCount)", { headers: { authorization: \`Bearer \${token}\` } }));
+    return ((await metadata.json() as any)?.sheets ?? []).map((entry: any) => entry?.properties);
+  };
+  let sheet = (await loadSheets()).find((properties: any) => text(properties?.title) === requestedTitle);
+  if (!sheet) {
+    const created = await fetch(spreadsheetBase + ":batchUpdate", { method: "POST", headers: { authorization: \`Bearer \${token}\`, "content-type": "application/json" }, body: JSON.stringify({ requests: [{ addSheet: { properties: { title: requestedTitle } } }] }) });
+    if (created.ok) sheet = ((await created.json() as any)?.replies ?? [])[0]?.addSheet?.properties;
+    if (!sheet) sheet = (await loadSheets()).find((properties: any) => text(properties?.title) === requestedTitle);
   }
+  const sheetId = Number(sheet?.sheetId);
+  const sheetTitle = text(sheet?.title);
+  const gridRows = Number(sheet?.gridProperties?.rowCount);
+  if (!Number.isInteger(sheetId) || !sheetTitle || !Number.isInteger(gridRows) || gridRows < 1) throw new Error("Google Sheet metadata is invalid.");
+  const sheetNamespace = text(env.GOOGLE_SHEETS_ID) + ":" + String(sheetId);
+  const deliveryKey = "google-sheets:" + sheetNamespace + ":" + text(payload.event_id);
+  const escapedTitle = sheetTitle.replace(/'/g, "''");
+  const existingRange = encodeURIComponent("'" + escapedTitle + "'!A:K");
+  const existing = await ok(fetch(spreadsheetBase + "/values/" + existingRange + "?majorDimension=ROWS", { headers: { authorization: \`Bearer \${token}\` } }));
+  const rows = (await existing.json() as { values?: unknown[][] }).values ?? [];
+  if (rows.some(row => text(row[1]) === text(payload.event_id))) return;
+
+  let assignment = await env.FUNNEL_DB.prepare("SELECT sheet_row, status FROM sheet_delivery_rows WHERE delivery_key = ?").bind(deliveryKey).first();
+  if (!assignment) {
+    await env.FUNNEL_DB.prepare("INSERT OR IGNORE INTO sheet_delivery_counters (sheet_id, next_row) VALUES (?, ?)").bind(sheetNamespace, rows.length + 1).run();
+    await env.FUNNEL_DB.prepare("UPDATE sheet_delivery_counters SET next_row = CASE WHEN next_row < ? THEN ? ELSE next_row END WHERE sheet_id = ?").bind(rows.length + 1, rows.length + 1, sheetNamespace).run();
+    const allocated = await env.FUNNEL_DB.prepare("UPDATE sheet_delivery_counters SET next_row = next_row + 1 WHERE sheet_id = ? RETURNING next_row - 1 AS sheet_row").bind(sheetNamespace).first();
+    const allocatedRow = Number(allocated?.sheet_row);
+    if (!Number.isInteger(allocatedRow) || allocatedRow < 1) throw new Error("Google Sheet row allocation failed.");
+    await env.FUNNEL_DB.prepare("INSERT OR IGNORE INTO sheet_delivery_rows (delivery_key, event_id, sheet_id, sheet_row, status, updated_at) VALUES (?, ?, ?, ?, 'pending', ?)").bind(deliveryKey, text(payload.event_id), sheetNamespace, allocatedRow, new Date().toISOString()).run();
+    assignment = await env.FUNNEL_DB.prepare("SELECT sheet_row, status FROM sheet_delivery_rows WHERE delivery_key = ?").bind(deliveryKey).first();
+  }
+  const sheetRow = Number(assignment?.sheet_row);
+  if (!Number.isInteger(sheetRow) || sheetRow < 1) throw new Error("Google Sheet row assignment is invalid.");
+  if (sheetRow > gridRows) {
+    await ok(fetch(spreadsheetBase + ":batchUpdate", { method: "POST", headers: { authorization: \`Bearer \${token}\`, "content-type": "application/json" }, body: JSON.stringify({ requests: [{ appendDimension: { sheetId, dimension: "ROWS", length: Math.max(1000, sheetRow - gridRows) } }] }) }));
+  }
+  const rowRange = encodeURIComponent("'" + escapedTitle + "'!A" + sheetRow + ":K" + sheetRow);
+  const values = [[new Date().toISOString(), text(payload.event_id), text(payload.lead_uuid), text(fields.firstName), text(fields.lastName), text(fields.email), text(fields.phone), text(fields.zip || fields.postalCode), text(payload.page_url), JSON.stringify(payload.attribution ?? {}), JSON.stringify(payload.data?.answers ?? {})]];
+  await ok(fetch(spreadsheetBase + "/values/" + rowRange + "?valueInputOption=RAW", { method: "PUT", headers: { authorization: \`Bearer \${token}\`, "content-type": "application/json" }, body: JSON.stringify({ majorDimension: "ROWS", values }) }));
+  await env.FUNNEL_DB.prepare("UPDATE sheet_delivery_rows SET status = 'delivered', updated_at = ? WHERE delivery_key = ? AND sheet_row = ?").bind(new Date().toISOString(), deliveryKey, sheetRow).run();
 }
 async function deliverAlert(payload: any, fields: Record<string, unknown>, env: RuntimeEnv) {
   if (!env.ALERT_WEBHOOK_URL) return;
@@ -352,7 +440,8 @@ async function ensureTables(env: RuntimeEnv) {
   if (!env.FUNNEL_DB) throw new Error("FUNNEL_DB is not configured.");
   await env.FUNNEL_DB.prepare("CREATE TABLE IF NOT EXISTS funnel_leads (lead_uuid TEXT PRIMARY KEY, first_event_id TEXT NOT NULL, first_url TEXT NOT NULL, original_query_string TEXT NOT NULL, fbc TEXT, fbp TEXT, ip_address TEXT, user_agent TEXT, email_hash TEXT, phone_hash TEXT, first_name_hash TEXT, last_name_hash TEXT, created_at TEXT NOT NULL)").run();
   await env.FUNNEL_DB.prepare("CREATE TABLE IF NOT EXISTS downstream_conversions (external_id TEXT PRIMARY KEY, event_id TEXT UNIQUE NOT NULL, lead_uuid TEXT NOT NULL, stage TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL, sent_at TEXT)").run();
-  await env.FUNNEL_DB.prepare("CREATE TABLE IF NOT EXISTS delivery_claims (delivery_key TEXT PRIMARY KEY, event_id TEXT NOT NULL, destination TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', claimed_at TEXT NOT NULL, delivered_at TEXT)").run();
+  await env.FUNNEL_DB.prepare("CREATE TABLE IF NOT EXISTS sheet_delivery_counters (sheet_id TEXT PRIMARY KEY, next_row INTEGER NOT NULL)").run();
+  await env.FUNNEL_DB.prepare("CREATE TABLE IF NOT EXISTS sheet_delivery_rows (delivery_key TEXT PRIMARY KEY, event_id TEXT NOT NULL, sheet_id TEXT NOT NULL, sheet_row INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'pending', updated_at TEXT NOT NULL, UNIQUE(sheet_id, sheet_row))").run();
 }
 async function storeOriginalLead(payload: any, fields: Record<string, unknown>, request: Request, env: RuntimeEnv) {
   await ensureTables(env);
@@ -460,13 +549,18 @@ CREATE TABLE IF NOT EXISTS downstream_conversions (
   created_at TEXT NOT NULL,
   sent_at TEXT
 );
-CREATE TABLE IF NOT EXISTS delivery_claims (
+CREATE TABLE IF NOT EXISTS sheet_delivery_counters (
+  sheet_id TEXT PRIMARY KEY,
+  next_row INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sheet_delivery_rows (
   delivery_key TEXT PRIMARY KEY,
   event_id TEXT NOT NULL,
-  destination TEXT NOT NULL,
+  sheet_id TEXT NOT NULL,
+  sheet_row INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
-  claimed_at TEXT NOT NULL,
-  delivered_at TEXT
+  updated_at TEXT NOT NULL,
+  UNIQUE(sheet_id, sheet_row)
 );
 `;
 
@@ -788,7 +882,7 @@ function graphRules(
 
 function cssSource(graph: PaidFunnelGraph): string {
   const { colors, fonts, button } = graph.globalStyles;
-  const base = `:root{--background:${cssText(colors.background, "#ffffff")};--surface:${cssText(colors.surface, "#f8fafc")};--heading-text:${cssText(colors.heading, "#0f172a")};--text:${cssText(colors.text, "#172033")};--muted:${cssText(colors.muted, "#64748b")};--primary:${cssText(colors.primary, "#1463f3")};--primary-text:${cssText(colors.primaryText, "#ffffff")};--border:${cssText(colors.border, "#d8e0ec")};--heading:${cssText(fonts.heading, "Inter")};--body:${cssText(fonts.body, "Inter")}}*{box-sizing:border-box}body{margin:0;background:var(--background);color:var(--text);font-family:var(--body),system-ui,sans-serif}main{min-height:100vh}.section{isolation:isolate}.row{display:flex}.column{display:flex;flex-direction:column;gap:18px}h1,h2,h3{color:var(--heading-text);font-family:var(--heading),system-ui,sans-serif;margin:0;line-height:1.05}h1{font-size:clamp(2.25rem,6vw,4.5rem)}p{color:var(--text);font-size:1.1rem;line-height:1.65}.funnel-button,.choice{display:inline-flex;justify-content:center;border:0;border-radius:${finite(button.radius)}px;background:${cssText(button.background, "#1463f3")};color:${cssText(button.color, "#ffffff")};padding:${finite(button.paddingY)}px ${finite(button.paddingX)}px;font-weight:${finite(button.fontWeight, 800, 1, 1000)};text-decoration:none;cursor:pointer}.funnel-form,.survey-question{display:grid;gap:12px;width:min(100%,520px);margin:0 auto}.funnel-form label{display:grid;gap:6px}.funnel-form input{min-height:48px;border:1px solid var(--border);border-radius:8px;padding:0 14px;font:inherit}.funnel-form .consent{grid-template-columns:auto 1fr;align-items:start;color:var(--muted)}.funnel-form .consent input{min-height:0;margin-top:4px}blockquote footer,input::placeholder{color:var(--muted)}.funnel-error{color:#b91c1c;font-size:.95rem;font-weight:700}.choice{width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);text-align:left}.choice[data-selected=true]{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 20%,transparent)}img{display:block;max-width:100%;height:auto}`;
+  const base = `:root{--background:${cssText(colors.background, "#ffffff")};--surface:${cssText(colors.surface, "#f8fafc")};--heading-text:${cssText(colors.heading, "#0f172a")};--text:${cssText(colors.text, "#172033")};--muted:${cssText(colors.muted, "#64748b")};--primary:${cssText(colors.primary, "#1463f3")};--primary-text:${cssText(colors.primaryText, "#ffffff")};--border:${cssText(colors.border, "#d8e0ec")};--heading:${cssText(fonts.heading, "Inter")};--body:${cssText(fonts.body, "Inter")}}*{box-sizing:border-box}body{margin:0;background:var(--background);color:var(--text);font-family:var(--body),system-ui,sans-serif}main{min-height:100vh}.section{isolation:isolate}.row{display:flex}.column{display:flex;flex-direction:column;gap:18px}h1,h2,h3{color:var(--heading-text);font-family:var(--heading),system-ui,sans-serif;margin:0;line-height:1.05}h1{font-size:clamp(2.25rem,6vw,4.5rem)}p{color:var(--text);font-size:1.1rem;line-height:1.65}.funnel-button,.choice{display:inline-flex;justify-content:center;border:0;border-radius:${finite(button.radius)}px;background:${cssText(button.background, "#1463f3")};color:${cssText(button.color, "#ffffff")};padding:${finite(button.paddingY)}px ${finite(button.paddingX)}px;font-weight:${finite(button.fontWeight, 800, 1, 1000)};text-decoration:none;cursor:pointer}.funnel-form,.survey-question{display:grid;gap:12px;width:min(100%,520px);margin:0 auto}.funnel-form label{display:grid;gap:6px}.funnel-form input{min-height:48px;border:1px solid var(--border);border-radius:8px;padding:0 14px;font:inherit}.funnel-form .consent{grid-template-columns:auto 1fr;align-items:start;color:var(--muted)}.funnel-form .consent input{min-height:0;margin-top:4px}blockquote footer,input::placeholder{color:var(--muted)}.funnel-error{color:#b91c1c;font-size:.95rem;font-weight:700}.choice{width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);text-align:left}.choice[data-selected=true]{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 20%,transparent)}img,video,iframe{display:block;max-width:100%}img{height:auto}video,iframe{width:100%;min-height:280px;border:0;border-radius:inherit}.funnel-faq{display:grid;gap:10px}.funnel-faq details,.inventory-slot,.media-placeholder{border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:14px}.funnel-faq summary{cursor:pointer;font-weight:800}.funnel-faq details p{margin-bottom:0}.funnel-countdown{display:flex;align-items:center;justify-content:space-between;gap:16px}.funnel-countdown strong{font-variant-numeric:tabular-nums}.inventory-slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:14px}.funnel-icon{font-size:2rem;line-height:1}`;
   const desktop = graphRules(graph, "desktop").join("");
   const tablet = graphRules(graph, "tablet").join("");
   const mobile = graphRules(graph, "mobile").join("");
