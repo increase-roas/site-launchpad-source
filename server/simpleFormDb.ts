@@ -69,6 +69,10 @@ export function simpleFormSecretPresenceFromProfile(
       profile.dto.secretPresence.META_CAPI_ACCESS_TOKEN === "SET",
     STAGE_WEBHOOK_SECRET:
       profile.dto.secretPresence.STAGE_WEBHOOK_SECRET === "SET",
+    GOOGLE_SERVICE_ACCOUNT_EMAIL:
+      profile.dto.secretPresence.GOOGLE_SERVICE_ACCOUNT_EMAIL === "SET",
+    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY:
+      profile.dto.secretPresence.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY === "SET",
     ALERT_WEBHOOK_URL:
       profile.dto.secretPresence.ALERT_WEBHOOK_URL === "SET",
   };

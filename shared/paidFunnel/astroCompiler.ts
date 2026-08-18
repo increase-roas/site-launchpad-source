@@ -673,6 +673,10 @@ function graphRules(
             const elementSelector = `.${styleClass("element", element.id)}`;
             const isButton =
               element.type === "button" || element.type === "phoneCta";
+            const elementPadding = responsiveValue(
+              element.styles.padding,
+              breakpoint
+            );
             const visibleDisplay =
               element.type === "form" ||
               element.type === "shortAnswer" ||
@@ -744,12 +748,11 @@ function graphRules(
                 ],
                 [
                   "padding",
-                  spacing(
-                    responsiveValue(element.styles.padding, breakpoint)
-                  ) ||
-                    (isButton
+                  elementPadding
+                    ? spacing(elementPadding)
+                    : isButton
                       ? `${finite(graph.globalStyles.button.paddingY)}px ${finite(graph.globalStyles.button.paddingX)}px`
-                      : "0"),
+                      : "0",
                 ],
                 [
                   "margin",

@@ -34,6 +34,7 @@ import {
   getSimpleFormPublishMaterial,
   saveSimpleFormConfig,
   saveSimpleFormIntegration,
+  simpleFormSecretPresenceFromProfile,
 } from "./simpleFormDb";
 
 function resolvedProfile(input: {
@@ -91,6 +92,30 @@ beforeEach(() => {
   integrationMocks.saveClientIntegrationProfile.mockResolvedValue(
     resolvedProfile().dto,
   );
+});
+
+it("maps the complete canonical runtime-secret presence into readiness", () => {
+  expect(simpleFormSecretPresenceFromProfile(resolvedProfile())).toMatchObject({
+    GHL_API_KEY: true,
+    META_CAPI_ACCESS_TOKEN: true,
+    STAGE_WEBHOOK_SECRET: true,
+    GOOGLE_SERVICE_ACCOUNT_EMAIL: true,
+    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: true,
+  });
+
+  expect(
+    simpleFormSecretPresenceFromProfile(
+      resolvedProfile({
+        secrets: {
+          GOOGLE_SERVICE_ACCOUNT_EMAIL: "",
+          GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: "",
+        },
+      }),
+    ),
+  ).toMatchObject({
+    GOOGLE_SERVICE_ACCOUNT_EMAIL: false,
+    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: false,
+  });
 });
 
 function buildReadyRecord() {

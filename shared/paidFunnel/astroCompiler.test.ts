@@ -6,6 +6,14 @@ import { compilePaidFunnelToAstro } from "./astroCompiler";
 describe("paid funnel Astro compiler", () => {
   it("creates one real Astro route per survey question", () => {
     const graph = createGenericPaidFunnelFixture(createIdFactory("astro"));
+    const button = Object.values(graph.pages)
+      .flatMap(page => page.sections)
+      .flatMap(section => section.rows)
+      .flatMap(row => row.columns)
+      .flatMap(column => column.elements)
+      .find(element => element.type === "button");
+    expect(button).toBeDefined();
+    if (button) button.styles.padding = undefined;
     const files = compilePaidFunnelToAstro(graph);
     const paths = files.map(file => file.path);
     expect(paths).toContain("src/pages/index.astro");
@@ -33,6 +41,7 @@ describe("paid funnel Astro compiler", () => {
     expect(css).toContain("h1,h2,h3{color:var(--heading-text)");
     expect(css).toContain("p{color:var(--text)");
     expect(css).toContain("color:var(--muted)");
+    expect(css.match(/padding:14px 22px/g)?.length ?? 0).toBeGreaterThan(1);
   });
 
   it("preserves attribution and reuses one event id for Pixel and CAPI deduplication", () => {
