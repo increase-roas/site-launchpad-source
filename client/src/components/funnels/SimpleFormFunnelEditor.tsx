@@ -31,13 +31,7 @@ import {
   Rocket,
   Save,
 } from "lucide-react";
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 type PublishStateLike = {
@@ -62,10 +56,7 @@ type PublishAdvanceController = {
   getState: () => PublishAdvanceControllerState;
   observeSuccessfulStatus: (publish: VersionedPublishStateLike) => void;
   resetForStart: () => void;
-  retry: (
-    publish: VersionedPublishStateLike,
-    request: () => void
-  ) => boolean;
+  retry: (publish: VersionedPublishStateLike, request: () => void) => boolean;
   scheduleAutomatic: (
     publish: VersionedPublishStateLike,
     delay: number,
@@ -282,13 +273,12 @@ export function offlineConversionOperatorGuidance(): {
   return {
     allowedCallbackStages:
       SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT.stageMappings.map(
-        mapping => mapping.callbackStage,
+        mapping => mapping.callbackStage
       ),
-    stageMappings:
-      SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT.stageMappings.map(
-        mapping =>
-          `${mapping.pipelineStage} → ${mapping.callbackStage} → Meta ${mapping.metaEvent}`,
-      ),
+    stageMappings: SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT.stageMappings.map(
+      mapping =>
+        `${mapping.pipelineStage} → ${mapping.callbackStage} → Meta ${mapping.metaEvent}`
+    ),
   };
 }
 
@@ -536,8 +526,9 @@ export function SimpleFormFunnelEditor({
     useState<PublishAdvanceControllerState>(
       initialPublishAdvanceControllerState
     );
-  const publishAdvanceControllerRef =
-    useRef<PublishAdvanceController | null>(null);
+  const publishAdvanceControllerRef = useRef<PublishAdvanceController | null>(
+    null
+  );
   if (publishAdvanceControllerRef.current === null) {
     publishAdvanceControllerRef.current = createPublishAdvanceController(
       setPublishAdvanceControl
@@ -627,7 +618,7 @@ export function SimpleFormFunnelEditor({
       publish,
       publishAdvanceDelayMs(publish),
       () => {
-        mutatePublishAdvance({ clientId, funnelId });
+        mutatePublishAdvance({ clientId, funnelId, retryFailed: false });
       }
     );
     return () => publishAdvanceController.cancelScheduled();
@@ -763,7 +754,11 @@ export function SimpleFormFunnelEditor({
                   }
                   if (!publish) return;
                   publishAdvanceController.retry(publish, () => {
-                    mutatePublishAdvance({ clientId, funnelId });
+                    mutatePublishAdvance({
+                      clientId,
+                      funnelId,
+                      retryFailed: true,
+                    });
                   });
                 }}
                 className="h-11 gap-2 rounded-xl bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
@@ -1053,7 +1048,10 @@ export function SimpleFormFunnelEditor({
       </Section>
 
       <Section title="GHL">
-        <Field label="GHL Location ID" hint="The client sub-account location ID.">
+        <Field
+          label="GHL Location ID"
+          hint="The client sub-account location ID."
+        >
           <Input
             value={integrationDrafts.GHL_LOCATION_ID ?? ""}
             onChange={event =>
@@ -1072,7 +1070,7 @@ export function SimpleFormFunnelEditor({
           <p className="text-sm font-medium text-muted-foreground">
             Allowed callback stages:{" "}
             {offlineConversionOperatorGuidance().allowedCallbackStages.join(
-              "/",
+              "/"
             )}
           </p>
           <ul className="list-disc space-y-1 pl-5 text-sm font-medium text-muted-foreground">

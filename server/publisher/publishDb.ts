@@ -154,7 +154,12 @@ export const simpleFormPublishStore: SimpleFormPublishStore = {
         and(
           eq(funnelPublishes.clientId, input.clientId),
           eq(funnelPublishes.funnelId, input.funnelId),
-          ne(funnelPublishes.status, "published"),
+          input.allowFailed
+            ? ne(funnelPublishes.status, "published")
+            : or(
+                eq(funnelPublishes.status, "pending"),
+                eq(funnelPublishes.status, "running")
+              ),
           or(
             isNull(funnelPublishes.leaseUntil),
             lt(funnelPublishes.leaseUntil, input.now)

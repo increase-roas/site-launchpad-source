@@ -87,6 +87,7 @@ export interface SimpleFormPublishStore {
   claim(input: {
     clientId: number;
     funnelId: number;
+    allowFailed: boolean;
     leaseToken: string;
     leaseUntil: Date;
     now: Date;
@@ -240,6 +241,7 @@ export type SimpleFormPublishDependencies = {
 type PublishOwnerInput = {
   clientId: number;
   funnelId: number;
+  retryFailed?: boolean;
 };
 
 type StartPublishInput = PublishOwnerInput & {
@@ -273,10 +275,7 @@ function startPublishLeaseHeartbeat(
   deps: SimpleFormPublishDependencies,
   controller: AbortController
 ): PublishLeaseHeartbeat {
-  const heartbeatIntervalMs = Math.max(
-    1,
-    Math.floor(deps.leaseDurationMs / 3)
-  );
+  const heartbeatIntervalMs = Math.max(1, Math.floor(deps.leaseDurationMs / 3));
   let stopped = false;
   let failure: unknown;
   let pendingRenewal: Promise<void> | null = null;
@@ -330,9 +329,7 @@ function assertExactWorkflowDisplayTitle(
   sourceSha: string,
   mismatchMessage: string
 ): void {
-  if (
-    displayTitle !== expectedWorkflowDisplayTitle(publishJobId, sourceSha)
-  ) {
+  if (displayTitle !== expectedWorkflowDisplayTitle(publishJobId, sourceSha)) {
     throw new PublisherManualAttentionError(mismatchMessage);
   }
 }
@@ -1040,6 +1037,7 @@ export async function advanceSimpleFormPublish(
   const leaseToken = deps.createLeaseToken();
   const claimed = await deps.store.claim({
     ...input,
+    allowFailed: input.retryFailed === true,
     leaseToken,
     now,
     leaseUntil: new Date(now.getTime() + deps.leaseDurationMs),
@@ -1282,10 +1280,11 @@ export async function startPublish(
 
 export async function advancePublish(
   clientId: number,
-  funnelId: number
+  funnelId: number,
+  retryFailed = false
 ): Promise<SimpleFormPublishStatusView> {
   return advanceSimpleFormPublish(
-    { clientId, funnelId },
+    { clientId, funnelId, retryFailed },
     runtimeDependencies()
   );
 }

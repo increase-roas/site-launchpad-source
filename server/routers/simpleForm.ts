@@ -40,13 +40,16 @@ export const simpleFormRouter = router({
       z.object({
         clientId: z.number().int().positive(),
         templateKey: z.literal(SIMPLE_FORM_TEMPLATE_KEY),
-      }),
+      })
     )
     .mutation(async ({ input }) => {
       try {
         return await createSimpleFormFromTemplate(input.clientId);
       } catch (error) {
-        throw mapRouterError(error, "Funnel could not be created from the template.");
+        throw mapRouterError(
+          error,
+          "Funnel could not be created from the template."
+        );
       }
     }),
 
@@ -62,7 +65,11 @@ export const simpleFormRouter = router({
     .input(ownedFunnelInput.extend({ record: simpleFormStoredRecordSchema }))
     .mutation(async ({ input }) => {
       try {
-        return await saveSimpleFormConfig(input.clientId, input.funnelId, input.record);
+        return await saveSimpleFormConfig(
+          input.clientId,
+          input.funnelId,
+          input.record
+        );
       } catch (error) {
         throw mapRouterError(error, "Simple Form settings could not be saved.");
       }
@@ -79,46 +86,64 @@ export const simpleFormRouter = router({
         ALERT_WEBHOOK_URL: optionalSecret,
         clearAlertWebhookUrl: z.boolean().optional(),
         regenerateStageWebhookSecret: z.boolean().optional(),
-      }),
+      })
     )
     .mutation(async ({ input }) => {
       try {
         const { clientId, funnelId, ...integration } = input;
         return await saveSimpleFormIntegration(clientId, funnelId, integration);
       } catch (error) {
-        throw mapRouterError(error, "Lead integration settings could not be saved.");
+        throw mapRouterError(
+          error,
+          "Lead integration settings could not be saved."
+        );
       }
     }),
 
-  publishHandoff: protectedProcedure.input(ownedFunnelInput).query(async ({ input }) => {
-    try {
-      return await getSimpleFormPublishHandoff(input.clientId, input.funnelId);
-    } catch (error) {
-      throw mapRouterError(error, "Publish handoff could not be loaded.");
-    }
-  }),
+  publishHandoff: protectedProcedure
+    .input(ownedFunnelInput)
+    .query(async ({ input }) => {
+      try {
+        return await getSimpleFormPublishHandoff(
+          input.clientId,
+          input.funnelId
+        );
+      } catch (error) {
+        throw mapRouterError(error, "Publish handoff could not be loaded.");
+      }
+    }),
 
-  startPublish: protectedProcedure.input(ownedFunnelInput).mutation(async ({ input }) => {
-    try {
-      return await startPublish(input.clientId, input.funnelId);
-    } catch (error) {
-      throw mapRouterError(error, "Publishing could not be started.");
-    }
-  }),
+  startPublish: protectedProcedure
+    .input(ownedFunnelInput)
+    .mutation(async ({ input }) => {
+      try {
+        return await startPublish(input.clientId, input.funnelId);
+      } catch (error) {
+        throw mapRouterError(error, "Publishing could not be started.");
+      }
+    }),
 
-  advancePublish: protectedProcedure.input(ownedFunnelInput).mutation(async ({ input }) => {
-    try {
-      return await advancePublish(input.clientId, input.funnelId);
-    } catch (error) {
-      throw mapRouterError(error, "Publishing could not be advanced.");
-    }
-  }),
+  advancePublish: protectedProcedure
+    .input(ownedFunnelInput.extend({ retryFailed: z.boolean().optional() }))
+    .mutation(async ({ input }) => {
+      try {
+        return await advancePublish(
+          input.clientId,
+          input.funnelId,
+          input.retryFailed === true
+        );
+      } catch (error) {
+        throw mapRouterError(error, "Publishing could not be advanced.");
+      }
+    }),
 
-  publishStatus: protectedProcedure.input(ownedFunnelInput).query(async ({ input }) => {
-    try {
-      return await publishStatus(input.clientId, input.funnelId);
-    } catch (error) {
-      throw mapRouterError(error, "Publish status could not be loaded.");
-    }
-  }),
+  publishStatus: protectedProcedure
+    .input(ownedFunnelInput)
+    .query(async ({ input }) => {
+      try {
+        return await publishStatus(input.clientId, input.funnelId);
+      } catch (error) {
+        throw mapRouterError(error, "Publish status could not be loaded.");
+      }
+    }),
 });

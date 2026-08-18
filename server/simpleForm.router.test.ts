@@ -191,9 +191,20 @@ describe("simple form template procedures", () => {
 
     await caller.startPublish({ clientId: 5, funnelId: 11 });
     await caller.advancePublish({ clientId: 5, funnelId: 11 });
+    await caller.advancePublish({
+      clientId: 5,
+      funnelId: 11,
+      retryFailed: true,
+    });
 
     expect(publishMocks.startPublish).toHaveBeenCalledWith(5, 11);
-    expect(publishMocks.advancePublish).toHaveBeenCalledWith(5, 11);
+    expect(publishMocks.advancePublish).toHaveBeenNthCalledWith(
+      1,
+      5,
+      11,
+      false
+    );
+    expect(publishMocks.advancePublish).toHaveBeenNthCalledWith(2, 5, 11, true);
   });
 
   it("keeps concurrent publish-status polls read-only", async () => {
