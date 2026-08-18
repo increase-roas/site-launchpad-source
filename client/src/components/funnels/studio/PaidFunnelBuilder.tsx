@@ -19,11 +19,13 @@ import {
 import {
   addStudioSurveyQuestion,
   applyStudioOptInTemplate,
+  canDeleteStudioSurveyQuestion,
   canRedoStudio,
   canUndoStudio,
+  deleteStudioSurveyQuestion,
   insertPaletteOnCanvas,
   insertStudioItem,
-  moveStudioNode,
+  moveCurrentStudioNode,
   reorderStudioStep,
   selectStudioNode,
   setStudioDevice,
@@ -34,8 +36,8 @@ import {
 } from "@shared/paidFunnel/store";
 import { OPT_IN_TEMPLATE_LABELS, OPT_IN_TEMPLATE_VALUES } from "@shared/paidFunnel/templates";
 import { PaidFunnelInspector } from "./PaidFunnelInspector";
-import { ArrowLeft, CheckCircle2, ContactRound, ExternalLink, FileText, GripVertical, LayoutTemplate, ListChecks, Loader2, Monitor, Plus, Redo2, RefreshCw, Rocket, Save, Smartphone, Tablet, Undo2, ZoomIn, ZoomOut } from "lucide-react";
-import { useEffect, useMemo, useState, type Dispatch, type PointerEvent as ReactPointerEvent, type SetStateAction } from "react";
+import { ArrowLeft, CheckCircle2, ContactRound, ExternalLink, FileText, GripVertical, LayoutTemplate, ListChecks, Loader2, Monitor, Plus, Redo2, RefreshCw, Rocket, Save, Smartphone, Tablet, Trash2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type PointerEvent as ReactPointerEvent, type SetStateAction } from "react";
 
 const SECTION_PRESETS = Object.keys(PAID_ADS_SECTION_PRESET_LABELS) as PaidFunnelSectionPreset[];
 const ROW_VARIANTS = [1, 2, 3] as const;
@@ -194,6 +196,8 @@ export function PaidFunnelBuilder({
   const [showTemplates, setShowTemplates] = useState(false);
   const [draggedStep, setDraggedStep] = useState<number | null>(null);
   const graph = state.document.graph;
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const page = graph.pages[state.stepKey];
   const saveLabel = state.document.conflict ? "error" : state.document.saveStatus;
 
@@ -223,13 +227,13 @@ export function PaidFunnelBuilder({
   const drop = (parentId: string, parentKind: CanvasBox["kind"], index: number, item: PaletteItem) => {
     const kind = parentKind === "page" ? "page" : parentKind === "section" ? "section" : parentKind === "column" ? "column" : parentKind === "row" ? "row" : null;
     if (!kind) return;
-    onChange(insertStudioItem(state, item, { parentId, parentKind: kind, index }));
+    onChange(current => current ? insertStudioItem(current, item, { parentId, parentKind: kind, index }) : current);
   };
 
   const move = (id: string, parentId: string, parentKind: CanvasBox["kind"], index: number) => {
     const kind = parentKind === "page" ? "page" : parentKind === "section" ? "section" : parentKind === "column" ? "column" : parentKind === "row" ? "row" : null;
     if (!kind) return;
-    onChange(moveStudioNode(state, id, { parentId, parentKind: kind, index }));
+    onChange(current => moveCurrentStudioNode(current, id, { parentId, parentKind: kind, index }));
   };
 
   const startPalette = (item: PaletteItem) => {
@@ -250,7 +254,7 @@ export function PaidFunnelBuilder({
             const index = childDropIndex(target, { x, y }, parentKind);
             const kind = parentKind as "page" | "section" | "row" | "column";
             const dropTarget = { parentId, parentKind: kind, index };
-            if (canMoveNodeTo(graph, movingId, dropTarget)) return dropTarget;
+            if (canMoveNodeTo(stateRef.current.document.graph, movingId, dropTarget)) return dropTarget;
           }
         }
         target = target.parentElement?.closest("[data-node-id]") as HTMLElement | null;
@@ -265,7 +269,7 @@ export function PaidFunnelBuilder({
     const nodeKind = kind === "section" || kind === "row" || kind === "column" || kind === "element" ? kind : null;
     if (!nodeKind) return;
     event.stopPropagation();
-    onChange(selectStudioNode(state, id));
+    onChange(current => current ? selectStudioNode(current, id) : current);
     const startX = event.clientX;
     const startY = event.clientY;
     const pointerId = event.pointerId;
@@ -421,7 +425,9 @@ export function PaidFunnelBuilder({
                     onDragStart={() => setDraggedStep(index)}
                     onDragOver={event => event.preventDefault()}
                     onDrop={() => {
-                      if (draggedStep !== null) onChange(reorderStudioStep(state, draggedStep, index));
+                      if (draggedStep !== null) {
+                        onChange(current => current ? reorderStudioStep(current, draggedStep, index) : current);
+                      }
                       setDraggedStep(null);
                     }}
                     onDragEnd={() => setDraggedStep(null)}
@@ -441,6 +447,19 @@ export function PaidFunnelBuilder({
             <Button type="button" variant="outline" className="mt-3 w-full border-dashed border-blue-300 bg-white text-blue-700" onClick={() => onChange(addStudioSurveyQuestion(state))}>
               <Plus className="h-4 w-4" /> Add survey question
             </Button>
+            {canDeleteStudioSurveyQuestion(state) ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-2 w-full border-red-200 bg-white text-red-700 hover:bg-red-50"
+                onClick={() => {
+                  if (!window.confirm("Delete this custom survey question and reconnect its incoming routes?")) return;
+                  onChange(current => current ? deleteStudioSurveyQuestion(current) : current);
+                }}
+              >
+                <Trash2 className="h-4 w-4" /> Delete survey question
+              </Button>
+            ) : null}
             {graph.steps.find(step => step.type === "landing")?.key === state.stepKey ? (
               <div className="mt-2">
                 <Button type="button" variant="outline" className="w-full bg-white" onClick={() => setShowTemplates(value => !value)}>

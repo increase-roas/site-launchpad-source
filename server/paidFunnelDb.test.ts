@@ -27,6 +27,13 @@ import {
   savePaidFunnelGraph,
 } from "./paidFunnelDb";
 import { createGenericPaidFunnelFixture } from "../shared/paidFunnel/fixture";
+import { studioToPersistSteps, studioToStorageGraph } from "../shared/paidFunnel/persist";
+import {
+  addStudioSurveyQuestion,
+  createDocumentFromPersist,
+  createStudioState,
+  deleteStudioSurveyQuestion,
+} from "../shared/paidFunnel/store";
 
 type Row = Record<string, unknown> & { id?: number };
 
@@ -56,9 +63,11 @@ function createMemoryDb() {
   let nextId = 1;
   let lockedGraphRows = 0;
   const inserted: Array<{ table: unknown; values: Row }> = [];
+  const deleted: Array<{ table: unknown; values: Row }> = [];
 
   const api = {
     inserted,
+    deleted,
     tables,
     select: (_shape?: unknown) => ({
       from: (table: unknown) => ({
@@ -127,6 +136,18 @@ function createMemoryDb() {
           },
         }),
       }),
+    }),
+    delete: (table: unknown) => ({
+      where: async () => {
+        const rows = tables.get(table) ?? [];
+        const index = table === paidFunnelSteps
+          ? rows.findIndex(row => typeof row.key === "string" && /^survey-question-\d+$/.test(row.key))
+          : -1;
+        if (index < 0) return [];
+        const [removed] = rows.splice(index, 1);
+        if (removed) deleted.push({ table, values: removed });
+        return removed ? [removed] : [];
+      },
     }),
     transaction: async (callback: (tx: typeof api) => Promise<unknown>) =>
       callback(api),
@@ -223,6 +244,26 @@ describe("paid funnel registry persistence", () => {
     );
   });
 
+  it("creates independent generic funnels with unique names and slugs", async () => {
+    const first = await createPaidFunnelFromTemplate(5, "generic-paid-funnel");
+    const second = await createPaidFunnelFromTemplate(5, "generic-paid-funnel");
+    expect(first.alreadyExists).toBe(false);
+    expect(second.alreadyExists).toBe(false);
+    expect(second.funnelId).not.toBe(first.funnelId);
+
+    const funnels = db.tables.get(paidFunnels) ?? [];
+    expect(funnels.map(row => row.name)).toEqual([
+      "Northland Spas Paid Funnel",
+      "Northland Spas Paid Funnel 2",
+    ]);
+    expect(funnels.map(row => row.slug)).toEqual([
+      "northland-paid-funnel",
+      "northland-paid-funnel-2",
+    ]);
+    const templates = await listPaidFunnelTemplates(5);
+    expect(templates[0]?.existingFunnelId).toBeNull();
+  });
+
   it("imports a zip as a ready package and never stores secret values", async () => {
     const zip = createStoreZip([
       {
@@ -269,5 +310,63 @@ describe("paid funnel registry persistence", () => {
     expect(saved.studio!.expectedUpdatedAt.getTime()).toBeGreaterThan(
       detail.studio!.expectedUpdatedAt.getTime()
     );
+  });
+
+  it("persists deletion of an added survey while protecting structural steps", async () => {
+    const created = await createPaidFunnelFromTemplate(5, "generic-paid-funnel");
+    const detail = await getPaidFunnelDetail(5, created.funnelId);
+    let state = createStudioState(createDocumentFromPersist({
+      clientId: 5,
+      funnelId: created.funnelId,
+      stepId: detail.studio!.stepId,
+      expectedUpdatedAt: detail.studio!.expectedUpdatedAt,
+      graph: detail.studio!.graph,
+    }));
+    state = addStudioSurveyQuestion(state);
+    const addedKey = state.stepKey;
+    const withAdded = await savePaidFunnelGraph({
+      clientId: 5,
+      funnelId: created.funnelId,
+      stepId: detail.studio!.stepId,
+      expectedUpdatedAt: detail.studio!.expectedUpdatedAt,
+      graph: studioToStorageGraph(state.document.graph),
+      steps: studioToPersistSteps(state.document.graph),
+    });
+    expect(withAdded.steps.some(step => step.key === addedKey)).toBe(true);
+
+    state = createStudioState(createDocumentFromPersist({
+      clientId: 5,
+      funnelId: created.funnelId,
+      stepId: withAdded.studio!.stepId,
+      expectedUpdatedAt: withAdded.studio!.expectedUpdatedAt,
+      graph: withAdded.studio!.graph,
+    }));
+    state = { ...state, stepKey: addedKey };
+    state = deleteStudioSurveyQuestion(state);
+    const withoutAdded = await savePaidFunnelGraph({
+      clientId: 5,
+      funnelId: created.funnelId,
+      stepId: withAdded.studio!.stepId,
+      expectedUpdatedAt: withAdded.studio!.expectedUpdatedAt,
+      graph: studioToStorageGraph(state.document.graph),
+      steps: studioToPersistSteps(state.document.graph),
+    });
+    expect(withoutAdded.steps.some(step => step.key === addedKey)).toBe(false);
+    expect(db.deleted).toEqual(expect.arrayContaining([
+      expect.objectContaining({ table: paidFunnelSteps, values: expect.objectContaining({ key: addedKey }) }),
+    ]));
+
+    const protectedGraph = {
+      ...state.document.graph,
+      steps: state.document.graph.steps.filter(step => step.key !== "form"),
+    };
+    await expect(savePaidFunnelGraph({
+      clientId: 5,
+      funnelId: created.funnelId,
+      stepId: withoutAdded.studio!.stepId,
+      expectedUpdatedAt: withoutAdded.studio!.expectedUpdatedAt,
+      graph: studioToStorageGraph(protectedGraph),
+      steps: studioToPersistSteps(protectedGraph),
+    })).rejects.toThrow("Only custom survey questions can be removed");
   });
 });

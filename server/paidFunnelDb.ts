@@ -89,6 +89,13 @@ function fixtureTemplate(existingFunnelId: number | null = null) {
   });
 }
 
+function uniqueFunnelName(base: string, used: string[]): string {
+  if (!used.includes(base)) return base;
+  let index = 2;
+  while (used.includes(`${base} ${index}`)) index += 1;
+  return `${base} ${index}`;
+}
+
 export async function listPaidFunnelTemplates(clientId: number) {
   const fallback = [fixtureTemplate(null)];
   try {
@@ -139,14 +146,8 @@ export async function listPaidFunnelTemplates(clientId: number) {
         }
       });
 
-    const existing = await db
-      .select({ id: paidFunnels.id })
-      .from(paidFunnels)
-      .where(eq(paidFunnels.clientId, clientId))
-      .limit(1);
-
     return [
-      fixtureTemplate(existing[0]?.id ?? null),
+      fixtureTemplate(null),
       ...imported.filter(
         item => item.templateKey !== GENERIC_PAID_FUNNEL_TEMPLATE_KEY
       ),
@@ -348,26 +349,17 @@ async function createPaidFunnelFromTemplateUnsafe(
   if (!client) throw new Error("Client not found.");
   const db = await requireDb();
   const used = await db
-    .select({ slug: paidFunnels.slug })
+    .select({ slug: paidFunnels.slug, name: paidFunnels.name })
     .from(paidFunnels)
     .where(eq(paidFunnels.clientId, clientId));
 
   if (templateKey === GENERIC_PAID_FUNNEL_TEMPLATE_KEY) {
-    const existing = used.length
-      ? await db
-          .select()
-          .from(paidFunnels)
-          .where(eq(paidFunnels.clientId, clientId))
-      : [];
-    const fixtureExisting = existing.find(row => row.source === "fixture");
-    if (fixtureExisting) {
-      return { alreadyExists: true as const, funnelId: fixtureExisting.id };
-    }
+    const baseName = genericPaidFunnelName(client.businessName);
     const funnelId = await insertFunnelFromPackage(
       clientId,
       GENERIC_PAID_FUNNEL_PACKAGE,
       "fixture",
-      genericPaidFunnelName(client.businessName),
+      uniqueFunnelName(baseName, used.map(row => row.name)),
       genericPaidFunnelSlug(
         client.shortName,
         used.map(row => row.slug)
@@ -595,9 +587,19 @@ export async function savePaidFunnelGraph(input: {
         .where(eq(paidFunnelSteps.funnelId, input.funnelId))
         .for("update");
       const requestedKeys = new Set(steps.map(step => step.key));
-      const removed = existingSteps.find(step => !requestedKeys.has(step.key));
-      if (removed) {
-        throw new Error("Funnel steps cannot be removed from this editor.");
+      const removed = existingSteps.filter(step => !requestedKeys.has(step.key));
+      if (removed.some(step => step.stepType !== "survey" || !/^survey-question-\d+$/.test(step.key))) {
+        throw new Error("Only custom survey questions can be removed from this editor.");
+      }
+      if (removed.some(step => step.id === current.stepId)) {
+        throw new Error("The graph storage step cannot be removed.");
+      }
+      const removedKeys = new Set(removed.map(step => step.key));
+      if (steps.some(step => step.nextStep && removedKeys.has(step.nextStep))) {
+        throw new Error("A funnel step still routes to a removed survey question.");
+      }
+      if (graph.pages.some(page => removedKeys.has(page.stepKey))) {
+        throw new Error("A removed survey question still has a page graph.");
       }
 
       // Vacate the unique (funnelId, position) slots before applying a reorder.
@@ -633,6 +635,12 @@ export async function savePaidFunnelGraph(input: {
             ...values,
           });
         }
+      }
+
+      for (const step of removed) {
+        await transaction
+          .delete(paidFunnelSteps)
+          .where(eq(paidFunnelSteps.id, step.id));
       }
     }
 

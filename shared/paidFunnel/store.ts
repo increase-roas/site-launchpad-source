@@ -134,6 +134,14 @@ export function moveStudioNode(state: StudioState, id: string, target: DropTarge
   return { ...applyGraph(state, next), selectedId: id };
 }
 
+export function moveCurrentStudioNode(
+  state: StudioState | null,
+  id: string,
+  target: DropTarget,
+): StudioState | null {
+  return state ? moveStudioNode(state, id, target) : state;
+}
+
 export function markStudioSaved(state: StudioState): StudioState {
   if (state.document.conflict) {
     return { ...state, document: { ...state.document, saveStatus: "error" } };
@@ -214,6 +222,107 @@ export function addStudioSurveyQuestion(state: StudioState): StudioState {
     pages: { ...graph.pages, [key]: created.page },
   });
   return { ...next, stepKey: key, selectedId: created.page.id };
+}
+
+export function canDeleteStudioSurveyQuestion(state: StudioState, stepKey = state.stepKey): boolean {
+  const step = state.document.graph.steps.find(candidate => candidate.key === stepKey);
+  return Boolean(step?.type === "survey" && /^survey-question-\d+$/.test(step.key));
+}
+
+function replacementButtonAction(next: PaidFunnelStep["nextStep"]): ButtonAction {
+  if (next.type === "step") return { type: "step", stepKey: next.stepKey };
+  if (next.type === "redirect") return { type: "url", href: next.url, openInNewTab: false };
+  return { type: "url", href: "", openInNewTab: false };
+}
+
+function repairDeletedStepAction(
+  action: ButtonAction | undefined,
+  deletedStepKey: string,
+  replacement: PaidFunnelStep["nextStep"],
+): ButtonAction | undefined {
+  if (!action) return action;
+  if (action.type === "step" && action.stepKey === deletedStepKey) {
+    return replacementButtonAction(replacement);
+  }
+  if (action.type === "booking" && action.stepKey === deletedStepKey) {
+    return replacement.type === "step"
+      ? { ...action, stepKey: replacement.stepKey }
+      : { type: "booking" };
+  }
+  if (action.type === "conditional") {
+    const replacementKey = replacement.type === "step" ? replacement.stepKey : null;
+    const rules = action.rules.flatMap(rule => {
+      if (rule.stepKey !== deletedStepKey) return [rule];
+      return replacementKey ? [{ ...rule, stepKey: replacementKey }] : [];
+    });
+    const fallbackStepKey = action.fallbackStepKey === deletedStepKey
+      ? replacementKey ?? undefined
+      : action.fallbackStepKey;
+    return { ...action, rules, fallbackStepKey };
+  }
+  return action;
+}
+
+function repairDeletedStepActions(
+  graph: PaidFunnelGraph,
+  deletedStepKey: string,
+  replacement: PaidFunnelStep["nextStep"],
+): PaidFunnelGraph["pages"] {
+  return Object.fromEntries(Object.entries(graph.pages).map(([stepKey, page]) => [
+    stepKey,
+    {
+      ...page,
+      sections: page.sections.map(section => ({
+        ...section,
+        rows: section.rows.map(row => ({
+          ...row,
+          columns: row.columns.map(column => ({
+            ...column,
+            elements: column.elements.map(element => {
+              if (element.type !== "button" && element.type !== "phoneCta") return element;
+              const action = element.props.action as ButtonAction | undefined;
+              const repaired = repairDeletedStepAction(action, deletedStepKey, replacement);
+              return repaired === action
+                ? element
+                : { ...element, props: { ...element.props, action: repaired } };
+            }),
+          })),
+        })),
+      })),
+    },
+  ]));
+}
+
+export function deleteStudioSurveyQuestion(state: StudioState, stepKey = state.stepKey): StudioState {
+  if (!canDeleteStudioSurveyQuestion(state, stepKey)) return state;
+  const graph = state.document.graph;
+  const deletedIndex = graph.steps.findIndex(step => step.key === stepKey);
+  const deleted = graph.steps[deletedIndex];
+  if (!deleted) return state;
+  const replacement: PaidFunnelStep["nextStep"] =
+    deleted.nextStep.type === "step" && deleted.nextStep.stepKey === stepKey
+      ? { type: "none" }
+      : deleted.nextStep;
+  const steps = graph.steps
+    .filter(step => step.key !== stepKey)
+    .map(step => step.nextStep.type === "step" && step.nextStep.stepKey === stepKey
+      ? { ...step, nextStep: replacement }
+      : step);
+  const repairedPages = repairDeletedStepActions(graph, stepKey, replacement);
+  const { [stepKey]: _deletedPage, ...pages } = repairedPages;
+  const nextGraph = { ...graph, steps, pages };
+  const nextState = applyGraph(state, nextGraph);
+  const selectedStep = (replacement.type === "step"
+    ? steps.find(step => step.key === replacement.stepKey)
+    : undefined)
+    ?? steps[Math.min(deletedIndex, steps.length - 1)]
+    ?? steps[deletedIndex - 1];
+  if (!selectedStep) return nextState;
+  return {
+    ...nextState,
+    stepKey: selectedStep.key,
+    selectedId: pages[selectedStep.key]?.id ?? null,
+  };
 }
 
 export function reorderStudioStep(state: StudioState, from: number, to: number): StudioState {
