@@ -375,16 +375,411 @@ export function createDefaultAstroConfig(client: {
   };
 }
 
-export function generateAstroClientConfig(input: AstroClientConfigInput, assets: Record<string, string>): string {
-  const config = {
-    ...input,
-    brand: { ...input.brand, assets },
+const CANONICAL_DAY_NAMES: Record<(typeof BUSINESS_DAY_VALUES)[number], string> = {
+  monday: "Monday",
+  tuesday: "Tuesday",
+  wednesday: "Wednesday",
+  thursday: "Thursday",
+  friday: "Friday",
+  saturday: "Saturday",
+  sunday: "Sunday",
+};
+
+const CANONICAL_CATEGORY_KEYS: Record<AstroCategory, string> = {
+  "hot-tubs": "hot-tub",
+  "swim-spas": "swim-spa",
+  saunas: "sauna",
+  "cold-plunge": "cold-plunge",
+  "massage-chairs": "massage-chair",
+};
+
+const CATEGORY_ASSET_SLOTS: Record<AstroCategory, AstroAssetSlot> = {
+  "hot-tubs": "categoryHotTubs",
+  "swim-spas": "categorySwimSpas",
+  saunas: "categorySaunas",
+  "cold-plunge": "categoryColdPlunge",
+  "massage-chairs": "categoryMassageChairs",
+};
+
+const BASE_CANONICAL_COLORS = {
+  primary: "#16469B",
+  primaryMid: "#0F327A",
+  deep: "#0B2559",
+  night: "#06183D",
+  abyss: "#030C20",
+  accent: "#FFB81C",
+  accentSoft: "#FFCB57",
+  accentDeep: "#E8A400",
+  accentDark: "#8F6400",
+  accentLift: "#FFD46A",
+  accentPress: "#F0A400",
+  accentGlow: "#FFE29A",
+  urgent: "#D7261E",
+  urgentLight: "#E8382F",
+  urgentDark: "#B71E17",
+  surface: "#FFFFFF",
+  surfaceAlt: "#F8F4EC",
+  ink: "#141927",
+  inkMuted: "#4A5268",
+  onDark: "#C6D4EF",
+  onDarkMuted: "#8FA6D2",
+};
+
+const THEME_COLOR_OVERRIDES: Record<
+  (typeof ASTRO_THEME_VALUES)[number],
+  Partial<typeof BASE_CANONICAL_COLORS>
+> = {
+  luxury: {},
+  aqua: {
+    primary: "#087F8C",
+    primaryMid: "#066875",
+    deep: "#064F5B",
+    night: "#043A43",
+    abyss: "#02272E",
+    accent: "#45D6C6",
+    accentSoft: "#83E7DC",
+    accentDeep: "#22B7A7",
+    accentDark: "#08766D",
+    accentLift: "#9AF0E7",
+    accentPress: "#20AFA1",
+    accentGlow: "#C5F8F3",
+    surfaceAlt: "#EFFBFA",
+    onDark: "#D4F5F2",
+    onDarkMuted: "#9BCFC9",
+  },
+  natural: {
+    primary: "#476A4E",
+    primaryMid: "#38583F",
+    deep: "#29442F",
+    night: "#1C3021",
+    abyss: "#101D14",
+    accent: "#C88952",
+    accentSoft: "#E0AE81",
+    accentDeep: "#A96938",
+    accentDark: "#76451F",
+    accentLift: "#EDC49E",
+    accentPress: "#A96332",
+    accentGlow: "#F6DDC4",
+    surfaceAlt: "#F4F2E8",
+    onDark: "#DCE9DE",
+    onDarkMuted: "#A9BEAC",
+  },
+  mono: {
+    primary: "#303030",
+    primaryMid: "#262626",
+    deep: "#1E1E1E",
+    night: "#151515",
+    abyss: "#0B0B0B",
+    accent: "#D6D6D6",
+    accentSoft: "#EEEEEE",
+    accentDeep: "#B5B5B5",
+    accentDark: "#555555",
+    accentLift: "#F5F5F5",
+    accentPress: "#A8A8A8",
+    accentGlow: "#FFFFFF",
+    surfaceAlt: "#F3F3F3",
+    ink: "#171717",
+    inkMuted: "#565656",
+    onDark: "#E2E2E2",
+    onDarkMuted: "#A7A7A7",
+  },
+};
+
+function nullIfEmpty(value: string): string | null {
+  const normalized = value.trim();
+  return normalized ? normalized : null;
+}
+
+function isHttpsUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function isAbsoluteAsset(value: string | undefined): value is string {
+  return Boolean(value && (value.startsWith("/") || value.startsWith("https://")));
+}
+
+function splitConfiguredLines(value: string, expectedParts: number): string[][] {
+  return value
+    .split(/\r?\n/)
+    .map(line => line.split("|").map(part => part.trim()))
+    .filter(parts =>
+      parts.length >= expectedParts &&
+      parts.slice(0, expectedParts).every(Boolean),
+    );
+}
+
+function toCanonicalHomepageSection(section: AstroHomepageSection): Record<string, unknown> | null {
+  if (!section.enabled) return null;
+  const field = (name: string) => section.fields[name]?.trim() ?? "";
+  const action = field("ctaLabel") && field("ctaHref")
+    ? [{ label: field("ctaLabel"), href: field("ctaHref"), style: "primary" }]
+    : [];
+
+  switch (section.type) {
+    case "hero":
+      return {
+        type: "hero",
+        eyebrow: nullIfEmpty(field("eyebrow")),
+        headline: nullIfEmpty(field("headline")),
+        subhead: nullIfEmpty(field("subheadline")),
+        actions: action,
+      };
+    case "cards": {
+      const items = splitConfiguredLines(field("items"), 3).map(
+        ([title, body, href]) => ({ title, body, image: null, href }),
+      );
+      return items.length > 0
+        ? {
+            type: "imagecards",
+            heading: nullIfEmpty(field("heading")),
+            items,
+          }
+        : null;
+    }
+    case "visit":
+      return {
+        type: "splitcards",
+        heading: field("heading"),
+        items: [{
+          title: field("heading"),
+          body: field("body"),
+          image: null,
+          showAddress: true,
+          showHours: true,
+          actions: action,
+        }],
+      };
+    case "steps": {
+      const items = splitConfiguredLines(field("steps"), 2).map(
+        ([title, body]) => ({ title, body }),
+      );
+      return items.length > 0
+        ? { type: "steps", heading: field("heading"), items }
+        : null;
+    }
+    case "gallery": {
+      const images = field("images")
+        .split(/\r?\n/)
+        .map(src => src.trim())
+        .filter(isAbsoluteAsset)
+        .map(src => ({ src, alt: field("heading") }));
+      return images.length > 0
+        ? { type: "gallery", heading: nullIfEmpty(field("heading")), images }
+        : null;
+    }
+    case "reviews":
+      // The dashboard currently captures a source, but no review quotes. The
+      // canonical schema requires real quotes, so omitting this section is
+      // safer than generating testimonial content that was never supplied.
+      return null;
+    case "bignumber":
+      return { type: "bignumber", value: field("value"), label: field("label") };
+    case "faq": {
+      const items = splitConfiguredLines(field("items"), 2).map(([q, a]) => ({ q, a }));
+      return items.length > 0
+        ? { type: "faq", heading: nullIfEmpty(field("heading")), items }
+        : null;
+    }
+    case "ctaband":
+    case "cta":
+      return {
+        type: "ctaband",
+        heading: field("headline"),
+        body: nullIfEmpty(field("subheadline")),
+        actions: action,
+        tone: "dark",
+      };
+  }
+}
+
+export function toCanonicalAstroClientConfig(
+  input: AstroClientConfigInput,
+  assets: Record<string, string>,
+): Record<string, unknown> {
+  const enabledCategories = ASTRO_CATEGORY_VALUES.filter(
+    category => input.categories[category].enabled,
+  );
+  const openHours = input.hours
+    .filter(hour => hour.isOpen)
+    .map(hour => ({
+      days: [CANONICAL_DAY_NAMES[hour.day]],
+      opens: hour.opensAt,
+      closes: hour.closesAt,
+    }));
+  const coordinates = {
+    latitude: Number(input.address.latitude),
+    longitude: Number(input.address.longitude),
   };
+  const hasCoordinates =
+    input.address.latitude.trim() !== "" &&
+    input.address.longitude.trim() !== "" &&
+    Number.isFinite(coordinates.latitude) &&
+    Number.isFinite(coordinates.longitude);
+  const hasRequiredAssets = ["navLogo", "footerLogo", "favicon", "ogImage"]
+    .every(slot => isAbsoluteAsset(assets[slot]));
+  const siteUrl = isHttpsUrl(input.identity.siteUrl)
+    ? input.identity.siteUrl
+    : "https://example.com";
+  const country = /^[A-Za-z]{2}$/.test(input.address.country)
+    ? input.address.country.toUpperCase()
+    : "US";
+  const deployMode =
+    enabledCategories.length > 0 &&
+    openHours.length > 0 &&
+    hasCoordinates &&
+    hasRequiredAssets &&
+    isHttpsUrl(input.identity.siteUrl)
+      ? "client"
+      : "template";
+
+  const categories = Object.fromEntries(enabledCategories.map((category, index) => {
+    const configured = input.categories[category];
+    const asset = assets[CATEGORY_ASSET_SLOTS[category]] || configured.heroImage;
+    return [CANONICAL_CATEGORY_KEYS[category], {
+      enabled: true,
+      label: configured.label,
+      blurb: configured.description,
+      heroImage: isAbsoluteAsset(asset) ? asset : null,
+      sortOrder: index,
+    }];
+  }));
+  const enabledCanonicalCategories = new Set(Object.keys(categories));
+  const canonicalCategoryRoutes: Record<string, string> = {
+    "/hot-tubs": "hot-tub",
+    "/swim-spas": "swim-spa",
+    "/saunas": "sauna",
+    "/cold-plunge": "cold-plunge",
+    "/massage-chairs": "massage-chair",
+  };
+  const financing = input.financing.enabled
+    ? {
+        headline: input.financing.ctaLabel,
+        blurb: input.financing.monthlyExample,
+        bullets: [input.financing.terms],
+        lenderName: input.financing.lenderName,
+        applyUrl: isHttpsUrl(input.financing.lenderUrl)
+          ? input.financing.lenderUrl
+          : null,
+        disclaimer: input.financing.disclaimer,
+      }
+    : null;
+  const navItems = input.navigationItems.flatMap(item => {
+    if (item.type === "categories") return [{ type: "categories" }];
+    const href = item.href.trim();
+    if (!item.label.trim()) return [];
+    if (href === "/financing" && !financing) return [];
+    const categoryKey = canonicalCategoryRoutes[href.replace(/\/$/, "")];
+    if (categoryKey && !enabledCanonicalCategories.has(categoryKey)) return [];
+    if (href.startsWith("/")) {
+      return [{ type: "link", label: item.label, href, inHeader: item.inHeader, inFooter: item.inFooter }];
+    }
+    if (isHttpsUrl(href)) {
+      return [{ type: "external", label: item.label, href, inHeader: item.inHeader, inFooter: item.inFooter }];
+    }
+    return [];
+  });
+  const homepageSections = input.homepageSections
+    .map(toCanonicalHomepageSection)
+    .filter((section): section is Record<string, unknown> => section !== null);
+  const safeHomepageSections = homepageSections.length === 0 ||
+    homepageSections[0]?.type === "hero"
+    ? homepageSections
+    : [];
+
+  return {
+    deployMode,
+    identity: {
+      name: input.identity.businessName,
+      shortName: input.identity.shortName,
+      foundedYear: input.identity.foundedYear,
+      tagline: input.identity.tagline,
+      siteUrl,
+      schemaType: input.identity.schemaType,
+    },
+    contact: {
+      phone: input.contact.phone,
+      phoneDisplayOverride: nullIfEmpty(input.contact.phoneDisplayOverride),
+      smsPhone: nullIfEmpty(input.contact.smsPhone),
+      email: nullIfEmpty(input.contact.email),
+    },
+    address: {
+      street: input.address.street1,
+      street2: nullIfEmpty(input.address.street2),
+      city: input.address.city,
+      region: input.address.state,
+      postalCode: input.address.postalCode,
+      country,
+      latitude: hasCoordinates ? coordinates.latitude : 0,
+      longitude: hasCoordinates ? coordinates.longitude : 0,
+      googlePlaceId: nullIfEmpty(input.address.googlePlaceId),
+    },
+    hours: openHours.length > 0
+      ? openHours
+      : [{
+          days: BUSINESS_DAY_VALUES.map(day => CANONICAL_DAY_NAMES[day]),
+          opens: "09:00",
+          closes: "17:00",
+        }],
+    social: Object.fromEntries(
+      Object.entries(input.socialLinks).map(([name, value]) => [
+        name,
+        isHttpsUrl(value) ? value : null,
+      ]),
+    ),
+    brand: {
+      colors: { ...BASE_CANONICAL_COLORS, ...THEME_COLOR_OVERRIDES[input.brand.theme] },
+      fonts: {
+        display: input.brand.fonts.display,
+        body: input.brand.fonts.body,
+        mono: input.brand.fonts.mono,
+        googleFontsHref: nullIfEmpty(input.brand.fonts.googleFontsUrl),
+      },
+      logos: {
+        nav: isAbsoluteAsset(assets.navLogo) ? assets.navLogo : "/brand/logo-nav.svg",
+        footer: isAbsoluteAsset(assets.footerLogo) ? assets.footerLogo : "/brand/logo-footer.svg",
+        inventory: isAbsoluteAsset(assets.inventoryLogo) ? assets.inventoryLogo : null,
+        favicon: isAbsoluteAsset(assets.favicon) ? assets.favicon : "/brand/favicon.svg",
+        ogImage: isAbsoluteAsset(assets.ogImage) ? assets.ogImage : "/brand/og-default.png",
+      },
+      radius: input.brand.borderRadii,
+    },
+    nav: {
+      items: navItems.length > 0 ? navItems : [{ type: "categories" }],
+      primaryCta: { label: "Shop Inventory", href: "/inventory" },
+      legalItems: [{ label: "Privacy Policy", href: "/privacy-policy" }],
+    },
+    categories,
+    serviceAreas: [],
+    financing,
+    display: { showPrice: true, showMonthly: Boolean(financing) },
+    homepage: {
+      title: null,
+      description: null,
+      sections: safeHomepageSections,
+      disclosures: [],
+    },
+    integrations: {
+      d1BindingName: "DB",
+      r2BindingName: "PRODUCT_IMAGES",
+      ghl: { enabled: input.integrations.ghl.enabled },
+      meta: { enabled: input.integrations.meta.enabled },
+      zaraz: { enabled: input.integrations.zaraz.enabled },
+      sentry: { enabled: input.integrations.sentry.enabled },
+    },
+  };
+}
+
+export function generateAstroClientConfig(input: AstroClientConfigInput, assets: Record<string, string>): string {
+  const config = toCanonicalAstroClientConfig(input, assets);
   return [
     "// Generated by Site Launchpad. Edit in the dashboard and export again.",
-    `export const clientConfig = ${JSON.stringify(config, null, 2)} as const;`,
+    'import type { ClientConfigInput } from "./schema";',
     "",
-    "export type ClientConfig = typeof clientConfig;",
+    `export const rawClientConfig: ClientConfigInput = ${JSON.stringify(config, null, 2)};`,
     "",
   ].join("\n");
 }

@@ -5,6 +5,7 @@ import * as schema from "./schema";
 import {
   assetUploadSessions,
   astroClientConfigs,
+  astroSitePublishes,
   clientAssets,
   clientLeadIntegrations,
   clientSecretSetups,
@@ -28,6 +29,7 @@ const applicationTables = {
     databaseName: "assetUploadSessions",
   },
   astroClientConfigs: { table: astroClientConfigs, databaseName: "astroClientConfigs" },
+  astroSitePublishes: { table: astroSitePublishes, databaseName: "astroSitePublishes" },
   clientAssets: { table: clientAssets, databaseName: "clientAssets" },
   clientLeadIntegrations: {
     table: clientLeadIntegrations,
@@ -71,7 +73,7 @@ describe("PostgreSQL application-table RLS", () => {
       .sort((left, right) => left.exportName.localeCompare(right.exportName));
 
     expect(discovered).toEqual(expected);
-    expect(discovered).toHaveLength(17);
+    expect(discovered).toHaveLength(18);
   });
 
   it("enables RLS without schema policies on every application table", () => {

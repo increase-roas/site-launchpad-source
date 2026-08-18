@@ -8,12 +8,20 @@ const mocks = vi.hoisted(() => ({
   getAstroConfigView: vi.fn(),
   saveAstroConfig: vi.fn(),
   saveWranglerSecrets: vi.fn(),
+  startPublish: vi.fn(),
+  advancePublish: vi.fn(),
+  publishStatus: vi.fn(),
 }));
 
 vi.mock("./astroConfigDb", () => ({
   getAstroConfigView: mocks.getAstroConfigView,
   saveAstroConfig: mocks.saveAstroConfig,
   saveWranglerSecrets: mocks.saveWranglerSecrets,
+}));
+vi.mock("./publisher/publishAstroSite", () => ({
+  startPublish: mocks.startPublish,
+  advancePublish: mocks.advancePublish,
+  publishStatus: mocks.publishStatus,
 }));
 import { astroConfigRouter } from "./routers/astroConfig";
 
@@ -80,12 +88,33 @@ const view = {
   generatedAt: null,
 };
 
+const publishView = {
+  id: "11111111-1111-4111-8111-111111111111",
+  status: "failed" as const,
+  step: "dispatch_workflow" as const,
+  progress: { completed: 4, total: 8 },
+  error: "Deployment workflow failed.",
+  externalSiteId: "astro-site-client-5",
+  repositoryName: "website-test-spas-5",
+  workerName: "website-test-spas-5",
+  repositoryUrl: "https://github.com/example/website-test-spas-5",
+  liveUrl: null,
+  dispatchRequestedAt: null,
+  workflowRunId: "100",
+  workflowStatus: "failure",
+  completedAt: null,
+  updatedAt: new Date("2026-08-18T12:00:00.000Z"),
+};
+
 describe("authenticated Astro config procedures", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getAstroConfigView.mockResolvedValue(view);
     mocks.saveAstroConfig.mockResolvedValue(view);
     mocks.saveWranglerSecrets.mockResolvedValue({ ...view, secretStatus: { ...view.secretStatus, GHL_API_KEY: true } });
+    mocks.startPublish.mockResolvedValue({ ...publishView, status: "pending" });
+    mocks.advancePublish.mockResolvedValue(publishView);
+    mocks.publishStatus.mockResolvedValue(publishView);
   });
 
   it("loads and saves the complete selected-client configuration", async () => {
@@ -155,5 +184,30 @@ describe("authenticated Astro config procedures", () => {
       code: "NOT_FOUND",
       message: "Client not found.",
     });
+  });
+
+  it("starts, resumes, and reads the dedicated website publish job", async () => {
+    const caller = astroConfigRouter.createCaller(context());
+    await caller.startPublish({ clientId: 5 });
+    const retried = await caller.advancePublish({ clientId: 5, retryFailed: true });
+    const status = await caller.publishStatus({ clientId: 5 });
+
+    expect(mocks.startPublish).toHaveBeenCalledWith(5);
+    expect(mocks.advancePublish).toHaveBeenCalledWith(5, true);
+    expect(mocks.publishStatus).toHaveBeenCalledWith(5);
+    expect(retried.workflowRunId).toBe("100");
+    expect(status).toEqual(publishView);
+  });
+
+  it("rejects unauthenticated website publish mutations", async () => {
+    const caller = astroConfigRouter.createCaller(context(null));
+    await expect(caller.startPublish({ clientId: 5 })).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
+    await expect(
+      caller.advancePublish({ clientId: 5, retryFailed: true }),
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    expect(mocks.startPublish).not.toHaveBeenCalled();
+    expect(mocks.advancePublish).not.toHaveBeenCalled();
   });
 });

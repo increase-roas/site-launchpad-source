@@ -27,6 +27,7 @@ import {
 } from "./db";
 import { postgresConflictTargets, withUpdatedAt } from "./postgresPersistence";
 import type { ProductCategory } from "../shared/client";
+import { getAstroSiteRuntimeSecrets } from "../shared/astroSiteContract";
 
 async function requireDb() {
   const db = await getDb();
@@ -192,6 +193,61 @@ export async function getAstroConfigView(clientId: number) {
     generatedConfig,
     generatedAt: configRows[0]?.generatedAt ?? null,
   };
+}
+
+export type AstroSitePublishMaterial = {
+  generatedConfig: string;
+  runtimeSecrets: Record<string, string>;
+};
+
+/** Server-only material for the publisher. Never return this through a router. */
+export async function getAstroSitePublishMaterial(
+  clientId: number,
+): Promise<AstroSitePublishMaterial> {
+  const [view, wranglerRow, legacySecrets] = await Promise.all([
+    getAstroConfigView(clientId),
+    getWranglerSecretRow(clientId),
+    getClientSecretSetup(clientId),
+  ]);
+  const enabledIntegrations = {
+    ghl: view.input.integrations.ghl.enabled,
+    meta: view.input.integrations.meta.enabled,
+  };
+  const requiredNames = getAstroSiteRuntimeSecrets(enabledIntegrations);
+  const runtimeSecrets: Record<string, string> = {};
+  const missing: string[] = [];
+
+  for (const name of requiredNames) {
+    const typedName = name as WranglerSecretName;
+    const column = secretColumnByName[typedName];
+    const protectedValue = wranglerRow?.[column] as string | null | undefined;
+    const legacyProtected =
+      typedName === "GHL_API_KEY"
+        ? legacySecrets?.ghlApiKeyEncrypted
+        : typedName === "META_PIXEL_ID"
+          ? legacySecrets?.metaPixelIdEncrypted
+          : null;
+    const value = protectedValue
+      ? decryptSetupValue(protectedValue)
+      : legacyProtected
+        ? decryptSetupValue(legacyProtected)
+        : "";
+    if (!value.trim()) missing.push(name);
+    else runtimeSecrets[name] = value;
+  }
+
+  if (missing.length > 0) {
+    throw new Error(`Website runtime secrets are missing: ${missing.join(", ")}.`);
+  }
+  if (!view.generatedAt) {
+    throw new Error("Save the website configuration before publishing.");
+  }
+  if (!view.generatedConfig.includes('"deployMode": "client"')) {
+    throw new Error(
+      "Website configuration is not launch-ready. Complete the required client details, assets, hours, coordinates, and at least one category.",
+    );
+  }
+  return { generatedConfig: view.generatedConfig, runtimeSecrets };
 }
 
 export async function saveAstroConfig(clientId: number, input: AstroClientConfigInput) {

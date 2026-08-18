@@ -61,6 +61,21 @@ describe("GitHub publisher client", () => {
     vi.useRealTimers();
   });
 
+  it("reads the exact reviewed template branch head", async () => {
+    const { fetchFn } = createMockFetch([
+      jsonResponse({ object: { sha: PERSISTED_SOURCE_SHA } }),
+    ]);
+    const client = createGitHubApiClient({ token: "opaque-test-credential", fetchFn });
+    await expect(
+      client.getBranchHeadSha({
+        owner: "increaseroasir",
+        repository: "32-htl-website-template-astrobuild",
+        branch: "main",
+        signal: abortSignal(),
+      }),
+    ).resolves.toBe(PERSISTED_SOURCE_SHA);
+  });
+
   it("generates a public repository from the configured template", async () => {
     const { fetchFn, requests } = createMockFetch([
       jsonResponse(
@@ -280,6 +295,48 @@ describe("GitHub publisher client", () => {
     ).toBe(true);
   });
 
+  it("commits arbitrary repository-relative website files atomically", async () => {
+    const { fetchFn, requests } = createMockFetch([
+      jsonResponse({ object: { sha: "base-commit-sha" } }),
+      jsonResponse({ tree: { sha: "base-tree-sha" } }),
+      jsonResponse({ sha: "new-tree-sha" }, 201),
+      jsonResponse({ sha: "new-commit-sha" }, 201),
+      jsonResponse({ object: { sha: "new-commit-sha" } }),
+    ]);
+    const client = createGitHubApiClient({
+      token: "opaque-test-credential",
+      fetchFn,
+    });
+
+    await client.commitFiles({
+      owner: "customer-repositories",
+      repository: "northland-website",
+      branch: "main",
+      message: "chore: configure generated website",
+      files: [
+        {
+          path: "src/config/client.config.ts",
+          content: "export const rawClientConfig = {};\n",
+        },
+        { path: "wrangler.toml", content: 'name = "northland-website"\n' },
+      ],
+      signal: abortSignal(),
+    });
+
+    expect(parseRequestBody(requests[2])).toMatchObject({
+      tree: [
+        {
+          path: "src/config/client.config.ts",
+          content: "export const rawClientConfig = {};\n",
+        },
+        {
+          path: "wrangler.toml",
+          content: 'name = "northland-website"\n',
+        },
+      ],
+    });
+  });
+
   it("does not begin another commit request after cancellation", async () => {
     const controller = new AbortController();
     const abortReason = new DOMException("Stop publishing.", "AbortError");
@@ -410,6 +467,38 @@ describe("GitHub publisher client", () => {
       },
     });
     expect(requests.some(request => request.url.includes("/runs"))).toBe(false);
+  });
+
+  it("reconciles an ambiguous source commit by its exact idempotency message", async () => {
+    const { fetchFn, requests } = createMockFetch([
+      jsonResponse([
+        {
+          sha: "newer-sha",
+          commit: { message: "another commit" },
+        },
+        {
+          sha: PERSISTED_SOURCE_SHA,
+          commit: { message: "Publish website job-123 source" },
+        },
+      ]),
+    ]);
+    const client = createGitHubApiClient({
+      token: "opaque-test-credential",
+      fetchFn,
+    });
+
+    await expect(
+      client.findCommitByMessage({
+        owner: "customer-repositories",
+        repository: "northland-website",
+        branch: "main",
+        message: "Publish website job-123 source",
+        signal: abortSignal(),
+      }),
+    ).resolves.toEqual({ commitSha: PERSISTED_SOURCE_SHA });
+    expect(requests[0]?.url).toContain(
+      "/repos/customer-repositories/northland-website/commits?sha=main&per_page=100",
+    );
   });
 
   it("looks up only the persisted workflow run id without treating head SHA as source SHA", async () => {
