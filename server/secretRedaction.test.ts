@@ -50,6 +50,12 @@ describe("client DTO redaction", () => {
   it("omits decrypted Astro generated config on get and save", () => {
     const client = toClientAstroConfigView({
       clientId: 5,
+      input: {
+        integrations: {
+          ghl: { enabled: true, config: { webhookUrl: "https://legacy.example/raw-webhook" } },
+          meta: { enabled: true, config: { pixelId: "123456789012345" } },
+        },
+      },
       generatedConfig: "export const clientConfig = { pixel: 'raw-secret-pixel' };",
       secretStatus: { GHL_API_KEY: true },
     });
@@ -57,5 +63,8 @@ describe("client DTO redaction", () => {
     expect(client.generatedConfig).toBe("");
     expect(client.hasGeneratedConfig).toBe(true);
     expect(JSON.stringify(client)).not.toContain("raw-secret-pixel");
+    expect(JSON.stringify(client)).not.toContain("raw-webhook");
+    expect(client.input.integrations.ghl.config).toEqual({});
+    expect(client.input.integrations.meta.config).toEqual({});
   });
 });

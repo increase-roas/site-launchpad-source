@@ -29,8 +29,15 @@ function breadcrumbItems(location: string, clientName?: string): string[] {
   const name = clientName ?? "Client";
   const area = getWorkspaceArea(location);
   if (area === "pages") return [name, "Website", "Pages"];
-  if (area === "funnels") return [name, "Paid Ads", "Funnels"];
+  if (area === "funnels") {
+    const search = typeof window === "undefined" ? "" : window.location.search;
+    if (search.includes("studio=")) return [name, "Paid Ads", "Funnels", "Builder"];
+    if (search.includes("tab=mine")) return [name, "Paid Ads", "Funnels", "My Funnels"];
+    if (search.includes("tab=templates")) return [name, "Paid Ads", "Funnels", "Templates"];
+    return [name, "Paid Ads", "Funnels"];
+  }
   if (area === "media") return [name, "Media"];
+  if (location.includes("/integrations")) return [name, "Integrations"];
   if (area === "settings") return [name, "Settings"];
   return ["Clients"];
 }

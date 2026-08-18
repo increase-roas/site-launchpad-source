@@ -82,6 +82,13 @@ describe("Astro client config schema", () => {
     config.financing = { enabled: true, lenderName: "Example Lender", lenderUrl: "https://lender.example.com", disclaimer: "Subject to approval.", terms: "Terms apply.", ctaLabel: "Apply now", monthlyExample: "$99/month" };
     config.integrations.d1.config.binding = "DB";
     expect(astroClientConfigInputSchema.safeParse(config).success).toBe(true);
+    config.integrations.ghl.enabled = true;
+    config.integrations.meta.enabled = true;
+    config.integrations.ghl.config = { webhookUrl: "https://legacy.example/secret" };
+    config.integrations.meta.config = { pixelId: "123456789012345" };
+    const parsed = astroClientConfigInputSchema.parse(config);
+    expect(parsed.integrations.ghl.config).toEqual({});
+    expect(parsed.integrations.meta.config).toEqual({});
   });
 
   it("supports all ten explicit section types and rejects incomplete enabled sections", () => {
@@ -104,7 +111,6 @@ describe("Astro client config schema", () => {
       heroImage: "https://assets.example.com/hot-tubs.webp",
     };
     config.integrations.ghl.enabled = true;
-    config.integrations.ghl.config.locationId = "location-123";
     config.financing = {
       enabled: true,
       lenderName: "Example Lender",

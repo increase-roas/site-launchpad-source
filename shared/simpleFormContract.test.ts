@@ -138,12 +138,18 @@ describe("Simple Form template contract", () => {
     expect(crmGuide?.whereToFind).toContain("generates");
     expect(crmGuide?.whereToFind).not.toContain("Reveal secret");
 
-    const editor = readFileSync(
+    const simpleFormEditor = readFileSync(
       "client/src/components/funnels/SimpleFormFunnelEditor.tsx",
       "utf8",
     );
-    expect(editor).toContain("Generate a new secret");
-    expect(editor).not.toContain("Reveal secret");
-    expect(editor).not.toContain("GHL_WEBHOOK_URL");
+    const clientIntegrationEditor = readFileSync(
+      "client/src/pages/ClientIntegrationsPage.tsx",
+      "utf8",
+    );
+    expect(clientIntegrationEditor).toContain("Generate / rotate");
+    expect(clientIntegrationEditor).toContain("Stored values are never returned");
+    expect(simpleFormEditor).not.toContain("Reveal secret");
+    expect(simpleFormEditor).not.toContain("GHL_API_KEY");
+    expect(simpleFormEditor).not.toContain("GHL_WEBHOOK_URL");
   });
 });

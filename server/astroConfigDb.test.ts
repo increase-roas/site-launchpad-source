@@ -81,7 +81,14 @@ describe("Astro config persistence helpers", () => {
       categories: defaults.categories,
       financing: defaults.financing,
       homepageSections,
-      integrations: defaults.integrations,
+      integrations: {
+        ...defaults.integrations,
+        ghl: {
+          enabled: true,
+          config: { webhookUrl: "https://legacy.example/secret-webhook" },
+        },
+        meta: { enabled: true, config: { pixelId: "123456789012345" } },
+      },
       generatedConfigEncrypted: null,
       generatedAt: null,
       createdAt: new Date(),
@@ -90,6 +97,9 @@ describe("Astro config persistence helpers", () => {
     const reloaded = mergeStoredAstroConfig(defaults, stored);
     expect(reloaded.navigationItems.map(item => item.id)).toEqual(navigationItems.map(item => item.id));
     expect(reloaded.homepageSections.map(section => section.id)).toEqual(homepageSections.map(section => section.id));
+    expect(reloaded.integrations.ghl.config).toEqual({});
+    expect(reloaded.integrations.meta.config).toEqual({});
+    expect(JSON.stringify(reloaded)).not.toContain("secret-webhook");
   });
 
   it("reorders Astro homepage sections without losing their configured fields", () => {

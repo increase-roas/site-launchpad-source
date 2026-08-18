@@ -3,7 +3,7 @@ export type WorkspaceArea = "clients" | "pages" | "funnels" | "media" | "setting
 export function getWorkspaceArea(location: string): WorkspaceArea {
   if (location.includes("/funnels")) return "funnels";
   if (location.includes("/media")) return "media";
-  if (location.includes("/settings") || /^\/clients\/\d+/.test(location)) return "settings";
+  if (location.includes("/integrations") || location.includes("/settings") || /^\/clients\/\d+/.test(location)) return "settings";
   if (location.includes("/pages")) return "pages";
   return "clients";
 }
@@ -20,6 +20,10 @@ export function workspaceRoute(area: WorkspaceArea, clientId?: number): string {
   if (area === "funnels") return `/workspace/${clientId}/funnels`;
   if (area === "media") return `/workspace/${clientId}/media`;
   return `/workspace/${clientId}/settings`;
+}
+
+export function integrationsRoute(clientId: number): string {
+  return `/workspace/${clientId}/integrations`;
 }
 
 export function settingsRedirectFromLegacyClientPath(path: string): string | null {

@@ -1,4 +1,3 @@
-import { StatusDot } from "@/components/StatusDot";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -6,13 +5,12 @@ import { Switch } from "@/components/ui/switch";
 import {
   ASTRO_INTEGRATION_FIELDS,
   ASTRO_INTEGRATION_VALUES,
-  WRANGLER_SECRET_DESCRIPTIONS,
   WRANGLER_SECRET_VALUES,
   type AstroClientConfigInput,
   type AstroIntegration,
   type WranglerSecretName,
 } from "@shared/astroConfig";
-import { Check, Clipboard, CloudCog, Code2, Download, KeyRound, Loader2, Save } from "lucide-react";
+import { Check, Clipboard, CloudCog, Code2, Download, KeyRound, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -29,10 +27,7 @@ export function TechnicalTab({
   value,
   onChange,
   secretStatus,
-  secretDrafts,
-  onSecretChange,
-  onSaveSecrets,
-  savingSecrets,
+  onOpenClientIntegrations,
   generatedConfig,
   onGenerate,
   generating,
@@ -42,10 +37,7 @@ export function TechnicalTab({
   value: AstroClientConfigInput;
   onChange: (next: AstroClientConfigInput) => void;
   secretStatus: Record<WranglerSecretName, boolean>;
-  secretDrafts: Partial<Record<WranglerSecretName, string>>;
-  onSecretChange: (name: WranglerSecretName, value: string) => void;
-  onSaveSecrets: () => void;
-  savingSecrets: boolean;
+  onOpenClientIntegrations: () => void;
   generatedConfig: string;
   onGenerate: () => void;
   generating: boolean;
@@ -76,12 +68,11 @@ export function TechnicalTab({
   return <div className="space-y-5">
     <Card className="border-white/8 bg-card/70 p-5 sm:p-6">
       <div className="mb-6 flex gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-cyan-400/10 text-cyan-300"><CloudCog className="h-5 w-5" /></span><div><h2 className="text-xl font-extrabold">Integrations</h2><p className="mt-1 text-sm font-medium text-muted-foreground">Turn on only the services this site uses. Setup fields appear automatically.</p></div></div>
-      <div className="grid gap-4 lg:grid-cols-2">{ASTRO_INTEGRATION_VALUES.map(name => { const integration = value.integrations[name]; return <div key={name} className="rounded-2xl border border-white/8 bg-white/[0.018] p-4"><div className="flex items-center justify-between gap-3"><div><h3 className="font-extrabold">{INTEGRATION_LABELS[name]}</h3><p className="mt-1 text-sm font-medium text-muted-foreground">{integration.enabled ? "Enabled" : "Not used"}</p></div><Switch checked={integration.enabled} onCheckedChange={enabled => updateIntegration(name, { enabled })} /></div>{integration.enabled ? <div className="mt-4 grid gap-3 sm:grid-cols-2">{Object.entries(ASTRO_INTEGRATION_FIELDS[name]).map(([key, label]) => <label key={key} className="block space-y-2"><span className="text-sm font-extrabold">{label}</span><Input value={integration.config[key] ?? ""} onChange={event => updateIntegration(name, { config: { ...integration.config, [key]: event.target.value } })} /></label>)}</div> : null}</div>; })}</div>
+      <div className="grid gap-4 lg:grid-cols-2">{ASTRO_INTEGRATION_VALUES.map(name => { const integration = value.integrations[name]; const integrationConfig = integration.config as Record<string, string>; const fields = Object.entries(ASTRO_INTEGRATION_FIELDS[name]); return <div key={name} className="rounded-2xl border border-white/8 bg-white/[0.018] p-4"><div className="flex items-center justify-between gap-3"><div><h3 className="font-extrabold">{INTEGRATION_LABELS[name]}</h3><p className="mt-1 text-sm font-medium text-muted-foreground">{integration.enabled ? "Enabled" : "Not used"}</p></div><Switch checked={integration.enabled} onCheckedChange={enabled => updateIntegration(name, { enabled })} /></div>{integration.enabled && fields.length > 0 ? <div className="mt-4 grid gap-3 sm:grid-cols-2">{fields.map(([key, label]) => <label key={key} className="block space-y-2"><span className="text-sm font-extrabold">{label}</span><Input value={integrationConfig[key] ?? ""} onChange={event => updateIntegration(name, { config: { ...integrationConfig, [key]: event.target.value } })} /></label>)}</div> : integration.enabled ? <p className="mt-4 text-sm font-medium text-muted-foreground">Client identifiers and protected values are managed once in Client integrations below.</p> : null}</div>; })}</div>
     </Card>
 
     <Card className="border-white/8 bg-card/70 p-5 sm:p-6">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div className="flex gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-400/10 text-cyan-300"><KeyRound className="h-5 w-5" /></span><div><h2 className="text-xl font-extrabold">Wrangler secrets</h2><p className="mt-1 text-sm font-medium text-muted-foreground">Saved values stay masked. Enter a value only when adding or replacing it.</p></div></div><Button type="button" onClick={onSaveSecrets} disabled={savingSecrets || !Object.values(secretDrafts).some(value => value?.trim())} className="h-11 bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300">{savingSecrets ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save entered secrets</Button></div>
-      <div className="grid gap-3 xl:grid-cols-2">{WRANGLER_SECRET_VALUES.map(name => <label key={name} className="rounded-2xl border border-white/8 bg-white/[0.018] p-4"><span className="flex items-start justify-between gap-3"><span><span className="block break-all text-sm font-extrabold">{name}</span><span className="mt-1 block text-xs font-medium leading-relaxed text-muted-foreground">{WRANGLER_SECRET_DESCRIPTIONS[name]}</span></span><StatusDot good={secretStatus[name] || Boolean(secretDrafts[name]?.trim())} label={secretStatus[name] ? "Set" : secretDrafts[name]?.trim() ? "Ready" : "Missing"} compact /></span><Input className="mt-3" type="password" autoComplete="new-password" value={secretDrafts[name] ?? ""} onChange={event => onSecretChange(name, event.target.value)} placeholder={secretStatus[name] ? "••••••••  Saved" : "Enter value"} /></label>)}</div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div className="flex gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-400/10 text-cyan-300"><KeyRound className="h-5 w-5" /></span><div><h2 className="text-xl font-extrabold">Client integrations</h2><p className="mt-1 text-sm font-medium text-muted-foreground">Enter these values once at the client level. The website and every funnel reuse the same protected profile.</p><p className="mt-2 text-xs font-extrabold text-cyan-200">{Object.values(secretStatus).filter(Boolean).length} of {WRANGLER_SECRET_VALUES.length} values set</p></div></div><Button type="button" onClick={onOpenClientIntegrations} className="h-11 bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300">Open client integrations</Button></div>
     </Card>
 
     <Card className="border-white/8 bg-card/70 p-5 sm:p-6">

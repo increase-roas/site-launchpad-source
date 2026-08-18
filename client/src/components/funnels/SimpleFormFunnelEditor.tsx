@@ -14,8 +14,6 @@ import {
 } from "@shared/simpleFormConfig";
 import {
   SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT,
-  type SimpleFormClientIntegrationFields,
-  type SimpleFormSecretGuide,
 } from "@shared/simpleFormContract";
 import type {
   FunnelPublishStatus,
@@ -36,8 +34,9 @@ import {
   Rocket,
   Save,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 type PublishStateLike = {
   status: FunnelPublishStatus;
@@ -743,78 +742,6 @@ function FunnelStats({ funnelName }: { funnelName: string }) {
   );
 }
 
-function SecretField({
-  guide,
-  present,
-  value,
-  onChange,
-  extra,
-}: {
-  guide: SimpleFormSecretGuide;
-  present: boolean;
-  value: string;
-  onChange: (value: string) => void;
-  extra?: ReactNode;
-}) {
-  const requirement =
-    guide.requirement === "required"
-      ? "Required"
-      : guide.requirement === "testing-only"
-        ? "Testing Only"
-        : guide.requirement === "generated"
-          ? "Generated"
-          : "Optional";
-  return (
-    <div className="space-y-3 rounded-xl border border-white/8 bg-white/[0.025] p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="font-extrabold">{guide.friendlyName}</p>
-          <p className="mt-1 font-mono text-xs text-cyan-300">
-            {guide.runtimeKey}
-          </p>
-        </div>
-        <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground">
-          {requirement}
-        </span>
-      </div>
-      <p className="text-sm font-medium text-muted-foreground">
-        Required for: {guide.requiredFor}
-      </p>
-      {guide.requirement === "generated" ? (
-        extra
-      ) : (
-        <Input
-          type="password"
-          autoComplete="off"
-          value={value}
-          onChange={event => onChange(event.target.value)}
-          placeholder={
-            present ? "Saved — paste a new value to replace" : "Paste value"
-          }
-          className="h-12 rounded-xl border-white/10 bg-white/[0.035] font-mono text-sm"
-        />
-      )}
-      <div>
-        <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-muted-foreground">
-          Where do I find this?
-        </p>
-        <p className="mt-1 text-sm font-medium leading-relaxed text-muted-foreground">
-          {guide.whereToFind}
-        </p>
-        <a
-          href={guide.docsUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-2 inline-flex items-center gap-1 text-sm font-extrabold text-cyan-300"
-        >
-          Official documentation
-          <ExternalLink className="h-3.5 w-3.5" />
-        </a>
-      </div>
-    </div>
-  );
-}
-
 function ImageSourcePicker({
   label,
   source,
@@ -899,6 +826,7 @@ export function SimpleFormFunnelEditor({
   onBack: () => void;
 }) {
   const utils = trpc.useUtils();
+  const [, setLocation] = useLocation();
   const query = trpc.simpleForm.get.useQuery({ clientId, funnelId });
   const publishQuery = trpc.simpleForm.publishStatus.useQuery(
     { clientId, funnelId },
@@ -909,13 +837,6 @@ export function SimpleFormFunnelEditor({
   const [record, setRecord] = useState<SimpleFormStoredRecord | null>(null);
   const [activeTab, setActiveTab] = useState<FunnelWorkspaceTab>("steps");
   const [zipText, setZipText] = useState("");
-  const [secretDrafts, setSecretDrafts] = useState<Record<string, string>>({});
-  const [integrationDrafts, setIntegrationDrafts] =
-    useState<SimpleFormClientIntegrationFields>({
-      GHL_LOCATION_ID: "",
-      GOOGLE_SHEETS_ID: "",
-      META_PIXEL_ID: "",
-    });
   const [activePublish, setActivePublish] = useState<{
     clientId: number;
     funnelId: number;
@@ -944,8 +865,6 @@ export function SimpleFormFunnelEditor({
     if (!query.data) return;
     setRecord(query.data.record);
     setZipText(query.data.record.config.serviceAreaZipCodes.join("\n"));
-    setSecretDrafts({});
-    setIntegrationDrafts(query.data.integration);
   }, [query.data]);
 
   useEffect(() => {
@@ -962,14 +881,6 @@ export function SimpleFormFunnelEditor({
       await utils.simpleForm.get.invalidate({ clientId, funnelId });
       setRecord(view.record);
       toast.success("Funnel settings saved.");
-    },
-    onError: error => toast.error(error.message),
-  });
-  const integrationMutation = trpc.simpleForm.saveIntegration.useMutation({
-    onSuccess: async () => {
-      await utils.simpleForm.get.invalidate({ clientId, funnelId });
-      setSecretDrafts({});
-      toast.success("Lead integration settings saved.");
     },
     onError: error => toast.error(error.message),
   });
@@ -1047,10 +958,6 @@ export function SimpleFormFunnelEditor({
 
   const readiness = query.data?.readiness;
   const assets = query.data?.assets ?? [];
-  const guides = useMemo(
-    () => query.data?.secretGuides ?? [],
-    [query.data?.secretGuides]
-  );
   const publishAction = publishActionForState(
     publish,
     publishAdvanceControl.pausedAfterErrorVersion
@@ -1279,6 +1186,22 @@ export function SimpleFormFunnelEditor({
         </div>
       </section>
 
+      <Section title="Client integrations">
+        <div className="space-y-3 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.035] p-4">
+          <p className="font-extrabold">One protected profile for this client</p>
+          <p className="text-sm font-medium text-muted-foreground">
+            GHL, Google Sheets, Meta, callback, and runtime values are entered once and reused by this funnel, every other funnel, and the website.
+          </p>
+          <Button
+            type="button"
+            onClick={() => setLocation(`/workspace/${clientId}/integrations`)}
+            className="h-11 rounded-xl bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
+          >
+            Open client integrations
+          </Button>
+        </div>
+      </Section>
+
       <Section title="Client">
         <Field label="Business name shown on the funnel">
           <Input
@@ -1436,20 +1359,6 @@ export function SimpleFormFunnelEditor({
       </Section>
 
       <Section title="Meta">
-        <Field
-          label="Meta Pixel ID"
-          hint="This is config, not a secret. Numbers only."
-        >
-          <Input
-            value={config.meta.pixelId}
-            onChange={event =>
-              patchConfig({
-                meta: { ...config.meta, pixelId: event.target.value },
-              })
-            }
-            className="h-12 rounded-xl border-white/10 bg-white/[0.035] font-mono"
-          />
-        </Field>
         <Field label="Lead conversion value">
           <Input
             type="number"
@@ -1466,40 +1375,9 @@ export function SimpleFormFunnelEditor({
             className="h-12 rounded-xl border-white/10 bg-white/[0.035]"
           />
         </Field>
-        {guides
-          .filter(guide => guide.runtimeKey === "META_CAPI_ACCESS_TOKEN")
-          .map(guide => (
-            <SecretField
-              key={guide.runtimeKey}
-              guide={guide}
-              present={Boolean(query.data?.secretStatus[guide.runtimeKey])}
-              value={secretDrafts[guide.runtimeKey] ?? ""}
-              onChange={value =>
-                setSecretDrafts(current => ({
-                  ...current,
-                  [guide.runtimeKey]: value,
-                }))
-              }
-            />
-          ))}
       </Section>
 
-      <Section title="GHL">
-        <Field
-          label="GHL Location ID"
-          hint="The client sub-account location ID."
-        >
-          <Input
-            value={integrationDrafts.GHL_LOCATION_ID ?? ""}
-            onChange={event =>
-              setIntegrationDrafts(current => ({
-                ...current,
-                GHL_LOCATION_ID: event.target.value,
-              }))
-            }
-            className="h-12 rounded-xl border-white/10 bg-white/[0.035] font-mono"
-          />
-        </Field>
+      <Section title="Offline conversion">
         <div className="space-y-2 rounded-xl border border-white/8 bg-white/[0.025] p-4">
           <p className="text-sm font-extrabold">
             Offline conversion callback stages
@@ -1516,81 +1394,6 @@ export function SimpleFormFunnelEditor({
             ))}
           </ul>
         </div>
-        {guides
-          .filter(guide => guide.runtimeKey === "GHL_API_KEY")
-          .map(guide => (
-            <SecretField
-              key={guide.runtimeKey}
-              guide={guide}
-              present={Boolean(query.data?.secretStatus[guide.runtimeKey])}
-              value={secretDrafts[guide.runtimeKey] ?? ""}
-              onChange={value =>
-                setSecretDrafts(current => ({
-                  ...current,
-                  [guide.runtimeKey]: value,
-                }))
-              }
-            />
-          ))}
-        <div className="space-y-3 rounded-xl border border-white/8 bg-white/[0.025] p-4">
-          <p className="font-extrabold">Lifecycle callback secret</p>
-          <p className="text-sm font-medium text-muted-foreground">
-            {query.data?.secretStatus.STAGE_WEBHOOK_SECRET
-              ? "Generated and saved. The value is never returned to the browser."
-              : "Not generated yet."}
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() =>
-              integrationMutation.mutate({
-                clientId,
-                funnelId,
-                regenerateStageWebhookSecret: true,
-              })
-            }
-            className="h-11 rounded-xl font-extrabold"
-          >
-            Generate a new secret
-          </Button>
-        </div>
-        <Button
-          type="button"
-          disabled={integrationMutation.isPending}
-          onClick={() =>
-            integrationMutation.mutate({
-              clientId,
-              funnelId,
-              GHL_LOCATION_ID: integrationDrafts.GHL_LOCATION_ID ?? "",
-              GOOGLE_SHEETS_ID: integrationDrafts.GOOGLE_SHEETS_ID ?? "",
-              META_PIXEL_ID: config.meta.pixelId,
-              GHL_API_KEY: secretDrafts.GHL_API_KEY,
-              META_CAPI_ACCESS_TOKEN: secretDrafts.META_CAPI_ACCESS_TOKEN,
-              ALERT_WEBHOOK_URL: secretDrafts.ALERT_WEBHOOK_URL,
-            })
-          }
-          className="h-11 rounded-xl bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
-        >
-          Save lead integration
-        </Button>
-      </Section>
-
-      <Section title="Google Sheets">
-        <Field
-          label="Lead vault Sheet ID"
-          hint="The spreadsheet ID used for All Leads and Missed Leads."
-        >
-          <Input
-            value={integrationDrafts.GOOGLE_SHEETS_ID ?? ""}
-            onChange={event =>
-              setIntegrationDrafts(current => ({
-                ...current,
-                GOOGLE_SHEETS_ID: event.target.value,
-              }))
-            }
-            className="h-12 rounded-xl border-white/10 bg-white/[0.035] font-mono"
-          />
-        </Field>
       </Section>
 
       <Section title="Inventory">
@@ -1801,22 +1604,6 @@ export function SimpleFormFunnelEditor({
             }
           />
         </div>
-        {guides
-          .filter(guide => guide.runtimeKey === "ALERT_WEBHOOK_URL")
-          .map(guide => (
-            <SecretField
-              key={guide.runtimeKey}
-              guide={guide}
-              present={Boolean(query.data?.secretStatus[guide.runtimeKey])}
-              value={secretDrafts[guide.runtimeKey] ?? ""}
-              onChange={value =>
-                setSecretDrafts(current => ({
-                  ...current,
-                  [guide.runtimeKey]: value,
-                }))
-              }
-            />
-          ))}
       </Section>
     </div>
   );

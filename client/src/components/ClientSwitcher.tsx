@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { clientSwitcherLabel } from "@/lib/queryErrors";
 import { cn } from "@/lib/utils";
 import { Building2, Check, ChevronsUpDown, Plus } from "lucide-react";
 import { StatusDot } from "./StatusDot";
@@ -27,7 +28,7 @@ export function ClientSwitcher({
   onSelect: (clientId: number) => void;
   onAddClient: () => void;
 }) {
-  const { clients, selectedClient, isLoading } = useWorkspace();
+  const { clients, selectedClient, isLoading, isError } = useWorkspace();
   const selectedState = selectedClient ? clientState(selectedClient.client.status) : null;
 
   return (
@@ -48,7 +49,11 @@ export function ClientSwitcher({
             </span>
             <span className="min-w-0 text-left">
               <span className="block truncate text-xs font-semibold sm:text-sm">
-                {selectedClient?.client.businessName ?? (clients.length ? "Choose client" : "No clients yet")}
+                {clientSwitcherLabel({
+                  selectedName: selectedClient?.client.businessName,
+                  clientCount: clients.length,
+                  isError,
+                })}
               </span>
               {selectedState && !compact ? (
                 <span className="mt-0.5 block">

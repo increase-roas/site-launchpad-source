@@ -9,6 +9,7 @@ import AstroClientEditor from "./pages/AstroClientEditor";
 import DraftClientCreate from "./pages/DraftClientCreate";
 import Home from "./pages/Home";
 import MediaWorkspace from "./pages/MediaWorkspace";
+import ClientIntegrationsPage from "./pages/ClientIntegrationsPage";
 import PaidAdsWorkspace from "./pages/PaidAdsWorkspace";
 import WebsiteWorkspace from "./pages/WebsiteWorkspace";
 
@@ -38,6 +39,14 @@ function Router() {
       <Route path="/workspace/:clientId/settings">
         {params => (
           <AstroClientEditor
+            key={Number(params.clientId)}
+            clientId={Number(params.clientId)}
+          />
+        )}
+      </Route>
+      <Route path="/workspace/:clientId/integrations">
+        {params => (
+          <ClientIntegrationsPage
             key={Number(params.clientId)}
             clientId={Number(params.clientId)}
           />
