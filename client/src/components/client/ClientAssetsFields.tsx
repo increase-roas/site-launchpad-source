@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ASSET_SLOT_LABELS, MARKETING_ASSET_SLOT_VALUES, type AssetSlot } from "@shared/client";
 import { ImageIcon, Loader2, Save } from "lucide-react";
+import { MEDIA_SPECIFICATIONS } from "@shared/mediaSpecifications";
 
 type ClientAssetPreview = { storageUrl: string; filename: string; byteSize: number };
 
@@ -42,6 +43,7 @@ export function ClientAssetsFields({
                 guidance={PHOTO_GUIDANCE.logo}
                 image={assetMap.get("logo")}
                 busy={uploadingSlot === "logo"}
+                specification={MEDIA_SPECIFICATIONS.logo}
                 onFile={file => onFile("logo", file)}
               />
             </div>
@@ -65,6 +67,7 @@ export function ClientAssetsFields({
                   guidance={PHOTO_GUIDANCE[slot]}
                   image={assetMap.get(slot)}
                   busy={uploadingSlot === slot}
+                  specification={slot === "hero" ? MEDIA_SPECIFICATIONS.hero : MEDIA_SPECIFICATIONS.landscape}
                   onFile={file => onFile(slot, file)}
                 />
               ))}

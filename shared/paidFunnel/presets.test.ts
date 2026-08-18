@@ -16,7 +16,7 @@ describe("paid-ad section presets and fixture", () => {
 
   it("builds a complete multi-step paid funnel graph", () => {
     const graph = createGenericPaidFunnelFixture("qa");
-    expect(graph.steps.map(step => step.key)).toEqual(["landing", "form", "thankYou", "booking", "upsell"]);
+    expect(graph.steps.map(step => step.key)).toEqual(["landing", "survey-homeowner", "survey-timeline", "form", "thankYou"]);
     for (const step of graph.steps) {
       const page = graph.pages[step.key];
       expect(page?.kind).toBe("page");

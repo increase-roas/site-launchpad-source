@@ -16,11 +16,14 @@ import {
   type ActiveDrag,
 } from "@shared/paidFunnel/dropRouting";
 import {
+  addStudioSurveyQuestion,
+  applyStudioOptInTemplate,
   canRedoStudio,
   canUndoStudio,
   insertPaletteOnCanvas,
   insertStudioItem,
   moveStudioNode,
+  reorderStudioStep,
   selectStudioNode,
   setStudioDevice,
   setStudioStep,
@@ -28,8 +31,9 @@ import {
   studioHotkey,
   type StudioState,
 } from "@shared/paidFunnel/store";
+import { OPT_IN_TEMPLATE_LABELS, OPT_IN_TEMPLATE_VALUES } from "@shared/paidFunnel/templates";
 import { PaidFunnelInspector } from "./PaidFunnelInspector";
-import { ArrowLeft, Monitor, Redo2, RefreshCw, Save, Smartphone, Tablet, Undo2, ZoomIn, ZoomOut } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ContactRound, FileText, GripVertical, LayoutTemplate, ListChecks, Monitor, Plus, Redo2, RefreshCw, Save, Smartphone, Tablet, Undo2, ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useMemo, useState, type Dispatch, type PointerEvent as ReactPointerEvent, type SetStateAction } from "react";
 
 const SECTION_PRESETS = Object.keys(PAID_ADS_SECTION_PRESET_LABELS) as PaidFunnelSectionPreset[];
@@ -110,12 +114,12 @@ function CanvasPreview({
       style={{
         ...box.style,
         outline: box.selected
-          ? "2px solid #22d3ee"
+          ? "2px solid #1463f3"
           : compatible
-            ? "2px dashed rgba(34,211,238,0.55)"
+            ? "2px dashed rgba(20,99,243,0.55)"
             : box.kind === "element"
-              ? "1px dashed rgba(255,255,255,0.08)"
-              : "1px dashed rgba(255,255,255,0.04)",
+              ? "1px dashed rgba(100,116,139,0.3)"
+              : "1px dashed rgba(148,163,184,0.35)",
         opacity: box.visible ? 1 : 0.35,
         display: box.kind === "row" ? "flex" : typeof box.style.display === "string" ? box.style.display : undefined,
         cursor: "default",
@@ -129,13 +133,13 @@ function CanvasPreview({
           aria-label={`Drag ${name}`}
           data-drag-handle="true"
           onPointerDown={event => onNodePointerDown(event, box.id, box.kind)}
-          className="absolute right-1 top-1 z-10 grid h-6 w-6 cursor-grab touch-none place-items-center rounded bg-slate-950/70 text-[10px] font-black text-cyan-200 active:cursor-grabbing"
+          className="absolute right-1 top-1 z-10 grid h-6 w-6 cursor-grab touch-none place-items-center rounded border border-slate-200 bg-white text-[10px] font-black text-slate-500 shadow-sm active:cursor-grabbing"
         >
           ⋮⋮
         </button>
       ) : null}
       {box.kind !== "element" ? (
-        <span className="pointer-events-none absolute left-1 top-1 rounded bg-black/50 px-1.5 text-[10px] font-extrabold uppercase tracking-wider text-cyan-200">
+        <span className="pointer-events-none absolute left-1 top-1 rounded bg-blue-50 px-1.5 text-[10px] font-extrabold uppercase tracking-wider text-blue-700">
           {box.label}
         </span>
       ) : null}
@@ -178,6 +182,8 @@ export function PaidFunnelBuilder({
   const [paletteTab, setPaletteTab] = useState<"section" | "row" | "element">("section");
   const [hover, setHover] = useState<{ id: string; index: number } | null>(null);
   const [active, setActive] = useState<ActiveDrag | PaletteItem | null>(null);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [draggedStep, setDraggedStep] = useState<number | null>(null);
   const graph = state.document.graph;
   const page = graph.pages[state.stepKey];
   const saveLabel = state.document.conflict ? "error" : state.document.saveStatus;
@@ -297,7 +303,7 @@ export function PaidFunnelBuilder({
     <button
       type="button"
       onClick={() => onChange(setStudioDevice(state, device))}
-      className={`grid h-9 w-9 place-items-center rounded-lg ${state.device === device ? "bg-cyan-400 text-slate-950" : "text-muted-foreground hover:bg-white/5"}`}
+      className={`grid h-9 w-9 place-items-center rounded-lg ${state.device === device ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-100"}`}
       aria-label={device}
     >
       <Icon className="h-4 w-4" />
@@ -305,33 +311,20 @@ export function PaidFunnelBuilder({
   );
 
   return (
-    <div className="flex min-h-[78vh] flex-col overflow-hidden rounded-3xl border border-white/8 bg-[#071018]">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
+    <div className="flex min-h-[78vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-sm">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
         <div className="flex items-center gap-3">
-          <Button type="button" variant="outline" onClick={onBack} className="h-10 rounded-xl border-white/10 font-extrabold">
+          <Button type="button" variant="outline" onClick={onBack} className="h-10 rounded-lg border-slate-200 font-extrabold">
             <ArrowLeft className="h-4 w-4" />
             Funnels
           </Button>
           <div>
-            <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-cyan-300">Paid Ads builder</p>
+            <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-blue-600">Astro funnel builder</p>
             <h2 className="text-lg font-extrabold">{graph.name}</h2>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {graph.steps.map(step => (
-            <button
-              key={step.key}
-              type="button"
-              onClick={() => onChange(setStudioStep(state, step.key))}
-              className={`h-9 rounded-lg px-3 text-xs font-extrabold ${
-                state.stepKey === step.key ? "bg-cyan-400 text-slate-950" : "bg-white/5 text-muted-foreground"
-              }`}
-            >
-              {step.title}
-            </button>
-          ))}
-        </div>
         <div className="flex items-center gap-2">
+          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-extrabold text-emerald-700">Astro output</span>
           <span className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
             {saveLabel === "saving" ? "Saving" : saveLabel === "saved" ? "Saved" : "Error"}
           </span>
@@ -351,7 +344,7 @@ export function PaidFunnelBuilder({
               if (state.document.saveStatus === "saved") return;
               onChange({ ...state, document: { ...state.document, saveStatus: "saving", editSeq: state.document.editSeq + 1 } });
             }}
-            className="h-9 rounded-xl bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
+            className="h-9 rounded-lg bg-blue-600 font-extrabold text-white hover:bg-blue-700"
           >
             {state.document.conflict ? <RefreshCw className="h-4 w-4" /> : <Save className="h-4 w-4" />}
             {state.document.conflict ? "Reload latest" : "Save"}
@@ -359,16 +352,72 @@ export function PaidFunnelBuilder({
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[240px_minmax(0,1fr)_280px]">
-        <aside className="border-r border-white/8">
-          <div className="flex border-b border-white/8">
+      <div className="grid min-h-0 flex-1 lg:grid-cols-[260px_minmax(0,1fr)_300px]">
+        <aside className="flex min-h-0 flex-col border-r border-slate-200 bg-slate-50/70">
+          <div className="border-b border-slate-200 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-sm font-extrabold text-slate-700">Funnel pages</p>
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+            </div>
+            <div className="space-y-1">
+              {graph.steps.map((step, index) => {
+                const Icon = step.type === "survey" ? ListChecks : step.type === "form" ? ContactRound : step.type === "thankYou" ? CheckCircle2 : FileText;
+                return (
+                  <button
+                    key={step.key}
+                    type="button"
+                    draggable
+                    onDragStart={() => setDraggedStep(index)}
+                    onDragOver={event => event.preventDefault()}
+                    onDrop={() => {
+                      if (draggedStep !== null) onChange(reorderStudioStep(state, draggedStep, index));
+                      setDraggedStep(null);
+                    }}
+                    onDragEnd={() => setDraggedStep(null)}
+                    onClick={() => onChange(setStudioStep(state, step.key))}
+                    className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left ${state.stepKey === step.key ? "border-blue-200 bg-blue-50 text-blue-700" : "border-transparent bg-white text-slate-600 hover:border-slate-200"}`}
+                  >
+                    <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-slate-400" />
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-extrabold">{index + 1}. {step.title}</span>
+                      <span className="block truncate text-[10px] text-slate-500">{step.slug}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <Button type="button" variant="outline" className="mt-3 w-full border-dashed border-blue-300 bg-white text-blue-700" onClick={() => onChange(addStudioSurveyQuestion(state))}>
+              <Plus className="h-4 w-4" /> Add survey question
+            </Button>
+            {graph.steps.find(step => step.type === "landing")?.key === state.stepKey ? (
+              <div className="mt-2">
+                <Button type="button" variant="outline" className="w-full bg-white" onClick={() => setShowTemplates(value => !value)}>
+                  <LayoutTemplate className="h-4 w-4" /> Change opt-in template
+                </Button>
+                {showTemplates ? (
+                  <div className="mt-2 space-y-1 rounded-lg border border-slate-200 bg-white p-2">
+                    {OPT_IN_TEMPLATE_VALUES.map(template => (
+                      <button key={template} type="button" className="w-full rounded-md px-2 py-2 text-left text-xs font-bold hover:bg-blue-50" onClick={() => {
+                        onChange(applyStudioOptInTemplate(state, template));
+                        setShowTemplates(false);
+                      }}>
+                        {OPT_IN_TEMPLATE_LABELS[template]}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+          <div className="flex border-b border-slate-200">
             {(["section", "row", "element"] as const).map(tab => (
               <button
                 key={tab}
                 type="button"
                 onClick={() => setPaletteTab(tab)}
                 className={`h-11 flex-1 text-xs font-extrabold uppercase tracking-wider ${
-                  paletteTab === tab ? "bg-cyan-400/15 text-cyan-200" : "text-muted-foreground"
+                  paletteTab === tab ? "border-b-2 border-blue-600 bg-white text-blue-700" : "text-slate-500"
                 }`}
               >
                 {tab === "section" ? "Sections" : tab === "row" ? "Rows" : "Elements"}
@@ -390,7 +439,7 @@ export function PaidFunnelBuilder({
                       }}
                       onDragEnd={() => setActive(null)}
                       onClick={() => onChange(insertPaletteOnCanvas(state, item))}
-                      className="w-full rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-left text-sm font-bold hover:border-cyan-300/30"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-bold text-slate-700 hover:border-blue-300"
                     >
                       {PAID_ADS_SECTION_PRESET_LABELS[preset]}
                     </button>
@@ -409,7 +458,7 @@ export function PaidFunnelBuilder({
                       onDragStart={event => event.dataTransfer.setData(PALETTE_DRAG, startPalette(item))}
                       onDragEnd={() => setActive(null)}
                       onClick={() => onChange(insertPaletteOnCanvas(state, item))}
-                      className="w-full rounded-xl border border-dashed border-cyan-300/25 bg-cyan-400/[0.04] px-3 py-2 text-left text-sm font-bold"
+                      className="w-full rounded-lg border border-dashed border-blue-300 bg-blue-50 px-3 py-2 text-left text-sm font-bold text-blue-700"
                     >
                       {entry.name}
                     </button>
@@ -428,7 +477,7 @@ export function PaidFunnelBuilder({
                       onDragStart={event => event.dataTransfer.setData(PALETTE_DRAG, startPalette(item))}
                       onDragEnd={() => setActive(null)}
                       onClick={() => onChange(insertPaletteOnCanvas(state, item))}
-                      className="w-full rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-left text-sm font-bold hover:border-cyan-300/30"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-bold text-slate-700 hover:border-blue-300"
                     >
                       {columns}-column row
                     </button>
@@ -447,7 +496,7 @@ export function PaidFunnelBuilder({
                       onDragStart={event => event.dataTransfer.setData(PALETTE_DRAG, startPalette(item))}
                       onDragEnd={() => setActive(null)}
                       onClick={() => onChange(insertPaletteOnCanvas(state, item))}
-                      className="w-full rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-left text-sm font-bold capitalize hover:border-cyan-300/30"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-bold capitalize text-slate-700 hover:border-blue-300"
                     >
                       {type}
                     </button>
@@ -458,14 +507,14 @@ export function PaidFunnelBuilder({
         </aside>
 
         <section className="flex min-w-0 flex-col">
-          <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-2">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2">
             <p className="truncate text-xs font-bold text-muted-foreground">
               {crumbs.length
                 ? crumbs.map(crumb => (
                     <button
                       key={crumb.id}
                       type="button"
-                      className="mr-1 hover:text-cyan-200"
+                      className="mr-1 hover:text-blue-600"
                       onClick={() => onChange(selectStudioNode(state, crumb.id))}
                     >
                       {crumb.label} /
@@ -486,14 +535,14 @@ export function PaidFunnelBuilder({
               </button>
             </div>
           </div>
-          <div className="flex-1 overflow-auto bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_40%),#050b12] p-6">
+          <div className="flex-1 overflow-auto bg-slate-100 p-6">
             <div
               style={{
                 zoom: state.zoom,
                 width: state.device === "mobile" ? 390 : state.device === "tablet" ? 768 : 1120,
                 margin: "0 auto",
               }}
-              className="min-h-[640px] overflow-hidden rounded-[28px] border border-white/10 bg-[#071018] shadow-[0_24px_80px_rgba(0,0,0,0.35)]"
+              className="min-h-[640px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-300/40"
             >
               {canvas ? (
                 <CanvasPreview

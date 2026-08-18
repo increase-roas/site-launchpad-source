@@ -6,6 +6,7 @@ import {
 } from "../../shared/assetUpload";
 import { ASTRO_ASSET_SLOT_VALUES } from "../../shared/astroConfig";
 import { ASSET_SLOT_VALUES } from "../../shared/client";
+import { mediaSpecificationForAsset } from "../../shared/mediaSpecifications";
 import {
   AssetUploadError,
   getDefaultAssetUploadService,
@@ -32,7 +33,15 @@ const requestUploadInput = z.discriminatedUnion("assetKind", [
     assetKind: z.literal("astro"),
     slot: z.enum(ASTRO_ASSET_SLOT_VALUES),
   }).strict(),
-]);
+]).superRefine((input, context) => {
+  const specification = mediaSpecificationForAsset(input.assetKind, input.slot);
+  if (!specification.mimeTypes.includes(input.mimeType)) {
+    context.addIssue({ code: "custom", path: ["mimeType"], message: specification.label });
+  }
+  if (input.sizeBytes > specification.maxBytes) {
+    context.addIssue({ code: "custom", path: ["sizeBytes"], message: specification.label });
+  }
+});
 
 const completeUploadInput = z.object({
   uploadId: z.string().uuid(),

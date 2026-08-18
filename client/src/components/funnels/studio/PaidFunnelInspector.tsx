@@ -21,10 +21,12 @@ import {
   setSelectedText,
   setSelectedVisibility,
   studioHotkey,
+  updateStudioStep,
   type StudioState,
 } from "@shared/paidFunnel/store";
 import { Copy, Trash2 } from "lucide-react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
+import { MEDIA_SPECIFICATIONS } from "@shared/mediaSpecifications";
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -50,7 +52,7 @@ function NumberField({
         type="number"
         value={Number.isFinite(value) ? value : 0}
         onChange={event => onChange(Number(event.target.value) || 0)}
-        className="h-10 rounded-xl border-white/10 bg-white/[0.03]"
+        className="h-10 rounded-lg border-slate-200 bg-white"
       />
     </Field>
   );
@@ -72,7 +74,7 @@ function SelectField({
       <select
         value={value}
         onChange={event => onChange(event.target.value)}
-        className="h-10 w-full rounded-xl border border-white/10 bg-[#0b1520] px-3 text-sm font-bold"
+        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800"
       >
         {options.map(option => (
           <option key={option.value} value={option.value}>
@@ -198,10 +200,68 @@ export function PaidFunnelInspector({
   const commit = (next: StudioState) => onChange(next);
   const presence = integrationPresenceRows(profile);
   const globals = state.document.graph.globalStyles;
+  const currentStep = state.document.graph.steps.find(step => step.key === state.stepKey);
+  const otherSteps = state.document.graph.steps.filter(step => step.key !== state.stepKey);
 
   return (
-    <aside className="space-y-4 overflow-y-auto border-l border-white/8 p-4">
-      <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-cyan-300">Inspector</p>
+    <aside className="space-y-4 overflow-y-auto border-l border-slate-200 bg-white p-4 text-slate-900">
+      <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-blue-600">Page settings</p>
+      {currentStep ? (
+        <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <Field label="Page name">
+            <Input value={currentStep.title} onChange={event => commit(updateStudioStep(state, { title: event.target.value, seo: { ...currentStep.seo, title: event.target.value } }))} className="h-10 rounded-lg border-slate-200 bg-white" />
+          </Field>
+          <Field label="Astro page URL">
+            <Input
+              value={currentStep.slug}
+              onChange={event => {
+                const value = `/${event.target.value.replace(/^\/+/, "").replace(/\s+/g, "-").toLowerCase()}`;
+                commit(updateStudioStep(state, { slug: value }));
+              }}
+              className="h-10 rounded-lg border-slate-200 bg-white font-mono text-xs"
+            />
+          </Field>
+          <p className="text-xs text-slate-500">Every survey question uses its own crawlable Astro route.</p>
+          <SelectField
+            label="After completion"
+            value={currentStep.nextStep.type}
+            options={[{ value: "step", label: "Go to a funnel page" }, { value: "redirect", label: "External URL" }, { value: "none", label: "Stop here" }]}
+            onChange={type => {
+              if (type === "redirect") commit(updateStudioStep(state, { nextStep: { type: "redirect", url: "https://" } }));
+              else if (type === "none") commit(updateStudioStep(state, { nextStep: { type: "none" } }));
+              else commit(updateStudioStep(state, { nextStep: { type: "step", stepKey: otherSteps[0]?.key ?? state.stepKey } }));
+            }}
+          />
+          {currentStep.nextStep.type === "step" ? (
+            <SelectField
+              label="Destination page"
+              value={currentStep.nextStep.stepKey}
+              options={otherSteps.map(step => ({ value: step.key, label: `${step.title} · ${step.slug}` }))}
+              onChange={stepKey => commit(updateStudioStep(state, { nextStep: { type: "step", stepKey } }))}
+            />
+          ) : null}
+          {currentStep.nextStep.type === "redirect" ? (
+            <Field label="Redirect URL">
+              <Input value={currentStep.nextStep.url} onChange={event => commit(updateStudioStep(state, { nextStep: { type: "redirect", url: event.target.value } }))} className="h-10 rounded-lg border-slate-200 bg-white" />
+            </Field>
+          ) : null}
+          {currentStep.type === "survey" ? (
+            <div className="space-y-2 border-t border-slate-200 pt-3">
+              <p className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Meta events</p>
+              <Field label="Browser event">
+                <Input value={currentStep.tracking?.browserEvent ?? "ViewContent"} onChange={event => commit(updateStudioStep(state, { tracking: { browserEvent: event.target.value, serverEvent: currentStep.tracking?.serverEvent ?? "LeadSurveyAnswer", answerField: currentStep.tracking?.answerField } }))} className="h-10 rounded-lg border-slate-200 bg-white" />
+              </Field>
+              <Field label="Server / CAPI event">
+                <Input value={currentStep.tracking?.serverEvent ?? "LeadSurveyAnswer"} onChange={event => commit(updateStudioStep(state, { tracking: { browserEvent: currentStep.tracking?.browserEvent ?? "ViewContent", serverEvent: event.target.value, answerField: currentStep.tracking?.answerField } }))} className="h-10 rounded-lg border-slate-200 bg-white" />
+              </Field>
+              <Field label="Answer field">
+                <Input value={currentStep.tracking?.answerField ?? ""} onChange={event => commit(updateStudioStep(state, { tracking: { browserEvent: currentStep.tracking?.browserEvent ?? "ViewContent", serverEvent: currentStep.tracking?.serverEvent ?? "LeadSurveyAnswer", answerField: event.target.value } }))} className="h-10 rounded-lg border-slate-200 bg-white" />
+              </Field>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      <p className="border-t border-slate-200 pt-4 text-xs font-extrabold uppercase tracking-[0.16em] text-blue-600">Block inspector</p>
       {inspector ? (
         <div className="space-y-3">
           <h3 className="text-lg font-extrabold">{inspector.title}</h3>
@@ -401,14 +461,36 @@ export function PaidFunnelInspector({
               ))}
             </div>
           ) : null}
-          {inspector.kind === "element" && ["heading", "text", "button", "phoneCta", "testimonial"].includes(String(inspector.values.type)) ? (
-            <Field label="Inline text">
+          {inspector.kind === "element" && ["heading", "text", "button", "phoneCta", "testimonial", "multipleChoice", "shortAnswer"].includes(String(inspector.values.type)) ? (
+            <Field label={inspector.values.type === "multipleChoice" || inspector.values.type === "shortAnswer" ? "Question" : "Inline text"}>
               <Input
-                value={String((inspector.values.props as { text?: string; label?: string; quote?: string }).text ?? (inspector.values.props as { label?: string }).label ?? (inspector.values.props as { quote?: string }).quote ?? "")}
+                value={String((inspector.values.props as { text?: string; label?: string; quote?: string; question?: string }).text ?? (inspector.values.props as { label?: string }).label ?? (inspector.values.props as { quote?: string }).quote ?? (inspector.values.props as { question?: string }).question ?? "")}
                 onChange={event => commit(setSelectedText(state, event.target.value))}
-                className="h-10 rounded-xl border-white/10 bg-white/[0.03]"
+                className="h-10 rounded-lg border-slate-200 bg-white"
               />
             </Field>
+          ) : null}
+          {inspector.kind === "element" && inspector.values.type === "multipleChoice" ? (
+            <>
+              <Field label="Answer field">
+                <Input
+                  value={String((inspector.values.props as { field?: string }).field ?? "")}
+                  onChange={event => commit(applySelectedPatch(state, { props: { ...(inspector.values.props as object), field: event.target.value } }))}
+                  className="h-10 rounded-lg border-slate-200 bg-white"
+                />
+              </Field>
+              <Field label="Choices (one per line)">
+                <textarea
+                  value={((inspector.values.props as { options?: string[] }).options ?? []).join("\n")}
+                  onChange={event => commit(applySelectedPatch(state, { props: { ...(inspector.values.props as object), options: event.target.value.split("\n").map(value => value.trim()).filter(Boolean) } }))}
+                  className="min-h-28 w-full rounded-lg border border-slate-200 bg-white p-3 text-sm"
+                />
+              </Field>
+              <label className="flex items-center justify-between text-sm font-bold">
+                Continue after answer
+                <input type="checkbox" checked={Boolean((inspector.values.props as { autoAdvance?: boolean }).autoAdvance)} onChange={event => commit(applySelectedPatch(state, { props: { ...(inspector.values.props as object), autoAdvance: event.target.checked } }))} />
+              </label>
+            </>
           ) : null}
           {inspector.controls.includes("typography") && inspector.kind === "element" ? (
             <>
@@ -452,6 +534,10 @@ export function PaidFunnelInspector({
                           ? { type: "formSubmit", formId: "lead-form" }
                           : type === "booking"
                             ? { type: "booking" }
+                            : type === "step"
+                              ? { type: "step", stepKey: otherSteps[0]?.key ?? state.stepKey }
+                              : type === "conditional"
+                                ? { type: "conditional", rules: [], fallbackStepKey: otherSteps[0]?.key }
                             : { type: "nextStep" };
                   commit(setSelectedAction(state, action));
                 }}
@@ -474,14 +560,24 @@ export function PaidFunnelInspector({
                   />
                 </Field>
               ) : null}
+              {(inspector.values.action as ButtonAction | undefined)?.type === "step" ? (
+                <SelectField
+                  label="Destination page"
+                  value={(inspector.values.action as { stepKey?: string }).stepKey ?? ""}
+                  options={otherSteps.map(step => ({ value: step.key, label: `${step.title} · ${step.slug}` }))}
+                  onChange={stepKey => commit(setSelectedAction(state, { type: "step", stepKey }))}
+                />
+              ) : null}
             </>
           ) : null}
           {inspector.kind === "element" && (inspector.values.type as string) === "image" ? (
-            <ImageUploadCard
-              label="Image"
-              guidance="Uses the existing media upload flow."
-              busy={requestUpload.isPending || completeUpload.isPending}
-              onFile={file => {
+            <div className="space-y-3">
+              <ImageUploadCard
+                label="Image"
+                guidance="The upload is blocked when its format, size, or aspect ratio is wrong."
+                specification={MEDIA_SPECIFICATIONS.hero}
+                busy={requestUpload.isPending || completeUpload.isPending}
+                onFile={file => {
                 void uploadAssetDirectly(file, { clientId, assetKind: "client", slot: "product" }, {
                   requestUpload: input => requestUpload.mutateAsync({
                     clientId: input.clientId,
@@ -500,8 +596,12 @@ export function PaidFunnelInspector({
                     assetId: (result as { assetId?: string }).assetId,
                   }));
                 });
-              }}
-            />
+                }}
+              />
+              <Field label="Alt text">
+                <Input value={String((inspector.values.props as { alt?: string }).alt ?? "")} onChange={event => commit(applySelectedPatch(state, { props: { ...(inspector.values.props as object), alt: event.target.value } }))} className="h-10 rounded-lg border-slate-200 bg-white" />
+              </Field>
+            </div>
           ) : null}
           {inspector.controls.includes("visibility") && inspector.values.visibility ? (
             <VisibilityFields
@@ -533,8 +633,8 @@ export function PaidFunnelInspector({
         <p className="text-sm font-medium text-muted-foreground">Select a section, row, column, or element.</p>
       )}
 
-      <div className="space-y-3 border-t border-white/8 pt-4">
-        <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-cyan-300">Global funnel styles</p>
+      <div className="space-y-3 border-t border-slate-200 pt-4">
+        <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-blue-600">Global funnel styles</p>
         <Field label="Heading font">
           <Input value={globals.fonts.heading} onChange={event => commit(patchGlobalStyles(state, { fonts: { ...globals.fonts, heading: event.target.value } }))} className="h-10 rounded-xl border-white/10 bg-white/[0.03]" />
         </Field>
@@ -547,19 +647,19 @@ export function PaidFunnelInspector({
         <NumberField label="Boxed max width" value={globals.containers.boxedMaxWidth} onChange={boxedMaxWidth => commit(patchGlobalStyles(state, { containers: { ...globals.containers, boxedMaxWidth } }))} />
       </div>
 
-      <div className="space-y-3 border-t border-white/8 pt-4">
-        <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-cyan-300">Client integrations</p>
+      <div className="space-y-3 border-t border-slate-200 pt-4">
+        <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-blue-600">Client integrations</p>
         <p className="text-xs font-medium text-muted-foreground">
           Presence from ClientIntegrationProfile for client {clientId}. Entered on Clients → Integrations. No secret values here.
         </p>
         {presence.map(group => (
-          <div key={group.id} className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
+          <div key={group.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
             <p className="text-sm font-extrabold">{group.label}</p>
             <ul className="mt-2 space-y-1">
               {group.fields.map(field => (
                 <li key={field.key} className="flex items-center justify-between text-xs font-bold">
                   <span>{field.key}</span>
-                  <span className={field.presence === "SET" ? "text-cyan-300" : "text-muted-foreground"}>{field.presence}</span>
+                  <span className={field.presence === "SET" ? "text-emerald-600" : "text-muted-foreground"}>{field.presence}</span>
                 </li>
               ))}
             </ul>

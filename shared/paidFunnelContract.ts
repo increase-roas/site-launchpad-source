@@ -20,6 +20,7 @@ export type PaidFunnelFramework = (typeof PAID_FUNNEL_FRAMEWORKS)[number];
 
 export const PAID_FUNNEL_STEP_TYPES = [
   "landing",
+  "survey",
   "form",
   "thankYou",
   "booking",
@@ -47,10 +48,10 @@ const slugSchema = z
   .string()
   .trim()
   .min(1)
-  .max(80)
+  .max(240)
   .regex(
-    /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
-    "Use lowercase letters, numbers, and hyphens only."
+    /^(?:\/|\/?[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*)$/,
+    "Use / or lowercase URL segments separated by slashes."
   );
 
 export const paidFunnelSeoSchema = z

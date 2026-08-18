@@ -40,7 +40,7 @@ function heading(nextId: () => string, text: string, tag: "h1" | "h2" | "h3" = "
 
 function body(nextId: () => string, text: string) {
   return createElement(nextId, "text", { text }, {
-    color: "#cbd5e1",
+    color: "#64748b",
     fontSize: { desktop: 18, mobile: 16 },
   });
 }
@@ -77,8 +77,8 @@ export function createSectionPreset(preset: PaidFunnelSectionPreset, nextId = cr
       layout: "full",
       minHeight: 560,
       alignment: "center",
-      background: { kind: "gradient", from: "#082f49", to: "#022c22", angle: 135 },
-      overlay: { color: "#020617", opacity: 0.25 },
+      background: { kind: "color", color: "#eef5ff" },
+      overlay: null,
       padding: { desktop: { top: 88, right: 32, bottom: 88, left: 32 }, mobile: { top: 56, right: 16, bottom: 56, left: 16 } },
       rows: [
         createRow(nextId, [
@@ -193,7 +193,7 @@ export function createSectionPreset(preset: PaidFunnelSectionPreset, nextId = cr
     preset: "footer",
     minHeight: 0,
     padding: { desktop: { top: 28, right: 24, bottom: 28, left: 24 } },
-    background: { kind: "color", color: "#020617" },
+    background: { kind: "color", color: "#f8fafc" },
     rows: [
       createRow(nextId, [
         createColumn(nextId, [
@@ -220,7 +220,7 @@ export function paidAdPalette() {
     ],
     elements: [
       "heading", "text", "image", "button", "icon", "video", "spacer", "divider", "list",
-      "form", "phoneCta", "countdown", "testimonial", "faq", "inventory", "map", "html",
+      "form", "multipleChoice", "shortAnswer", "phoneCta", "countdown", "testimonial", "faq", "inventory", "map", "html",
     ].map(type => ({ id: type, label: type, source: "element" as const, type: type as never })),
   };
 }

@@ -23,14 +23,21 @@ import {
   updateElement,
   updateRow,
   updateSection,
+  updateStep,
   type DropTarget,
   type PaletteItem,
   type StudioClipboard,
 } from "./ops";
-import type { BoxSpacing, ButtonAction, DeviceVisibility, FunnelColumn, FunnelElement, FunnelRow, FunnelSection, GlobalFunnelStyles } from "./graph";
+import type { BoxSpacing, ButtonAction, DeviceVisibility, FunnelColumn, FunnelElement, FunnelRow, FunnelSection, GlobalFunnelStyles, PaidFunnelStep } from "./graph";
 import { createEmptyGraph, createIdFactory } from "./graph";
 import { createSectionPreset } from "./presets";
 import { createGenericPaidFunnelFixture } from "./fixture";
+import {
+  applyOptInTemplate,
+  createSurveyQuestionStep,
+  reorderFunnelSteps,
+  type OptInTemplate,
+} from "./templates";
 
 export type SaveStatus = "saved" | "saving" | "error";
 
@@ -96,7 +103,7 @@ export function createStudioState(document: PaidFunnelDocument): StudioState {
     selectedId: document.graph.pages[document.graph.steps[0]?.key ?? ""]?.id ?? null,
     stepKey: document.graph.steps[0]?.key ?? "landing",
     device: "desktop",
-    zoom: 1,
+    zoom: 0.6,
     clipboard: null,
   };
 }
@@ -168,6 +175,57 @@ export function setStudioStep(state: StudioState, stepKey: string): StudioState 
     stepKey,
     selectedId: state.document.graph.pages[stepKey]?.id ?? null,
   };
+}
+
+export function applyStudioOptInTemplate(state: StudioState, template: OptInTemplate): StudioState {
+  return applyGraph(state, applyOptInTemplate(state.document.graph, template));
+}
+
+export function addStudioSurveyQuestion(state: StudioState): StudioState {
+  const graph = state.document.graph;
+  const number = graph.steps.filter(step => step.type === "survey").length + 1;
+  let key = `survey-question-${number}`;
+  let suffix = number;
+  while (graph.pages[key]) {
+    suffix += 1;
+    key = `survey-question-${suffix}`;
+  }
+  const insertAt = graph.steps.findIndex(step => step.type === "form" || step.type === "thankYou");
+  const targetIndex = insertAt < 0 ? graph.steps.length : insertAt;
+  const nextStepKey = graph.steps[targetIndex]?.key;
+  const created = createSurveyQuestionStep({
+    key,
+    slug: `survey/question-${suffix}`,
+    title: `Question ${suffix}`,
+    question: "What would you like us to know?",
+    field: `question${suffix}`,
+    options: ["Option one", "Option two", "Option three"],
+    nextStepKey,
+  });
+  const previous = graph.steps[targetIndex - 1];
+  const steps = [...graph.steps];
+  if (previous?.nextStep.type === "step" && previous.nextStep.stepKey === nextStepKey) {
+    steps[targetIndex - 1] = { ...previous, nextStep: { type: "step", stepKey: key } };
+  }
+  steps.splice(targetIndex, 0, created.step);
+  const next = applyGraph(state, {
+    ...graph,
+    steps,
+    pages: { ...graph.pages, [key]: created.page },
+  });
+  return { ...next, stepKey: key, selectedId: created.page.id };
+}
+
+export function reorderStudioStep(state: StudioState, from: number, to: number): StudioState {
+  const graph = reorderFunnelSteps(state.document.graph, from, to);
+  return graph === state.document.graph ? state : applyGraph(state, graph);
+}
+
+export function updateStudioStep(
+  state: StudioState,
+  patch: Partial<Omit<PaidFunnelStep, "key">>,
+): StudioState {
+  return applyGraph(state, updateStep(state.document.graph, state.stepKey, patch));
 }
 
 export function setStudioDevice(state: StudioState, device: PaidFunnelBreakpoint): StudioState {

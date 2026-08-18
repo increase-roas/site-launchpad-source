@@ -945,6 +945,7 @@ export type PaidFunnelSource = (typeof paidFunnelSourceValues)[number];
 
 export const paidFunnelStepKindValues = [
   "landing",
+  "survey",
   "form",
   "thankYou",
   "booking",

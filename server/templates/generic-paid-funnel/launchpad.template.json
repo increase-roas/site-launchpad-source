@@ -1,63 +1,67 @@
 {
   "schemaVersion": 1,
   "templateKey": "generic-paid-funnel",
-  "name": "Generic Multi-Step Paid Funnel",
+  "name": "Perspective-style Astro paid funnel",
   "version": "1.0.0",
   "kind": "paid-funnel",
-  "framework": "static-html",
+  "framework": "astro",
   "steps": [
     {
       "key": "landing",
       "type": "landing",
-      "slug": "landing",
-      "title": "Landing",
+      "slug": "/",
+      "title": "Opt-in page",
       "seo": {
-        "title": "Landing",
-        "description": "Paid ad landing page"
+        "title": "Opt-in page | Paid offer",
+        "description": "Opt-in page step for the generic paid funnel."
+      },
+      "nextStep": "survey-homeowner"
+    },
+    {
+      "key": "survey-homeowner",
+      "type": "survey",
+      "slug": "/survey/homeowner",
+      "title": "Homeownership",
+      "seo": {
+        "title": "Homeownership",
+        "description": "Do you own the property where this will be installed?"
+      },
+      "nextStep": "survey-timeline"
+    },
+    {
+      "key": "survey-timeline",
+      "type": "survey",
+      "slug": "/survey/timeline",
+      "title": "Timeline",
+      "seo": {
+        "title": "Timeline",
+        "description": "When would you like to get started?"
       },
       "nextStep": "form"
     },
     {
       "key": "form",
       "type": "form",
-      "slug": "form",
-      "title": "Form",
+      "slug": "/contact",
+      "title": "Contact form",
       "seo": {
-        "title": "Get your offer"
+        "title": "Contact form | Paid offer",
+        "description": "Contact form step for the generic paid funnel."
       },
-      "nextStep": "thank-you"
+      "nextStep": "thankYou"
     },
     {
-      "key": "thank-you",
+      "key": "thankYou",
       "type": "thankYou",
-      "slug": "thank-you",
-      "title": "Thank You",
+      "slug": "/thank-you",
+      "title": "Thank you",
       "seo": {
-        "title": "Thank you"
-      },
-      "nextStep": "booking"
-    },
-    {
-      "key": "booking",
-      "type": "booking",
-      "slug": "booking",
-      "title": "Booking",
-      "seo": {
-        "title": "Book a visit"
-      },
-      "nextStep": "upsell"
-    },
-    {
-      "key": "upsell",
-      "type": "upsell",
-      "slug": "upsell",
-      "title": "Upsell",
-      "seo": {
-        "title": "Upgrade your offer"
+        "title": "Thank you | Paid offer",
+        "description": "Thank you step for the generic paid funnel."
       }
     }
   ],
-  "previewEntry": "landing.html",
+  "previewEntry": "src/pages/index.astro",
   "sectionPresets": [
     {
       "key": "blank",
@@ -111,19 +115,41 @@
   "assets": [],
   "configSchema": {},
   "defaults": {
-    "fonts": {
-      "heading": "Inter",
-      "body": "Inter"
-    },
-    "colors": {
-      "primary": "#0f766e",
-      "background": "#0b1220",
-      "text": "#f8fafc"
-    },
-    "containerWidths": {
-      "desktop": "1120px",
-      "tablet": "768px",
-      "mobile": "100%"
+    "globalStyles": {
+      "fonts": {
+        "heading": "Inter",
+        "body": "Inter"
+      },
+      "colors": {
+        "background": "#ffffff",
+        "surface": "#f8fafc",
+        "text": "#172033",
+        "muted": "#64748b",
+        "primary": "#1463f3",
+        "primaryText": "#ffffff",
+        "border": "#d8e0ec"
+      },
+      "button": {
+        "background": "#1463f3",
+        "color": "#ffffff",
+        "radius": 8,
+        "paddingX": 22,
+        "paddingY": 14,
+        "fontWeight": 800
+      },
+      "containers": {
+        "boxedMaxWidth": 1120,
+        "fullMaxWidth": 1440
+      },
+      "mobile": {
+        "sectionPadding": {
+          "top": 20,
+          "right": 20,
+          "bottom": 20,
+          "left": 20
+        },
+        "rowGap": 12
+      }
     }
   },
   "integrations": [
@@ -202,7 +228,7 @@
     }
   ],
   "build": {
-    "command": "echo generic-paid-funnel",
+    "command": "npm run build",
     "outputDir": "dist"
   },
   "publishAdapter": "generic-paid-funnel",
@@ -270,43 +296,245 @@
     "version": 1,
     "pages": [
       {
-        "id": "page-landing",
+        "id": "manifest_1",
+        "kind": "page",
         "stepKey": "landing",
         "sections": [
           {
-            "id": "section-landing-hero",
+            "id": "manifest_38",
+            "kind": "section",
             "preset": "hero",
+            "layout": "full",
+            "maxWidth": 1120,
+            "minHeight": 560,
+            "alignment": "center",
+            "padding": {
+              "desktop": {
+                "top": 88,
+                "right": 32,
+                "bottom": 88,
+                "left": 32
+              },
+              "mobile": {
+                "top": 56,
+                "right": 16,
+                "bottom": 56,
+                "left": 16
+              }
+            },
+            "margin": {
+              "desktop": {
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            },
+            "background": {
+              "kind": "color",
+              "color": "#eef5ff"
+            },
+            "overlay": null,
+            "borderColor": "transparent",
+            "borderWidth": 0,
+            "borderRadius": 0,
+            "shadow": "none",
+            "sticky": false,
+            "anchor": "",
+            "className": "",
+            "visibility": {
+              "desktop": true,
+              "tablet": true,
+              "mobile": true
+            },
             "rows": [
               {
-                "id": "row-landing-hero",
+                "id": "manifest_37",
+                "kind": "row",
+                "gap": 16,
+                "valign": "top",
+                "wrap": true,
+                "background": {
+                  "kind": "none"
+                },
+                "padding": {
+                  "desktop": {
+                    "top": 0,
+                    "right": 0,
+                    "bottom": 0,
+                    "left": 0
+                  }
+                },
                 "columns": [
                   {
-                    "id": "col-landing-hero",
-                    "width": {
-                      "desktop": 12
+                    "id": "manifest_36",
+                    "kind": "column",
+                    "widths": {
+                      "desktop": 100,
+                      "tablet": 100,
+                      "mobile": 100
+                    },
+                    "alignment": "left",
+                    "padding": {
+                      "desktop": {
+                        "top": 16,
+                        "right": 16,
+                        "bottom": 16,
+                        "left": 16
+                      }
+                    },
+                    "background": {
+                      "kind": "none"
+                    },
+                    "borderColor": "transparent",
+                    "borderWidth": 0,
+                    "borderRadius": 0,
+                    "visibility": {
+                      "desktop": true,
+                      "tablet": true,
+                      "mobile": true
                     },
                     "elements": [
                       {
-                        "id": "el-landing-heading",
+                        "id": "manifest_33",
+                        "kind": "element",
                         "type": "heading",
                         "props": {
-                          "text": "See today's special offer",
-                          "level": 1
+                          "text": "This weekend only: in-stock hot tubs",
+                          "tag": "h1"
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 56,
+                            "tablet": 42,
+                            "mobile": 34
+                          },
+                          "textAlign": {
+                            "desktop": "center"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "fontWeight": 800
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
                         }
                       },
                       {
-                        "id": "el-landing-text",
+                        "id": "manifest_34",
+                        "kind": "element",
                         "type": "text",
                         "props": {
-                          "text": "A complete generic paid-ad funnel. No fabricated customer quotes."
+                          "text": "See live inventory, lock the advertised price, and book a showroom visit."
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 18,
+                            "mobile": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "color": "#64748b"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
                         }
                       },
                       {
-                        "id": "el-landing-cta",
+                        "id": "manifest_35",
+                        "kind": "element",
                         "type": "button",
                         "props": {
-                          "label": "Get started",
-                          "action": "next-step"
+                          "label": "Check availability",
+                          "action": {
+                            "type": "nextStep"
+                          }
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 16
+                          },
+                          "textAlign": {
+                            "desktop": "center"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "fontWeight": 800
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
                         }
                       }
                     ]
@@ -316,150 +544,237 @@
             ]
           },
           {
-            "id": "section-landing-split",
-            "preset": "two-column",
-            "rows": [
-              {
-                "id": "row-landing-split",
-                "columns": [
-                  {
-                    "id": "col-landing-image",
-                    "width": {
-                      "desktop": 6
-                    },
-                    "elements": [
-                      {
-                        "id": "el-landing-image",
-                        "type": "image",
-                        "props": {
-                          "alt": "Showroom placeholder",
-                          "src": ""
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "id": "col-landing-benefits",
-                    "width": {
-                      "desktop": 6
-                    },
-                    "elements": [
-                      {
-                        "id": "el-landing-list",
-                        "type": "list",
-                        "props": {
-                          "items": [
-                            "Local delivery",
-                            "In-stock models",
-                            "Financing options"
-                          ]
-                        }
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "id": "section-landing-cta",
-            "preset": "cta",
-            "rows": [
-              {
-                "id": "row-landing-cta",
-                "columns": [
-                  {
-                    "id": "col-landing-cta",
-                    "width": {
-                      "desktop": 12
-                    },
-                    "elements": [
-                      {
-                        "id": "el-landing-phone",
-                        "type": "phoneCta",
-                        "props": {
-                          "label": "Call now"
-                        }
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "id": "section-landing-footer",
-            "preset": "footer",
-            "rows": [
-              {
-                "id": "row-landing-footer",
-                "columns": [
-                  {
-                    "id": "col-landing-footer",
-                    "width": {
-                      "desktop": 12
-                    },
-                    "elements": [
-                      {
-                        "id": "el-landing-footer",
-                        "type": "text",
-                        "props": {
-                          "text": "Paid ads funnel fixture"
-                        }
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "id": "page-form",
-        "stepKey": "form",
-        "sections": [
-          {
-            "id": "section-form",
+            "id": "manifest_44",
+            "kind": "section",
             "preset": "form",
+            "layout": "boxed",
+            "maxWidth": 1120,
+            "minHeight": 0,
+            "alignment": "left",
+            "padding": {
+              "desktop": {
+                "top": 56,
+                "right": 24,
+                "bottom": 56,
+                "left": 24
+              }
+            },
+            "margin": {
+              "desktop": {
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            },
+            "background": {
+              "kind": "none"
+            },
+            "overlay": null,
+            "borderColor": "transparent",
+            "borderWidth": 0,
+            "borderRadius": 0,
+            "shadow": "none",
+            "sticky": false,
+            "anchor": "lead-form",
+            "className": "",
+            "visibility": {
+              "desktop": true,
+              "tablet": true,
+              "mobile": true
+            },
             "rows": [
               {
-                "id": "row-form",
+                "id": "manifest_43",
+                "kind": "row",
+                "gap": 16,
+                "valign": "top",
+                "wrap": true,
+                "background": {
+                  "kind": "none"
+                },
+                "padding": {
+                  "desktop": {
+                    "top": 0,
+                    "right": 0,
+                    "bottom": 0,
+                    "left": 0
+                  }
+                },
                 "columns": [
                   {
-                    "id": "col-form",
-                    "width": {
-                      "desktop": 12
+                    "id": "manifest_42",
+                    "kind": "column",
+                    "widths": {
+                      "desktop": 100,
+                      "tablet": 100,
+                      "mobile": 100
+                    },
+                    "alignment": "left",
+                    "padding": {
+                      "desktop": {
+                        "top": 16,
+                        "right": 16,
+                        "bottom": 16,
+                        "left": 16
+                      }
+                    },
+                    "background": {
+                      "kind": "none"
+                    },
+                    "borderColor": "transparent",
+                    "borderWidth": 0,
+                    "borderRadius": 0,
+                    "visibility": {
+                      "desktop": true,
+                      "tablet": true,
+                      "mobile": true
                     },
                     "elements": [
                       {
-                        "id": "el-form-heading",
+                        "id": "manifest_39",
+                        "kind": "element",
                         "type": "heading",
                         "props": {
-                          "text": "Tell us how to reach you",
-                          "level": 2
+                          "text": "Get today's price",
+                          "tag": "h2"
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 32,
+                            "tablet": 28,
+                            "mobile": 24
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "fontWeight": 800
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
                         }
                       },
                       {
-                        "id": "el-form",
+                        "id": "manifest_40",
+                        "kind": "element",
+                        "type": "text",
+                        "props": {
+                          "text": "ZIP + contact maps to the existing lead and offline-conversion contract."
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 18,
+                            "mobile": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "color": "#64748b"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      },
+                      {
+                        "id": "manifest_41",
+                        "kind": "element",
                         "type": "form",
                         "props": {
+                          "formId": "lead-form",
                           "fields": [
+                            "zip",
                             "firstName",
                             "lastName",
                             "email",
-                            "phone",
-                            "consent"
+                            "phone"
                           ],
-                          "joinKey": "leadUuid"
-                        }
-                      },
-                      {
-                        "id": "el-form-submit",
-                        "type": "button",
-                        "props": {
-                          "label": "Submit",
-                          "action": "form-submit"
+                          "submitLabel": "See my price"
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
                         }
                       }
                     ]
@@ -471,43 +786,193 @@
         ]
       },
       {
-        "id": "page-thank-you",
-        "stepKey": "thank-you",
+        "id": "manifest_2",
+        "kind": "page",
+        "stepKey": "survey-homeowner",
         "sections": [
           {
-            "id": "section-thank-you",
+            "id": "manifest_7",
+            "kind": "section",
             "preset": "boxed",
+            "layout": "boxed",
+            "maxWidth": 1120,
+            "minHeight": 520,
+            "alignment": "left",
+            "padding": {
+              "desktop": {
+                "top": 56,
+                "right": 24,
+                "bottom": 56,
+                "left": 24
+              }
+            },
+            "margin": {
+              "desktop": {
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            },
+            "background": {
+              "kind": "color",
+              "color": "#ffffff"
+            },
+            "overlay": null,
+            "borderColor": "transparent",
+            "borderWidth": 0,
+            "borderRadius": 0,
+            "shadow": "none",
+            "sticky": false,
+            "anchor": "",
+            "className": "",
+            "visibility": {
+              "desktop": true,
+              "tablet": true,
+              "mobile": true
+            },
             "rows": [
               {
-                "id": "row-thank-you",
+                "id": "manifest_6",
+                "kind": "row",
+                "gap": 16,
+                "valign": "top",
+                "wrap": true,
+                "background": {
+                  "kind": "none"
+                },
+                "padding": {
+                  "desktop": {
+                    "top": 0,
+                    "right": 0,
+                    "bottom": 0,
+                    "left": 0
+                  }
+                },
                 "columns": [
                   {
-                    "id": "col-thank-you",
-                    "width": {
-                      "desktop": 12
+                    "id": "manifest_5",
+                    "kind": "column",
+                    "widths": {
+                      "desktop": 100,
+                      "tablet": 100,
+                      "mobile": 100
+                    },
+                    "alignment": "left",
+                    "padding": {
+                      "desktop": {
+                        "top": 16,
+                        "right": 16,
+                        "bottom": 16,
+                        "left": 16
+                      }
+                    },
+                    "background": {
+                      "kind": "none"
+                    },
+                    "borderColor": "transparent",
+                    "borderWidth": 0,
+                    "borderRadius": 0,
+                    "visibility": {
+                      "desktop": true,
+                      "tablet": true,
+                      "mobile": true
                     },
                     "elements": [
                       {
-                        "id": "el-thank-you-heading",
+                        "id": "manifest_3",
+                        "kind": "element",
                         "type": "heading",
                         "props": {
-                          "text": "Thanks \u2014 we got your request",
-                          "level": 2
+                          "text": "Do you own the property where this will be installed?",
+                          "tag": "h1"
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
                         }
                       },
                       {
-                        "id": "el-thank-you-text",
-                        "type": "text",
+                        "id": "manifest_4",
+                        "kind": "element",
+                        "type": "multipleChoice",
                         "props": {
-                          "text": "A specialist will follow up. You can book a time now."
-                        }
-                      },
-                      {
-                        "id": "el-thank-you-button",
-                        "type": "button",
-                        "props": {
-                          "label": "Book a visit",
-                          "action": "next-step"
+                          "field": "homeowner",
+                          "question": "Do you own the property where this will be installed?",
+                          "options": [
+                            "Yes",
+                            "No",
+                            "Not yet"
+                          ],
+                          "autoAdvance": true
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
                         }
                       }
                     ]
@@ -519,43 +984,193 @@
         ]
       },
       {
-        "id": "page-booking",
-        "stepKey": "booking",
+        "id": "manifest_8",
+        "kind": "page",
+        "stepKey": "survey-timeline",
         "sections": [
           {
-            "id": "section-booking",
+            "id": "manifest_13",
+            "kind": "section",
             "preset": "boxed",
+            "layout": "boxed",
+            "maxWidth": 1120,
+            "minHeight": 520,
+            "alignment": "left",
+            "padding": {
+              "desktop": {
+                "top": 56,
+                "right": 24,
+                "bottom": 56,
+                "left": 24
+              }
+            },
+            "margin": {
+              "desktop": {
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            },
+            "background": {
+              "kind": "color",
+              "color": "#ffffff"
+            },
+            "overlay": null,
+            "borderColor": "transparent",
+            "borderWidth": 0,
+            "borderRadius": 0,
+            "shadow": "none",
+            "sticky": false,
+            "anchor": "",
+            "className": "",
+            "visibility": {
+              "desktop": true,
+              "tablet": true,
+              "mobile": true
+            },
             "rows": [
               {
-                "id": "row-booking",
+                "id": "manifest_12",
+                "kind": "row",
+                "gap": 16,
+                "valign": "top",
+                "wrap": true,
+                "background": {
+                  "kind": "none"
+                },
+                "padding": {
+                  "desktop": {
+                    "top": 0,
+                    "right": 0,
+                    "bottom": 0,
+                    "left": 0
+                  }
+                },
                 "columns": [
                   {
-                    "id": "col-booking",
-                    "width": {
-                      "desktop": 12
+                    "id": "manifest_11",
+                    "kind": "column",
+                    "widths": {
+                      "desktop": 100,
+                      "tablet": 100,
+                      "mobile": 100
+                    },
+                    "alignment": "left",
+                    "padding": {
+                      "desktop": {
+                        "top": 16,
+                        "right": 16,
+                        "bottom": 16,
+                        "left": 16
+                      }
+                    },
+                    "background": {
+                      "kind": "none"
+                    },
+                    "borderColor": "transparent",
+                    "borderWidth": 0,
+                    "borderRadius": 0,
+                    "visibility": {
+                      "desktop": true,
+                      "tablet": true,
+                      "mobile": true
                     },
                     "elements": [
                       {
-                        "id": "el-booking-heading",
+                        "id": "manifest_9",
+                        "kind": "element",
                         "type": "heading",
                         "props": {
-                          "text": "Pick a time",
-                          "level": 2
+                          "text": "When would you like to get started?",
+                          "tag": "h1"
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
                         }
                       },
                       {
-                        "id": "el-booking-text",
-                        "type": "text",
+                        "id": "manifest_10",
+                        "kind": "element",
+                        "type": "multipleChoice",
                         "props": {
-                          "text": "Choose a showroom or delivery window."
-                        }
-                      },
-                      {
-                        "id": "el-booking-button",
-                        "type": "button",
-                        "props": {
-                          "label": "Open booking",
-                          "action": "booking"
+                          "field": "timeline",
+                          "question": "When would you like to get started?",
+                          "options": [
+                            "As soon as possible",
+                            "Within 30 days",
+                            "Just researching"
+                          ],
+                          "autoAdvance": true
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
                         }
                       }
                     ]
@@ -567,44 +1182,687 @@
         ]
       },
       {
-        "id": "page-upsell",
-        "stepKey": "upsell",
+        "id": "manifest_14",
+        "kind": "page",
+        "stepKey": "form",
         "sections": [
           {
-            "id": "section-upsell-pricing",
-            "preset": "pricing",
+            "id": "manifest_20",
+            "kind": "section",
+            "preset": "form",
+            "layout": "boxed",
+            "maxWidth": 1120,
+            "minHeight": 0,
+            "alignment": "left",
+            "padding": {
+              "desktop": {
+                "top": 56,
+                "right": 24,
+                "bottom": 56,
+                "left": 24
+              }
+            },
+            "margin": {
+              "desktop": {
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            },
+            "background": {
+              "kind": "none"
+            },
+            "overlay": null,
+            "borderColor": "transparent",
+            "borderWidth": 0,
+            "borderRadius": 0,
+            "shadow": "none",
+            "sticky": false,
+            "anchor": "lead-form",
+            "className": "",
+            "visibility": {
+              "desktop": true,
+              "tablet": true,
+              "mobile": true
+            },
             "rows": [
               {
-                "id": "row-upsell",
+                "id": "manifest_19",
+                "kind": "row",
+                "gap": 16,
+                "valign": "top",
+                "wrap": true,
+                "background": {
+                  "kind": "none"
+                },
+                "padding": {
+                  "desktop": {
+                    "top": 0,
+                    "right": 0,
+                    "bottom": 0,
+                    "left": 0
+                  }
+                },
                 "columns": [
                   {
-                    "id": "col-upsell",
-                    "width": {
-                      "desktop": 12
+                    "id": "manifest_18",
+                    "kind": "column",
+                    "widths": {
+                      "desktop": 100,
+                      "tablet": 100,
+                      "mobile": 100
+                    },
+                    "alignment": "left",
+                    "padding": {
+                      "desktop": {
+                        "top": 16,
+                        "right": 16,
+                        "bottom": 16,
+                        "left": 16
+                      }
+                    },
+                    "background": {
+                      "kind": "none"
+                    },
+                    "borderColor": "transparent",
+                    "borderWidth": 0,
+                    "borderRadius": 0,
+                    "visibility": {
+                      "desktop": true,
+                      "tablet": true,
+                      "mobile": true
                     },
                     "elements": [
                       {
-                        "id": "el-upsell-heading",
+                        "id": "manifest_15",
+                        "kind": "element",
                         "type": "heading",
                         "props": {
-                          "text": "Add delivery and setup",
-                          "level": 2
+                          "text": "Get today's price",
+                          "tag": "h2"
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 32,
+                            "tablet": 28,
+                            "mobile": 24
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "fontWeight": 800
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
                         }
                       },
                       {
-                        "id": "el-upsell-text",
+                        "id": "manifest_16",
+                        "kind": "element",
                         "type": "text",
                         "props": {
-                          "text": "Optional upgrade. No invented pricing claims."
+                          "text": "ZIP + contact maps to the existing lead and offline-conversion contract."
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 18,
+                            "mobile": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "color": "#64748b"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
                         }
                       },
                       {
-                        "id": "el-upsell-button",
+                        "id": "manifest_17",
+                        "kind": "element",
+                        "type": "form",
+                        "props": {
+                          "formId": "lead-form",
+                          "fields": [
+                            "zip",
+                            "firstName",
+                            "lastName",
+                            "email",
+                            "phone"
+                          ],
+                          "submitLabel": "See my price"
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "manifest_25",
+            "kind": "section",
+            "preset": "faq",
+            "layout": "boxed",
+            "maxWidth": 1120,
+            "minHeight": 0,
+            "alignment": "left",
+            "padding": {
+              "desktop": {
+                "top": 56,
+                "right": 24,
+                "bottom": 56,
+                "left": 24
+              }
+            },
+            "margin": {
+              "desktop": {
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            },
+            "background": {
+              "kind": "none"
+            },
+            "overlay": null,
+            "borderColor": "transparent",
+            "borderWidth": 0,
+            "borderRadius": 0,
+            "shadow": "none",
+            "sticky": false,
+            "anchor": "",
+            "className": "",
+            "visibility": {
+              "desktop": true,
+              "tablet": true,
+              "mobile": true
+            },
+            "rows": [
+              {
+                "id": "manifest_24",
+                "kind": "row",
+                "gap": 16,
+                "valign": "top",
+                "wrap": true,
+                "background": {
+                  "kind": "none"
+                },
+                "padding": {
+                  "desktop": {
+                    "top": 0,
+                    "right": 0,
+                    "bottom": 0,
+                    "left": 0
+                  }
+                },
+                "columns": [
+                  {
+                    "id": "manifest_23",
+                    "kind": "column",
+                    "widths": {
+                      "desktop": 100,
+                      "tablet": 100,
+                      "mobile": 100
+                    },
+                    "alignment": "left",
+                    "padding": {
+                      "desktop": {
+                        "top": 16,
+                        "right": 16,
+                        "bottom": 16,
+                        "left": 16
+                      }
+                    },
+                    "background": {
+                      "kind": "none"
+                    },
+                    "borderColor": "transparent",
+                    "borderWidth": 0,
+                    "borderRadius": 0,
+                    "visibility": {
+                      "desktop": true,
+                      "tablet": true,
+                      "mobile": true
+                    },
+                    "elements": [
+                      {
+                        "id": "manifest_21",
+                        "kind": "element",
+                        "type": "heading",
+                        "props": {
+                          "text": "Before you book",
+                          "tag": "h2"
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 32,
+                            "tablet": 28,
+                            "mobile": 24
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "fontWeight": 800
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      },
+                      {
+                        "id": "manifest_22",
+                        "kind": "element",
+                        "type": "faq",
+                        "props": {
+                          "items": [
+                            {
+                              "question": "Is the ad price real?",
+                              "answer": "Yes. The landing page only shows current inventory."
+                            },
+                            {
+                              "question": "Do you keep the click IDs?",
+                              "answer": "UTM and click IDs are preserved through the form step."
+                            }
+                          ]
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "manifest_26",
+        "kind": "page",
+        "stepKey": "thankYou",
+        "sections": [
+          {
+            "id": "manifest_32",
+            "kind": "section",
+            "preset": "hero",
+            "layout": "full",
+            "maxWidth": 1120,
+            "minHeight": 560,
+            "alignment": "center",
+            "padding": {
+              "desktop": {
+                "top": 88,
+                "right": 32,
+                "bottom": 88,
+                "left": 32
+              },
+              "mobile": {
+                "top": 56,
+                "right": 16,
+                "bottom": 56,
+                "left": 16
+              }
+            },
+            "margin": {
+              "desktop": {
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            },
+            "background": {
+              "kind": "color",
+              "color": "#eef5ff"
+            },
+            "overlay": null,
+            "borderColor": "transparent",
+            "borderWidth": 0,
+            "borderRadius": 0,
+            "shadow": "none",
+            "sticky": false,
+            "anchor": "",
+            "className": "",
+            "visibility": {
+              "desktop": true,
+              "tablet": true,
+              "mobile": true
+            },
+            "rows": [
+              {
+                "id": "manifest_31",
+                "kind": "row",
+                "gap": 16,
+                "valign": "top",
+                "wrap": true,
+                "background": {
+                  "kind": "none"
+                },
+                "padding": {
+                  "desktop": {
+                    "top": 0,
+                    "right": 0,
+                    "bottom": 0,
+                    "left": 0
+                  }
+                },
+                "columns": [
+                  {
+                    "id": "manifest_30",
+                    "kind": "column",
+                    "widths": {
+                      "desktop": 100,
+                      "tablet": 100,
+                      "mobile": 100
+                    },
+                    "alignment": "left",
+                    "padding": {
+                      "desktop": {
+                        "top": 16,
+                        "right": 16,
+                        "bottom": 16,
+                        "left": 16
+                      }
+                    },
+                    "background": {
+                      "kind": "none"
+                    },
+                    "borderColor": "transparent",
+                    "borderWidth": 0,
+                    "borderRadius": 0,
+                    "visibility": {
+                      "desktop": true,
+                      "tablet": true,
+                      "mobile": true
+                    },
+                    "elements": [
+                      {
+                        "id": "manifest_27",
+                        "kind": "element",
+                        "type": "heading",
+                        "props": {
+                          "text": "This weekend only: in-stock hot tubs",
+                          "tag": "h1"
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 56,
+                            "tablet": 42,
+                            "mobile": 34
+                          },
+                          "textAlign": {
+                            "desktop": "center"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "fontWeight": 800
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      },
+                      {
+                        "id": "manifest_28",
+                        "kind": "element",
+                        "type": "text",
+                        "props": {
+                          "text": "See live inventory, lock the advertised price, and book a showroom visit."
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 18,
+                            "mobile": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "color": "#64748b"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      },
+                      {
+                        "id": "manifest_29",
+                        "kind": "element",
                         "type": "button",
                         "props": {
-                          "label": "Continue",
-                          "action": "url",
-                          "href": "/"
+                          "label": "Check availability",
+                          "action": {
+                            "type": "nextStep"
+                          }
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 16
+                          },
+                          "textAlign": {
+                            "desktop": "center"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "fontWeight": 800
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
                         }
                       }
                     ]
@@ -615,6 +1873,45 @@
           }
         ]
       }
-    ]
+    ],
+    "funnelKey": "generic-paid-funnel",
+    "name": "Generic multi-step paid funnel",
+    "globalStyles": {
+      "fonts": {
+        "heading": "Inter",
+        "body": "Inter"
+      },
+      "colors": {
+        "background": "#ffffff",
+        "surface": "#f8fafc",
+        "text": "#172033",
+        "muted": "#64748b",
+        "primary": "#1463f3",
+        "primaryText": "#ffffff",
+        "border": "#d8e0ec"
+      },
+      "button": {
+        "background": "#1463f3",
+        "color": "#ffffff",
+        "radius": 8,
+        "paddingX": 22,
+        "paddingY": 14,
+        "fontWeight": 800
+      },
+      "containers": {
+        "boxedMaxWidth": 1120,
+        "fullMaxWidth": 1440
+      },
+      "mobile": {
+        "sectionPadding": {
+          "top": 20,
+          "right": 20,
+          "bottom": 20,
+          "left": 20
+        },
+        "rowGap": 12
+      }
+    },
+    "reusableSections": []
   }
 }

@@ -27,10 +27,10 @@ describe("paid funnel package contract", () => {
     expect(GENERIC_PAID_FUNNEL_PACKAGE.kind).toBe("paid-funnel");
     expect(GENERIC_PAID_FUNNEL_PACKAGE.steps.map(step => step.type)).toEqual([
       "landing",
+      "survey",
+      "survey",
       "form",
       "thankYou",
-      "booking",
-      "upsell",
     ]);
     expect(GENERIC_PAID_FUNNEL_PACKAGE.resources).toEqual([]);
     expect(GENERIC_PAID_FUNNEL_PACKAGE.offlineConversionContract).toEqual(

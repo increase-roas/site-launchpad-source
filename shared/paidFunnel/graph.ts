@@ -6,6 +6,7 @@ export const PAID_FUNNEL_KIND = "paid-funnel" as const;
 
 export const PAID_FUNNEL_STEP_TYPES = [
   "landing",
+  "survey",
   "form",
   "thankYou",
   "booking",
@@ -24,6 +25,8 @@ export const PAID_FUNNEL_ELEMENT_TYPES = [
   "divider",
   "list",
   "form",
+  "multipleChoice",
+  "shortAnswer",
   "phoneCta",
   "countdown",
   "testimonial",
@@ -96,10 +99,21 @@ export type Overlay = { color: string; opacity: number };
 
 export type ButtonAction =
   | { type: "nextStep" }
+  | { type: "step"; stepKey: string }
   | { type: "url"; href: string; openInNewTab: boolean }
   | { type: "phone"; tel: string }
   | { type: "formSubmit"; formId: string }
-  | { type: "booking"; stepKey?: string };
+  | { type: "booking"; stepKey?: string }
+  | {
+      type: "conditional";
+      rules: Array<{
+        field: string;
+        operator: "equals" | "notEquals" | "contains";
+        value: string;
+        stepKey: string;
+      }>;
+      fallbackStepKey?: string;
+    };
 
 export type TextAlign = "left" | "center" | "right";
 export type VerticalAlign = "top" | "center" | "bottom";
@@ -196,6 +210,12 @@ export type FunnelStepNext =
   | { type: "redirect"; url: string }
   | { type: "none" };
 
+export type FunnelStepTracking = {
+  browserEvent: string;
+  serverEvent: string;
+  answerField?: string;
+};
+
 export type PaidFunnelStep = {
   key: string;
   type: PaidFunnelStepType;
@@ -203,6 +223,7 @@ export type PaidFunnelStep = {
   title: string;
   seo: FunnelStepSeo;
   nextStep: FunnelStepNext;
+  tracking?: FunnelStepTracking;
   previewState: PaidFunnelStepState;
   publishState: PaidFunnelStepState;
 };
@@ -263,18 +284,18 @@ export function defaultGlobalStyles(): GlobalFunnelStyles {
   return {
     fonts: { heading: "Inter", body: "Inter" },
     colors: {
-      background: "#07111b",
-      surface: "#0c1622",
-      text: "#f8fafc",
-      muted: "#94a3b8",
-      primary: "#22d3ee",
-      primaryText: "#082f49",
-      border: "rgba(255,255,255,0.1)",
+      background: "#ffffff",
+      surface: "#f8fafc",
+      text: "#172033",
+      muted: "#64748b",
+      primary: "#1463f3",
+      primaryText: "#ffffff",
+      border: "#d8e0ec",
     },
     button: {
-      background: "#22d3ee",
-      color: "#082f49",
-      radius: 12,
+      background: "#1463f3",
+      color: "#ffffff",
+      radius: 8,
       paddingX: 22,
       paddingY: 14,
       fontWeight: 800,
@@ -405,6 +426,18 @@ export function defaultElementProps(
       fields: ["firstName", "lastName", "email", "phone"],
       submitLabel: "Get pricing",
     },
+    multipleChoice: {
+      field: "surveyAnswer",
+      question: "Choose the answer that fits best.",
+      options: ["Option one", "Option two", "Option three"],
+      autoAdvance: true,
+    },
+    shortAnswer: {
+      field: "surveyAnswer",
+      question: "Tell us a little more.",
+      placeholder: "Type your answer",
+      required: true,
+    },
     phoneCta: { label: "Call now", tel: "" },
     countdown: { endsAt: "", label: "Offer ends" },
     testimonial: { quote: "The showroom visit was worth it.", author: "Jordan", role: "Homeowner" },
@@ -445,6 +478,10 @@ export function createEmptyGraph(input: {
         title: "Landing",
         seo: { title: `${input.name} | Offer`, description: "Paid ads landing page." },
         nextStep: { type: "none" },
+        tracking: {
+          browserEvent: "ViewContent",
+          serverEvent: "ViewContent",
+        },
         previewState: "draft",
         publishState: "draft",
       },
@@ -531,6 +568,11 @@ export const paidFunnelGraphSchema: z.ZodType<PaidFunnelGraph> = z.lazy(() =>
           z.object({ type: z.literal("redirect"), url: z.string() }),
           z.object({ type: z.literal("none") }),
         ]),
+        tracking: z.object({
+          browserEvent: z.string().min(1),
+          serverEvent: z.string().min(1),
+          answerField: z.string().min(1).optional(),
+        }).optional(),
         previewState: z.enum(PAID_FUNNEL_STEP_STATE_VALUES),
         publishState: z.enum(PAID_FUNNEL_STEP_STATE_VALUES),
       }),

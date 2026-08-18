@@ -37,6 +37,9 @@ export function elementText(element: FunnelElement): string {
   if (element.type === "testimonial") return String(element.props.quote ?? "");
   if (element.type === "heading" || element.type === "text") return String(element.props.text ?? "");
   if (element.type === "form") return String(element.props.submitLabel ?? "Form");
+  if (element.type === "multipleChoice" || element.type === "shortAnswer") {
+    return String(element.props.question ?? "Survey question");
+  }
   if (element.type === "inventory") return String(element.props.heading ?? "Inventory");
   return element.type;
 }

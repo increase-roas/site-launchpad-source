@@ -33,6 +33,7 @@ import {
   createDocumentFromPersist,
   createStudioState,
   parsePaidAdsFunnelSearch,
+  studioToPersistSteps,
   studioToStorageGraph,
   type PaidAdsFunnelTab,
   type StudioState,
@@ -350,6 +351,7 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
         stepId: request.stepId,
         expectedUpdatedAt: new Date(snapshot.document.expectedUpdatedAt),
         graph: studioToStorageGraph(snapshot.document.graph),
+        steps: studioToPersistSteps(snapshot.document.graph),
       }, {
         onSuccess: async detail => {
           const flight = autosaveFlight.current;

@@ -23,6 +23,10 @@ import {
   type AssetSlot,
 } from "../shared/client";
 import {
+  mediaSpecificationForAsset,
+  validateImageMetadata,
+} from "../shared/mediaSpecifications";
+import {
   inspectSupportedImageMimeType,
   processAstroUploadedImage,
   processUploadedImage,
@@ -305,6 +309,20 @@ export function createAssetUploadService(dependencies: AssetUploadServiceDepende
           uploadId,
           "That image could not be processed. Choose a different image.",
         );
+      }
+
+      const specification = mediaSpecificationForAsset(session.assetKind, session.slot);
+      const specificationError = validateImageMetadata(
+        {
+          mimeType: actualMimeType,
+          sizeBytes: source.length,
+          width: processed.width,
+          height: processed.height,
+        },
+        specification,
+      );
+      if (specificationError) {
+        return failSession(dependencies, uploadId, specificationError);
       }
 
       const client = await dependencies.getClientById(session.clientId);

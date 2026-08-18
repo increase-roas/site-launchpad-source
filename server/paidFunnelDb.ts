@@ -27,6 +27,7 @@ import {
 } from "../shared/paidFunnelGraph";
 import {
   assembleStudioGraph,
+  paidFunnelPersistStepsSchema,
   persistGraphInput,
 } from "../shared/paidFunnel/persist";
 import { ingestPaidFunnelZip } from "../shared/paidFunnelZip";
@@ -535,6 +536,7 @@ export async function savePaidFunnelGraph(input: {
   stepId: number;
   expectedUpdatedAt: Date;
   graph: unknown;
+  steps?: unknown;
 }) {
   const db = await requireDb();
   const funnelRows = await db
@@ -550,6 +552,9 @@ export async function savePaidFunnelGraph(input: {
   if (!funnelRows[0]) throw new Error("Funnel not found.");
 
   const graph = persistGraphInput(input.graph);
+  const steps = input.steps
+    ? paidFunnelPersistStepsSchema.parse(input.steps)
+    : null;
   await db.transaction(async transaction => {
     // Lock before comparing the version. PostgreSQL default timestamps retain
     // microseconds while JavaScript Date values only retain milliseconds, so a
@@ -582,6 +587,54 @@ export async function savePaidFunnelGraph(input: {
     const now = new Date(
       Math.max(Date.now(), current.updatedAt.getTime() + 1)
     );
+
+    if (steps) {
+      const existingSteps = await transaction
+        .select()
+        .from(paidFunnelSteps)
+        .where(eq(paidFunnelSteps.funnelId, input.funnelId))
+        .for("update");
+      const requestedKeys = new Set(steps.map(step => step.key));
+      const removed = existingSteps.find(step => !requestedKeys.has(step.key));
+      if (removed) {
+        throw new Error("Funnel steps cannot be removed from this editor.");
+      }
+
+      // Vacate the unique (funnelId, position) slots before applying a reorder.
+      for (const step of existingSteps) {
+        await transaction
+          .update(paidFunnelSteps)
+          .set({ position: -(step.id + 1), updatedAt: now })
+          .where(eq(paidFunnelSteps.id, step.id));
+      }
+
+      for (const step of steps) {
+        const existing = existingSteps.find(row => row.key === step.key);
+        const values = {
+          position: step.position,
+          stepType: step.stepType,
+          slug: step.slug,
+          title: step.title,
+          seo: step.seo,
+          nextStep: step.nextStep,
+          previewState: step.previewState,
+          publishState: step.publishState,
+          updatedAt: now,
+        };
+        if (existing) {
+          await transaction
+            .update(paidFunnelSteps)
+            .set(values)
+            .where(eq(paidFunnelSteps.id, existing.id));
+        } else {
+          await transaction.insert(paidFunnelSteps).values({
+            funnelId: input.funnelId,
+            key: step.key,
+            ...values,
+          });
+        }
+      }
+    }
 
     const updated = await transaction
       .update(paidFunnelGraphs)

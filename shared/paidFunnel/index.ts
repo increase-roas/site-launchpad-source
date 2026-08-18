@@ -11,3 +11,5 @@ export * from "./integrationPresence";
 export * from "./persist";
 export * from "./autosave";
 export * from "./dropRouting";
+export * from "./templates";
+export * from "./astroCompiler";

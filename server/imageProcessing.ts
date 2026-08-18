@@ -23,12 +23,10 @@ export async function inspectSupportedImageMimeType(
     case "webp":
       return "image/webp";
     case "tiff":
-      return "image/tiff";
     case "gif":
-      return "image/gif";
+      throw new Error("Unsupported image format. Use WebP, JPEG, or PNG.");
     case "heif":
-      if (metadata.compression === "av1") return "image/avif";
-      throw new Error("Unsupported HEIF image.");
+      throw new Error("Unsupported image format. Use WebP, JPEG, or PNG.");
     default:
       throw new Error("Unsupported image format.");
   }

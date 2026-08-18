@@ -71,6 +71,13 @@
       "when": 1787013600000,
       "tag": "0009_client_integration_profile",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787064000000,
+      "tag": "0010_paid_funnel_survey_step",
+      "breakpoints": true
     }
   ]
 }

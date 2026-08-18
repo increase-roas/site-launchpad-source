@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { paidFunnelGraphSchema } from "../../shared/paidFunnelGraph";
 import { paidFunnelSectionSchema } from "../../shared/paidFunnelGraph";
+import { paidFunnelPersistStepsSchema } from "../../shared/paidFunnel/persist";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
   createPaidFunnelFromTemplate,
@@ -92,6 +93,7 @@ export const paidFunnelRouter = router({
         stepId: z.number().int().positive(),
         expectedUpdatedAt: z.coerce.date(),
         graph: paidFunnelGraphSchema,
+        steps: paidFunnelPersistStepsSchema,
       })
     )
     .mutation(async ({ input }) => {

@@ -382,10 +382,20 @@ export function updateElement(graph: PaidFunnelGraph, id: string, patch: Partial
 export function setInlineText(graph: PaidFunnelGraph, id: string, text: string): PaidFunnelGraph {
   return mutateById(graph, id, node => {
     if (node.kind !== "element") return node;
-    if (!("text" in node.props) && node.type !== "heading" && node.type !== "text" && node.type !== "button") {
+    if (
+      !("text" in node.props) &&
+      !["heading", "text", "button", "testimonial", "multipleChoice", "shortAnswer"].includes(node.type)
+    ) {
       throw new Error("This element does not support inline text.");
     }
-    const key = node.type === "button" ? "label" : node.type === "testimonial" ? "quote" : "text";
+    const key =
+      node.type === "button"
+        ? "label"
+        : node.type === "testimonial"
+          ? "quote"
+          : node.type === "multipleChoice" || node.type === "shortAnswer"
+            ? "question"
+            : "text";
     return { ...node, props: { ...node.props, [key]: text } };
   });
 }

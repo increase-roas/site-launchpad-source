@@ -9,6 +9,7 @@ import {
   type AstroClientConfigInput,
 } from "@shared/astroConfig";
 import { ImageIcon, Palette, Type } from "lucide-react";
+import { MEDIA_SPECIFICATIONS } from "@shared/mediaSpecifications";
 
 type StoredImage = { slot: string; storageUrl: string; filename: string; byteSize: number };
 
@@ -59,7 +60,7 @@ export function BrandingTab({
 
     <Card className="border-white/8 bg-card/70 p-5 sm:p-6">
       <div className="mb-6 flex gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-cyan-400/10 text-cyan-300"><ImageIcon className="h-5 w-5" /></span><div><h2 className="text-xl font-extrabold">Brand images</h2><p className="mt-1 text-sm font-medium text-muted-foreground">Upload the exact images the Astro template expects.</p></div></div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{BRAND_ASSET_SLOTS.map(slot => <ImageUploadCard key={slot} label={ASTRO_ASSET_LABELS[slot]} guidance={slot === "ogImage" ? "Wide image used when the site is shared." : slot === "favicon" ? "Square brand icon shown in browser tabs." : "Use a clear transparent or simple-background logo."} image={assetMap.get(slot)} busy={uploadingSlot === slot} onFile={file => onUpload(slot, file)} />)}</div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{BRAND_ASSET_SLOTS.map(slot => <ImageUploadCard key={slot} label={ASTRO_ASSET_LABELS[slot]} guidance={slot === "ogImage" ? "Wide image used when the site is shared." : slot === "favicon" ? "Square brand icon shown in browser tabs." : "Use a clear transparent or simple-background logo."} image={assetMap.get(slot)} busy={uploadingSlot === slot} specification={slot === "ogImage" ? MEDIA_SPECIFICATIONS.social : slot === "favicon" ? MEDIA_SPECIFICATIONS.favicon : MEDIA_SPECIFICATIONS.logo} onFile={file => onUpload(slot, file)} />)}</div>
     </Card>
   </div>;
 }

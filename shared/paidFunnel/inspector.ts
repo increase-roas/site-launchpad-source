@@ -148,7 +148,7 @@ export function inspectorModel(
   };
 }
 
-export const BUTTON_ACTION_TYPES = ["nextStep", "url", "phone", "formSubmit", "booking"] as const;
+export const BUTTON_ACTION_TYPES = ["nextStep", "step", "url", "phone", "formSubmit", "booking", "conditional"] as const;
 
 export function currentSpacing(
   value: ResponsiveValue<BoxSpacing> | undefined,

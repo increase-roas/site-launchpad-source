@@ -13,6 +13,7 @@ import {
   type PaidFunnelStep,
 } from "./graph";
 import { createSectionPreset, PAID_ADS_SECTION_PRESET_LABELS } from "./presets";
+import { applyOptInTemplate, createSurveyQuestionStep } from "./templates";
 
 export const GENERIC_PAID_FUNNEL_FIXTURE_KEY = "generic-paid-funnel";
 
@@ -24,6 +25,10 @@ function step(key: PaidFunnelStep["key"], type: PaidFunnelStep["type"], slug: st
     title,
     seo: { title: `${title} | Paid offer`, description: `${title} step for the generic paid funnel.` },
     nextStep: next,
+    tracking: {
+      browserEvent: type === "thankYou" ? "PageView" : "ViewContent",
+      serverEvent: type === "survey" ? "LeadSurveyAnswer" : type === "form" || type === "landing" ? "Lead" : "PageView",
+    },
     previewState: "draft",
     publishState: "draft",
   };
@@ -32,41 +37,55 @@ function step(key: PaidFunnelStep["key"], type: PaidFunnelStep["type"], slug: st
 export function createGenericPaidFunnelFixture(nextId: (() => string) | string = "fixture"): PaidFunnelGraph {
   const makeId = typeof nextId === "function" ? nextId : createIdFactory(nextId);
   const landing = createEmptyPage(makeId, "landing");
-  landing.sections = [
-    createSectionPreset("hero", makeId),
-    createSectionPreset("three-column", makeId),
-    createSection(makeId, {
-      preset: "boxed",
-      rows: [createRow(makeId, [createColumn(makeId, [createElement(makeId, "inventory", { slots: 5, heading: "This week's floor models" })])])],
-    }),
-    createSectionPreset("testimonial", makeId),
-    createSectionPreset("cta", makeId),
-  ];
+  landing.sections = [];
+  const homeowner = createSurveyQuestionStep({
+    key: "survey-homeowner",
+    slug: "survey/homeowner",
+    title: "Homeownership",
+    question: "Do you own the property where this will be installed?",
+    field: "homeowner",
+    options: ["Yes", "No", "Not yet"],
+    nextStepKey: "survey-timeline",
+    nextId: makeId,
+  });
+  const timeline = createSurveyQuestionStep({
+    key: "survey-timeline",
+    slug: "survey/timeline",
+    title: "Timeline",
+    question: "When would you like to get started?",
+    field: "timeline",
+    options: ["As soon as possible", "Within 30 days", "Just researching"],
+    nextStepKey: "form",
+    nextId: makeId,
+  });
   const form = createEmptyPage(makeId, "form");
   form.sections = [createSectionPreset("form", makeId), createSectionPreset("faq", makeId)];
   const thankYou = createEmptyPage(makeId, "thankYou");
   thankYou.sections = [createSectionPreset("hero", makeId)];
-  const booking = createEmptyPage(makeId, "booking");
-  booking.sections = [createSectionPreset("cta", makeId)];
-  const upsell = createEmptyPage(makeId, "upsell");
-  upsell.sections = [createSectionPreset("pricing", makeId), createSectionPreset("footer", makeId)];
-  return {
+  const graph: PaidFunnelGraph = {
     schemaVersion: PAID_FUNNEL_GRAPH_SCHEMA_VERSION,
     kind: PAID_FUNNEL_KIND,
     funnelKey: GENERIC_PAID_FUNNEL_FIXTURE_KEY,
     name: "Generic multi-step paid funnel",
     version: 1,
     steps: [
-      step("landing", "landing", "/", "Landing", { type: "step", stepKey: "form" }),
-      step("form", "form", "/form", "Form", { type: "step", stepKey: "thankYou" }),
-      step("thankYou", "thankYou", "/thank-you", "Thank You", { type: "step", stepKey: "booking" }),
-      step("booking", "booking", "/book", "Booking", { type: "step", stepKey: "upsell" }),
-      step("upsell", "upsell", "/upgrade", "Upsell", { type: "none" }),
+      step("landing", "landing", "/", "Opt-in page", { type: "step", stepKey: "survey-homeowner" }),
+      homeowner.step,
+      timeline.step,
+      step("form", "form", "/contact", "Contact form", { type: "step", stepKey: "thankYou" }),
+      step("thankYou", "thankYou", "/thank-you", "Thank you", { type: "none" }),
     ],
-    pages: { landing, form, thankYou, booking, upsell },
+    pages: {
+      landing,
+      "survey-homeowner": homeowner.page,
+      "survey-timeline": timeline.page,
+      form,
+      thankYou,
+    },
     globalStyles: defaultGlobalStyles(),
     reusableSections: [],
   };
+  return applyOptInTemplate(graph, "hero-with-form", makeId);
 }
 
 export const GENERIC_PAID_FUNNEL_PACKAGE = {
@@ -75,8 +94,8 @@ export const GENERIC_PAID_FUNNEL_PACKAGE = {
   name: "Generic multi-step paid funnel",
   version: "1.0.0",
   kind: PAID_FUNNEL_KIND,
-  framework: "static-html" as const,
-  previewEntry: "landing/index.html",
+  framework: "astro" as const,
+  previewEntry: "src/pages/index.astro",
   graph: true,
   sectionPresets: Object.keys(PAID_ADS_SECTION_PRESET_LABELS),
   integrations: ["meta-pixel", "ghl", "google-sheets"],
@@ -94,6 +113,6 @@ export const GENERIC_PAID_FUNNEL_LIBRARY_CARD = {
   templateKey: GENERIC_PAID_FUNNEL_FIXTURE_KEY,
   name: GENERIC_PAID_FUNNEL_PACKAGE.name,
   kind: PAID_FUNNEL_KIND,
-  flow: "Landing → Form → Thank You → Booking → Upsell",
-  description: "Complete GHL-style paid ads funnel with a visual graph on every step.",
+  flow: "Opt-in → Survey questions → Contact → Thank You",
+  description: "Perspective-style visual funnel compiled to fast Astro pages, with one URL per survey question.",
 };

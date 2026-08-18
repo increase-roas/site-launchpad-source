@@ -5,6 +5,7 @@ import {
   assembleStudioGraph,
   persistGraphInput,
   storageToStudioGraph,
+  studioToPersistSteps,
   studioToStorageGraph,
 } from "./persist";
 import { migratePaidFunnelGraph } from "../paidFunnelGraph";
@@ -52,6 +53,18 @@ describe("paid funnel graph persist adapter", () => {
     expect(restored.globalStyles.colors.primary).toBe(studio.globalStyles.colors.primary);
   });
 
+  it("persists survey URLs, routing, and Meta event metadata", () => {
+    const studio = createGenericPaidFunnelFixture(createIdFactory("meta"));
+    const steps = studioToPersistSteps(studio);
+    const survey = steps.find(step => step.stepType === "survey");
+    expect(survey?.slug).toMatch(/^\/survey\//);
+    expect(survey?.nextStep).toBeTruthy();
+    expect(survey?.seo._tracking).toMatchObject({
+      browserEvent: "ViewContent",
+      serverEvent: "LeadSurveyAnswer",
+    });
+  });
+
   it("assembles per-step registry graphs into one studio graph", () => {
     const fixture = createGenericPaidFunnelFixture(createIdFactory("as"));
     const storage = studioToStorageGraph(fixture);
@@ -78,17 +91,17 @@ describe("paid funnel graph persist adapter", () => {
     });
     expect(assembled.graph.steps.map(step => step.key)).toEqual([
       "landing",
+      "survey-homeowner",
+      "survey-timeline",
       "form",
       "thankYou",
-      "booking",
-      "upsell",
     ]);
     expect(Object.keys(assembled.graph.pages).sort()).toEqual([
-      "booking",
       "form",
       "landing",
+      "survey-homeowner",
+      "survey-timeline",
       "thankYou",
-      "upsell",
     ]);
     expect(assembled.stepId).toBe(10);
   });

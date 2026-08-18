@@ -14,9 +14,10 @@ describe("paid funnel graph model", () => {
     const graph = createEmptyGraph({ funnelKey: "demo", name: "Demo", nextId: createIdFactory("g") });
     expect(graph.kind).toBe(PAID_FUNNEL_KIND);
     expect(graph.kind).not.toBe("website");
-    expect(PAID_FUNNEL_STEP_TYPES).toEqual(["landing", "form", "thankYou", "booking", "upsell"]);
+    expect(PAID_FUNNEL_STEP_TYPES).toEqual(["landing", "survey", "form", "thankYou", "booking", "upsell"]);
     expect(PAID_FUNNEL_ELEMENT_TYPES).toContain("form");
     expect(PAID_FUNNEL_ELEMENT_TYPES).toContain("phoneCta");
+    expect(PAID_FUNNEL_ELEMENT_TYPES).toContain("multipleChoice");
     expect(PAID_FUNNEL_SECTION_PRESETS).toContain("hero");
     expect(graph.schemaVersion).toBe(1);
   });

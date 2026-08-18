@@ -207,10 +207,10 @@ describe("paid funnel registry persistence", () => {
     const steps = db.inserted.filter(row => row.table === paidFunnelSteps);
     expect(steps.map(row => row.values.key)).toEqual([
       "landing",
+      "survey-homeowner",
+      "survey-timeline",
       "form",
-      "thank-you",
-      "booking",
-      "upsell",
+      "thankYou",
     ]);
     expect(db.inserted.some(row => row.table === paidFunnelGraphs)).toBe(true);
     expect(

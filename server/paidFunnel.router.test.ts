@@ -148,6 +148,17 @@ describe("paid funnel registry procedures", () => {
       stepId: 3,
       expectedUpdatedAt: new Date("2026-08-18T12:00:00.000Z"),
       graph,
+      steps: graph.steps.map((step, position) => ({
+        key: step.key,
+        stepType: step.type,
+        slug: step.slug,
+        title: step.title,
+        seo: step.seo,
+        nextStep: step.nextStep.type === "step" ? step.nextStep.stepKey : null,
+        previewState: step.previewState,
+        publishState: step.publishState,
+        position,
+      })),
     });
     expect(mocks.savePaidFunnelGraph).toHaveBeenCalledOnce();
     const payload = mocks.savePaidFunnelGraph.mock.calls[0][0];

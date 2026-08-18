@@ -8,15 +8,16 @@ import { paidAdPalette, PAID_ADS_SECTION_PRESET_LABELS } from "./presets";
 import { applyGraph, commitAutosave, createDocumentFromFixture, createStudioState, studioHotkey } from "./store";
 
 describe("generic multi-step paid funnel UX", () => {
-  it("ships every paid-ad section preset and a complete Landing/Form/Thank You/Booking/Upsell funnel", () => {
+  it("ships every paid-ad section preset and a complete opt-in/survey/form funnel", () => {
     const graph = createGenericPaidFunnelFixture();
     expect(Object.keys(PAID_ADS_SECTION_PRESET_LABELS)).toEqual([
       "blank", "full-width", "boxed", "hero", "two-column", "three-column", "form", "testimonial", "faq", "cta", "pricing", "footer",
     ]);
-    expect(paidAdPalette().elements).toHaveLength(17);
-    expect(graph.steps.map(step => step.type)).toEqual(["landing", "form", "thankYou", "booking", "upsell"]);
-    expect(graph.steps.map(step => step.slug)).toEqual(["/", "/form", "/thank-you", "/book", "/upgrade"]);
-    expect(nextStepKey(graph, "landing")).toBe("form");
+    expect(paidAdPalette().elements).toHaveLength(19);
+    expect(graph.steps.map(step => step.type)).toEqual(["landing", "survey", "survey", "form", "thankYou"]);
+    expect(graph.steps.map(step => step.slug)).toEqual(["/", "/survey/homeowner", "/survey/timeline", "/contact", "/thank-you"]);
+    expect(nextStepKey(graph, "landing")).toBe("survey-homeowner");
+    expect(nextStepKey(graph, "survey-homeowner")).toBe("survey-timeline");
     expect(nextStepKey(graph, "form")).toBe("thankYou");
     expect(stepHasLeadForm(graph, "form")).toBe(true);
     expect(GENERIC_PAID_FUNNEL_PACKAGE.kind).toBe("paid-funnel");
@@ -39,6 +40,7 @@ describe("generic multi-step paid funnel UX", () => {
     expect(landingLabels).toContain("heading");
     expect(landingLabels).toContain("button");
     expect(formLabels).toContain("form");
+    expect(flattenCanvas(renderFunnelCanvas(graph, { stepKey: "survey-homeowner", breakpoint: "desktop" })).map(box => box.label)).toContain("multipleChoice");
     expect(landingLabels.join(",")).not.toBe(formLabels.join(","));
   });
 
