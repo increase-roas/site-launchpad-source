@@ -30,10 +30,11 @@ import {
   ChevronRight,
   ExternalLink,
   FileText,
+  GripVertical,
   Loader2,
+  MousePointer2,
   Rocket,
   Save,
-  Settings2,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -414,41 +415,253 @@ function FunnelEditorHeader({
   );
 }
 
-function FunnelStepsOverview({
-  businessName,
-  slug,
-  onEdit,
+type SimpleFormPageKey = "zip" | "contact" | "thank-you";
+type SimpleFormEditableField =
+  | "offer.headline"
+  | "offer.subheadline"
+  | "funnel.qualifyingLine"
+  | "funnel.ctaLabel"
+  | "trust.statement"
+  | "contact.headline"
+  | "contact.submitLabel"
+  | "contact.consent.text"
+  | "thankYou.headline"
+  | "thankYou.message"
+  | "inventory.headline"
+  | "inventory.subheadline";
+
+export function reorderSimpleFormProducts<T>(products: readonly T[], from: number, to: number): T[] {
+  if (from === to || from < 0 || to < 0 || from >= products.length || to >= products.length) {
+    return [...products];
+  }
+  const next = [...products];
+  const [moved] = next.splice(from, 1);
+  if (moved === undefined) return [...products];
+  next.splice(to, 0, moved);
+  return next;
+}
+
+function EditableCanvasBlock({
+  field,
+  selected,
+  onSelect,
+  children,
 }: {
-  businessName: string;
-  slug: string;
-  onEdit: () => void;
+  field: SimpleFormEditableField;
+  selected: boolean;
+  onSelect: (field: SimpleFormEditableField) => void;
+  children: ReactNode;
 }) {
-  const [selectedStep, setSelectedStep] = useState(0);
-  const steps = [
-    { title: "ZIP code", detail: "Qualify the service area" },
-    { title: "Contact details", detail: "Collect the lead" },
-    { title: "Thank you", detail: "Confirm the submission" },
-  ];
-  const selected = steps[selectedStep];
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(field)}
+      className={`group relative block w-full rounded-md border px-4 py-3 text-left transition ${
+        selected
+          ? "border-primary bg-blue-50 ring-2 ring-primary/15"
+          : "border-transparent hover:border-primary/40 hover:bg-blue-50/60"
+      }`}
+    >
+      <span className="absolute -right-2 -top-2 hidden rounded bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground group-hover:block">
+        Edit
+      </span>
+      {children}
+    </button>
+  );
+}
+
+function SimpleFormFieldInspector({
+  field,
+  config,
+  onChange,
+}: {
+  field: SimpleFormEditableField;
+  config: SimpleFormOperatorConfig;
+  onChange: (config: SimpleFormOperatorConfig) => void;
+}) {
+  const value = (() => {
+    switch (field) {
+      case "offer.headline": return config.offer.headline;
+      case "offer.subheadline": return config.offer.subheadline;
+      case "funnel.qualifyingLine": return config.funnel.qualifyingLine;
+      case "funnel.ctaLabel": return config.funnel.ctaLabel;
+      case "trust.statement": return config.trust.statement;
+      case "contact.headline": return config.contact.headline;
+      case "contact.submitLabel": return config.contact.submitLabel;
+      case "contact.consent.text": return config.contact.consent.text;
+      case "thankYou.headline": return config.thankYou.headline;
+      case "thankYou.message": return config.thankYou.message;
+      case "inventory.headline": return config.inventory.headline;
+      case "inventory.subheadline": return config.inventory.subheadline;
+    }
+  })();
+  const multiline = field.endsWith("subheadline") || field.endsWith("message") || field.endsWith("statement") || field.endsWith("consent.text");
+  const label = field
+    .split(".")
+    .at(-1)!
+    .replace(/([A-Z])/g, " $1")
+    .replace(/^./, letter => letter.toUpperCase());
+
+  const update = (nextValue: string) => {
+    switch (field) {
+      case "offer.headline": onChange({ ...config, offer: { ...config.offer, headline: nextValue } }); break;
+      case "offer.subheadline": onChange({ ...config, offer: { ...config.offer, subheadline: nextValue } }); break;
+      case "funnel.qualifyingLine": onChange({ ...config, funnel: { ...config.funnel, qualifyingLine: nextValue } }); break;
+      case "funnel.ctaLabel": onChange({ ...config, funnel: { ...config.funnel, ctaLabel: nextValue } }); break;
+      case "trust.statement": onChange({ ...config, trust: { ...config.trust, statement: nextValue } }); break;
+      case "contact.headline": onChange({ ...config, contact: { ...config.contact, headline: nextValue } }); break;
+      case "contact.submitLabel": onChange({ ...config, contact: { ...config.contact, submitLabel: nextValue } }); break;
+      case "contact.consent.text": onChange({ ...config, contact: { ...config.contact, consent: { ...config.contact.consent, text: nextValue } } }); break;
+      case "thankYou.headline": onChange({ ...config, thankYou: { ...config.thankYou, headline: nextValue } }); break;
+      case "thankYou.message": onChange({ ...config, thankYou: { ...config.thankYou, message: nextValue } }); break;
+      case "inventory.headline": onChange({ ...config, inventory: { ...config.inventory, headline: nextValue } }); break;
+      case "inventory.subheadline": onChange({ ...config, inventory: { ...config.inventory, subheadline: nextValue } }); break;
+    }
+  };
 
   return (
-    <section className="mt-3 overflow-hidden rounded-md border border-border bg-card lg:grid lg:grid-cols-[255px_minmax(0,1fr)]">
-      <aside className="border-b border-border bg-blue-50/80 lg:min-h-[520px] lg:border-b-0 lg:border-r">
+    <div className="space-y-3">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Selected element</p>
+        <p className="mt-1 text-sm font-semibold">{label}</p>
+      </div>
+      {multiline ? (
+        <Textarea aria-label={`Edit ${label}`} value={value} onChange={event => update(event.target.value)} className="min-h-32 resize-y bg-white text-sm" />
+      ) : (
+        <Input aria-label={`Edit ${label}`} value={value} onChange={event => update(event.target.value)} className="bg-white text-sm" />
+      )}
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        Changes appear on the canvas immediately. Save before leaving the funnel.
+      </p>
+    </div>
+  );
+}
+
+function FunnelStepsOverview({
+  config,
+  slug,
+  saving,
+  onConfigChange,
+  onSave,
+}: {
+  config: SimpleFormOperatorConfig;
+  slug: string;
+  saving: boolean;
+  onConfigChange: (config: SimpleFormOperatorConfig) => void;
+  onSave: () => void;
+}) {
+  const [selectedStep, setSelectedStep] = useState<SimpleFormPageKey>("zip");
+  const [selectedField, setSelectedField] = useState<SimpleFormEditableField>("offer.headline");
+  const [draggedProduct, setDraggedProduct] = useState<number | null>(null);
+  const steps: Array<{ key: SimpleFormPageKey; title: string; detail: string; defaultField: SimpleFormEditableField }> = [
+    { key: "zip", title: "ZIP code", detail: "Qualify the service area", defaultField: "offer.headline" },
+    { key: "contact", title: "Contact details", detail: "Collect the lead", defaultField: "contact.headline" },
+    { key: "thank-you", title: "Thank you", detail: "Confirm the submission", defaultField: "thankYou.headline" },
+  ];
+  const selectedIndex = steps.findIndex(step => step.key === selectedStep);
+  const selected = steps[selectedIndex] ?? steps[0]!;
+
+  const chooseStep = (step: (typeof steps)[number]) => {
+    setSelectedStep(step.key);
+    setSelectedField(step.defaultField);
+  };
+
+  const canvas = selectedStep === "zip" ? (
+    <div className="mx-auto w-full max-w-xl space-y-2 rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+      <div className="mx-auto mb-5 grid h-12 w-28 place-items-center rounded border border-dashed border-slate-300 text-xs font-semibold text-slate-500">Client logo</div>
+      <EditableCanvasBlock field="offer.headline" selected={selectedField === "offer.headline"} onSelect={setSelectedField}>
+        <h2 className="text-center text-2xl font-bold text-slate-900">{config.offer.headline}</h2>
+      </EditableCanvasBlock>
+      <EditableCanvasBlock field="offer.subheadline" selected={selectedField === "offer.subheadline"} onSelect={setSelectedField}>
+        <p className="text-center text-sm leading-relaxed text-slate-600">{config.offer.subheadline}</p>
+      </EditableCanvasBlock>
+      <div className="mx-4 mt-3 rounded-md border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-400">Enter ZIP code</div>
+      <EditableCanvasBlock field="funnel.ctaLabel" selected={selectedField === "funnel.ctaLabel"} onSelect={setSelectedField}>
+        <div className="rounded-md bg-primary px-4 py-3 text-center text-sm font-semibold text-primary-foreground">{config.funnel.ctaLabel}</div>
+      </EditableCanvasBlock>
+      <EditableCanvasBlock field="funnel.qualifyingLine" selected={selectedField === "funnel.qualifyingLine"} onSelect={setSelectedField}>
+        <p className="text-center text-xs leading-relaxed text-slate-500">{config.funnel.qualifyingLine}</p>
+      </EditableCanvasBlock>
+      <EditableCanvasBlock field="trust.statement" selected={selectedField === "trust.statement"} onSelect={setSelectedField}>
+        <p className="text-center text-xs leading-relaxed text-slate-500">{config.trust.statement}</p>
+      </EditableCanvasBlock>
+    </div>
+  ) : selectedStep === "contact" ? (
+    <div className="mx-auto w-full max-w-xl space-y-2 rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+      <EditableCanvasBlock field="contact.headline" selected={selectedField === "contact.headline"} onSelect={setSelectedField}>
+        <h2 className="text-center text-2xl font-bold text-slate-900">{config.contact.headline}</h2>
+      </EditableCanvasBlock>
+      {["First name", "Last name", "Phone", ...(config.contact.emailRequired ? ["Email"] : [])].map(label => (
+        <div key={label} className="mx-4 rounded-md border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-400">{label}</div>
+      ))}
+      <EditableCanvasBlock field="contact.consent.text" selected={selectedField === "contact.consent.text"} onSelect={setSelectedField}>
+        <p className="text-[10px] leading-relaxed text-slate-500">{config.contact.consent.text}</p>
+      </EditableCanvasBlock>
+      <EditableCanvasBlock field="contact.submitLabel" selected={selectedField === "contact.submitLabel"} onSelect={setSelectedField}>
+        <div className="rounded-md bg-primary px-4 py-3 text-center text-sm font-semibold text-primary-foreground">{config.contact.submitLabel}</div>
+      </EditableCanvasBlock>
+    </div>
+  ) : (
+    <div className="mx-auto w-full max-w-2xl space-y-2 rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+      <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full bg-emerald-100 text-xl text-emerald-600">✓</div>
+      <EditableCanvasBlock field="thankYou.headline" selected={selectedField === "thankYou.headline"} onSelect={setSelectedField}>
+        <h2 className="text-center text-2xl font-bold text-slate-900">{config.thankYou.headline}</h2>
+      </EditableCanvasBlock>
+      <EditableCanvasBlock field="thankYou.message" selected={selectedField === "thankYou.message"} onSelect={setSelectedField}>
+        <p className="text-center text-sm leading-relaxed text-slate-600">{config.thankYou.message}</p>
+      </EditableCanvasBlock>
+      <EditableCanvasBlock field="inventory.headline" selected={selectedField === "inventory.headline"} onSelect={setSelectedField}>
+        <h3 className="pt-3 text-lg font-bold text-slate-900">{config.inventory.headline}</h3>
+      </EditableCanvasBlock>
+      <EditableCanvasBlock field="inventory.subheadline" selected={selectedField === "inventory.subheadline"} onSelect={setSelectedField}>
+        <p className="text-sm leading-relaxed text-slate-600">{config.inventory.subheadline}</p>
+      </EditableCanvasBlock>
+      <p className="flex items-center gap-1.5 px-3 pt-2 text-[11px] font-semibold text-slate-500"><GripVertical className="h-3.5 w-3.5" /> Drag inventory cards to change their published order.</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {config.inventory.products.map((product, index) => (
+          <div
+            key={product.id}
+            draggable
+            onDragStart={() => setDraggedProduct(index)}
+            onDragEnd={() => setDraggedProduct(null)}
+            onDragOver={event => event.preventDefault()}
+            onDrop={event => {
+              event.preventDefault();
+              if (draggedProduct === null) return;
+              onConfigChange({
+                ...config,
+                inventory: {
+                  ...config.inventory,
+                  products: reorderSimpleFormProducts(config.inventory.products, draggedProduct, index),
+                },
+              });
+              setDraggedProduct(null);
+            }}
+            className={`flex cursor-grab items-center gap-2 rounded-md border bg-slate-50 p-3 text-xs text-slate-700 active:cursor-grabbing ${draggedProduct === index ? "border-primary opacity-50" : "border-slate-200"}`}
+          >
+            <GripVertical className="h-4 w-4 shrink-0 text-slate-400" />
+            <span className="truncate font-semibold">{product.name}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <section className="mt-3 overflow-hidden rounded-md border border-border bg-card lg:grid lg:grid-cols-[225px_minmax(0,1fr)]">
+      <aside className="border-b border-border bg-blue-50/80 lg:min-h-[680px] lg:border-b-0 lg:border-r">
         <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-semibold text-slate-600">
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-          Funnel steps
+          <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Funnel steps
         </div>
         <div>
           {steps.map((step, index) => (
             <button
-              key={step.title}
+              key={step.key}
               type="button"
-              onClick={() => setSelectedStep(index)}
-              className={`flex w-full items-center gap-3 border-b border-blue-100 px-4 py-3 text-left ${
-                selectedStep === index ? "bg-white text-foreground" : "text-slate-600 hover:bg-white/60"
-              }`}
+              onClick={() => chooseStep(step)}
+              className={`flex w-full items-center gap-3 border-b border-blue-100 px-4 py-3 text-left ${selectedStep === step.key ? "bg-white text-foreground" : "text-slate-600 hover:bg-white/60"}`}
             >
-              <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-sm ${selectedStep === index ? "bg-emerald-100 text-emerald-600" : "bg-blue-100 text-blue-500"}`}>
+              <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-sm ${selectedStep === step.key ? "bg-emerald-100 text-emerald-600" : "bg-blue-100 text-blue-500"}`}>
                 <FileText className="h-3.5 w-3.5" />
               </span>
               <span className="min-w-0 flex-1">
@@ -461,35 +674,24 @@ function FunnelStepsOverview({
         </div>
       </aside>
 
-      <div className="p-4 sm:p-5">
+      <div className="min-w-0 p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
           <div>
-            <p className="text-sm font-semibold">{selectedStep + 1}. {selected.title}</p>
-            <p className="mt-1 text-xs text-muted-foreground">/{slug}/{selectedStep === 0 ? "zip" : selectedStep === 1 ? "contact" : "thank-you"}</p>
+            <p className="text-sm font-semibold">{selectedIndex + 1}. {selected.title}</p>
+            <p className="mt-1 text-xs text-muted-foreground">/{slug}/{selected.key}</p>
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={onEdit} className="rounded-md border-border bg-card text-xs">
-            <Settings2 className="h-3.5 w-3.5" /> Edit settings
+          <Button type="button" size="sm" disabled={saving} onClick={onSave} className="rounded-md text-xs">
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Save page
           </Button>
         </div>
 
-        <div className="mt-5 grid gap-5 md:grid-cols-[minmax(250px,1fr)_minmax(220px,0.8fr)]">
-          <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-primary">Control</p>
-            <div className="grid min-h-[285px] place-items-center rounded-md border border-primary bg-white p-6">
-              <div className="w-full max-w-[230px] rounded-md border border-border bg-white p-4 shadow-sm">
-                <div className="mx-auto h-5 w-16 rounded-sm bg-primary/10" />
-                <p className="mt-4 text-center text-sm font-semibold text-slate-800">{businessName}</p>
-                <p className="mt-1 text-center text-[11px] text-slate-500">{selected.detail}</p>
-                <div className="mt-4 h-8 rounded border border-slate-200 bg-slate-50" />
-                <div className="mt-2 h-8 rounded bg-primary" />
-              </div>
-            </div>
-          </div>
-          <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Variation</p>
-            <button type="button" onClick={onEdit} className="grid min-h-[285px] w-full place-items-center rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-6 text-primary hover:bg-blue-50">
-              <span className="text-center text-xs font-semibold">+ Configure this step</span>
-            </button>
+        <div className="mt-4 flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+          <MousePointer2 className="h-3.5 w-3.5 shrink-0" /> Click any outlined page element to edit its real published content.
+        </div>
+        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(420px,1fr)_260px]">
+          <div className="min-h-[520px] overflow-auto rounded-md border border-slate-200 bg-slate-100 p-4 sm:p-6">{canvas}</div>
+          <div className="rounded-md border border-border bg-slate-50 p-4">
+            <SimpleFormFieldInspector field={selectedField} config={config} onChange={onConfigChange} />
           </div>
         </div>
       </div>
@@ -892,9 +1094,11 @@ export function SimpleFormFunnelEditor({
       <div className="space-y-3">
         {header}
         <FunnelStepsOverview
-          businessName={config.client.name}
+          config={config}
           slug={funnelSlug}
-          onEdit={() => setActiveTab("settings")}
+          saving={saveMutation.isPending}
+          onConfigChange={nextConfig => setRecord({ ...record, config: nextConfig })}
+          onSave={() => saveMutation.mutate({ clientId, funnelId, record })}
         />
       </div>
     );

@@ -8,6 +8,7 @@ import {
   publishAdvanceDelayMs,
   publishPollInterval,
   publishProgressPercent,
+  reorderSimpleFormProducts,
   shouldAutoAdvancePublish,
 } from "./SimpleFormFunnelEditor";
 
@@ -318,5 +319,19 @@ describe("Simple Form publish controls", () => {
         "Sold → sale → Meta Purchase",
       ],
     });
+  });
+});
+
+describe("Simple Form page editor", () => {
+  it("reorders inventory cards without mutating the saved product array", () => {
+    const products = ["one", "two", "three"];
+
+    expect(reorderSimpleFormProducts(products, 0, 2)).toEqual(["two", "three", "one"]);
+    expect(products).toEqual(["one", "two", "three"]);
+  });
+
+  it("ignores invalid product drop positions", () => {
+    expect(reorderSimpleFormProducts(["one", "two"], -1, 1)).toEqual(["one", "two"]);
+    expect(reorderSimpleFormProducts(["one", "two"], 0, 9)).toEqual(["one", "two"]);
   });
 });
