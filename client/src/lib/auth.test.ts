@@ -4,7 +4,6 @@ import {
   UNAPPROVED_ACCOUNT_MESSAGE,
   createAuthCallbackHandler,
   getSupabaseBearerHeaders,
-  isUnauthorizedAuthResult,
   signOutAndClearAuth,
   startGoogleLogin,
   switchGoogleAccount,
@@ -165,34 +164,6 @@ describe("Supabase browser authentication", () => {
     await expect(
       getSupabaseBearerHeaders({ getSession } as never),
     ).resolves.toEqual({});
-  });
-
-  it("does not mislabel a transient auth query failure as an unapproved account", () => {
-    expect(
-      isUnauthorizedAuthResult({
-        hasSession: true,
-        querySucceeded: false,
-        user: null,
-      }),
-    ).toBe(false);
-    expect(
-      isUnauthorizedAuthResult({
-        hasSession: true,
-        querySucceeded: true,
-        user: null,
-      }),
-    ).toBe(true);
-  });
-
-  it("surfaces session lookup failures instead of sending an anonymous request", async () => {
-    const getSession = vi.fn(async () => ({
-      data: { session: null },
-      error: new Error("temporary storage failure"),
-    }));
-
-    await expect(
-      getSupabaseBearerHeaders({ getSession } as never),
-    ).rejects.toThrow("Authentication session is temporarily unavailable.");
   });
 
   it("uses the required unauthorized-account message exactly", () => {

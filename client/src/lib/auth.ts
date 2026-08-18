@@ -112,23 +112,8 @@ export async function getSupabaseBearerHeaders(
   auth: SessionAuth,
 ): Promise<Record<string, string>> {
   const { data, error } = await auth.getSession();
-  if (error) {
-    throw new Error("Authentication session is temporarily unavailable.");
-  }
-  if (!data.session?.access_token) return {};
+  if (error || !data.session?.access_token) return {};
   return {
     Authorization: `Bearer ${data.session.access_token}`,
   };
-}
-
-export function isUnauthorizedAuthResult({
-  hasSession,
-  querySucceeded,
-  user,
-}: {
-  hasSession: boolean;
-  querySucceeded: boolean;
-  user: unknown | null;
-}): boolean {
-  return hasSession && querySucceeded && user === null;
 }

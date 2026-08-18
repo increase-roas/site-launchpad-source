@@ -1,18 +1,5 @@
-import { useAuth } from "@/_core/hooks/useAuth";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { startLogin } from "@/const";
 import { WorkspaceProvider, useWorkspace } from "@/contexts/WorkspaceContext";
-import {
-  UNAPPROVED_ACCOUNT_MESSAGE,
-  switchGoogleAccount,
-} from "@/lib/auth";
 import {
   getWorkspaceArea,
   workspaceRoute,
@@ -21,7 +8,6 @@ import {
 import {
   Eye,
   Images,
-  LogOut,
   PanelsTopLeft,
   Rocket,
   Route,
@@ -32,7 +18,6 @@ import { ReactNode } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { ClientSwitcher } from "./ClientSwitcher";
-import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { WorkspaceBreadcrumbs } from "./WorkspaceBreadcrumbs";
 
 function breadcrumbItems(location: string, clientName?: string): string[] {
@@ -49,18 +34,9 @@ function breadcrumbItems(location: string, clientName?: string): string[] {
 
 type DashboardShellProps = {
   children: ReactNode;
-  user: {
-    name: string | null;
-    email: string | null;
-  };
-  logout: () => Promise<void>;
 };
 
-function DashboardShell({
-  children,
-  user,
-  logout,
-}: DashboardShellProps) {
+function DashboardShell({ children }: DashboardShellProps) {
   const { selectedClientId, selectedClient, selectClient } = useWorkspace();
   const [location, setLocation] = useLocation();
   const area = getWorkspaceArea(location);
@@ -141,31 +117,6 @@ function DashboardShell({
           })}
         </nav>
 
-        <div className="border-t border-white/8 p-3">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex min-h-14 w-full items-center gap-3 rounded-xl px-2 text-left hover:bg-white/[0.04]">
-                <Avatar className="h-10 w-10 border border-white/10">
-                  <AvatarFallback className="bg-white/[0.05] text-sm font-extrabold">
-                    {user?.name?.charAt(0).toUpperCase() ?? "A"}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-extrabold">{user?.name ?? "Agency team"}</span>
-                  <span className="block truncate text-xs font-semibold text-muted-foreground">
-                    {user?.email ?? ""}
-                  </span>
-                </span>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52 border-white/10 bg-popover">
-              <DropdownMenuItem onClick={logout} className="cursor-pointer text-red-300 focus:text-red-200">
-                <LogOut className="mr-2 h-4 w-4" />
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
       </aside>
 
       <div className="min-h-screen lg:pl-72">
@@ -240,89 +191,9 @@ function DashboardShell({
 }
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
-  const { error, isUnauthorized, loading, logout, refresh, user } = useAuth();
-
-  if (loading) return <DashboardLayoutSkeleton />;
-
-  if (!user) {
-    const temporarilyUnavailable = Boolean(error) && !isUnauthorized;
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <div className="flex w-full max-w-md flex-col items-center gap-8 rounded-3xl border border-white/8 bg-card/70 p-8 text-center shadow-[0_24px_70px_rgba(0,0,0,0.3)]">
-          <div className="grid h-16 w-16 place-items-center rounded-3xl bg-cyan-400/10 text-cyan-300 ring-1 ring-cyan-300/20">
-            <Rocket className="h-8 w-8" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">
-              {temporarilyUnavailable
-                ? "Workspace temporarily unavailable"
-                : isUnauthorized
-                ? "Account not approved"
-                : "Sign in to Site Launchpad"}
-            </h1>
-            <p className="mt-3 text-base font-medium leading-relaxed text-muted-foreground">
-              {temporarilyUnavailable
-                ? "Your signed-in session is still intact. Retry the workspace connection."
-                : isUnauthorized
-                ? UNAPPROVED_ACCOUNT_MESSAGE
-                : "Only your agency team can open this workspace."}
-            </p>
-          </div>
-          <Button
-            onClick={() => {
-              if (temporarilyUnavailable) {
-                void refresh();
-                return;
-              }
-              if (isUnauthorized) {
-                void switchGoogleAccount({
-                  logout,
-                  startLogin,
-                }).then(result => {
-                  switch (result) {
-                    case "started":
-                      return;
-                    case "logout-failed":
-                      toast.error(
-                        "Sign out failed. Please try again.",
-                      );
-                      return;
-                    case "login-failed":
-                      toast.error(
-                        "Google sign-in could not start.",
-                      );
-                      return;
-                    default: {
-                      const exhaustiveResult: never = result;
-                      return exhaustiveResult;
-                    }
-                  }
-                });
-                return;
-              }
-              void startLogin().catch(() => {
-                toast.error("Google sign-in could not start.");
-              });
-            }}
-            size="lg"
-            className="h-14 w-full rounded-2xl bg-cyan-400 text-base font-extrabold text-slate-950 hover:bg-cyan-300"
-          >
-            {temporarilyUnavailable
-              ? "Retry"
-              : isUnauthorized
-              ? "Use another Google account"
-              : "Sign in with Google"}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <WorkspaceProvider>
-      <DashboardShell user={user} logout={logout}>
-        {children}
-      </DashboardShell>
+      <DashboardShell>{children}</DashboardShell>
     </WorkspaceProvider>
   );
 }

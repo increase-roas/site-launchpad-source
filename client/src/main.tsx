@@ -1,5 +1,3 @@
-import { getSupabaseBearerHeaders } from "@/lib/auth";
-import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
 import { fetchWithTimeout } from "@shared/requestTimeout";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -31,9 +29,6 @@ const trpcClient = trpc.createClient({
     httpLink({
       url: "/api/trpc",
       transformer: superjson,
-      async headers() {
-        return await getSupabaseBearerHeaders(supabase.auth);
-      },
       fetch(input, init) {
         return fetchWithTimeout(
           globalThis.fetch,
