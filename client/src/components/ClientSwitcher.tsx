@@ -38,19 +38,19 @@ export function ClientSwitcher({
           variant="outline"
           disabled={isLoading}
           className={cn(
-            "h-12 justify-between rounded-xl border-white/10 bg-white/[0.035] px-3 hover:bg-white/[0.07]",
-            compact ? "w-[190px]" : "w-full",
+            "justify-between border-border bg-card px-2.5 hover:bg-accent",
+            compact ? "h-9 w-[150px] rounded-md sm:w-[210px]" : "h-11 w-full rounded-md",
           )}
         >
-          <span className="flex min-w-0 items-center gap-2.5">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-cyan-400/10 text-cyan-300">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className={cn("grid shrink-0 place-items-center bg-primary/8 text-primary", compact ? "h-6 w-6 rounded" : "h-8 w-8 rounded-md")}>
               <Building2 className="h-4 w-4" />
             </span>
             <span className="min-w-0 text-left">
-              <span className="block truncate text-sm font-extrabold">
+              <span className="block truncate text-xs font-semibold sm:text-sm">
                 {selectedClient?.client.businessName ?? (clients.length ? "Choose client" : "No clients yet")}
               </span>
-              {selectedState ? (
+              {selectedState && !compact ? (
                 <span className="mt-0.5 block">
                   <StatusDot good={selectedState.tone === "green"} tone={selectedState.tone} label={selectedState.label} compact />
                 </span>
@@ -60,7 +60,7 @@ export function ClientSwitcher({
           <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-72 border-white/10 bg-popover p-2">
+      <DropdownMenuContent align="end" className="w-72 border-border bg-popover p-1.5 shadow-lg">
         <DropdownMenuLabel className="px-2 py-2 text-xs font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
           Switch client
         </DropdownMenuLabel>
@@ -83,15 +83,15 @@ export function ClientSwitcher({
                 }`}
               />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-extrabold">{view.client.businessName}</span>
+                <span className="block truncate text-sm font-semibold">{view.client.businessName}</span>
                 <span className="text-xs font-semibold text-muted-foreground">{state.label}</span>
               </span>
               {selected ? <Check className="ml-2 h-4 w-4 text-cyan-300" /> : null}
             </DropdownMenuItem>
           );
         })}
-        <DropdownMenuSeparator className="my-2 bg-white/8" />
-        <DropdownMenuItem onSelect={onAddClient} className="min-h-12 cursor-pointer rounded-lg px-3 font-extrabold text-cyan-300">
+        <DropdownMenuSeparator className="my-1.5 bg-border" />
+        <DropdownMenuItem onSelect={onAddClient} className="min-h-10 cursor-pointer rounded-md px-3 font-semibold text-primary">
           <Plus className="mr-2 h-4 w-4" />
           Add new client
         </DropdownMenuItem>

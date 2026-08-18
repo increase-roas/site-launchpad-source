@@ -44,42 +44,42 @@
 
 :root {
   color-scheme: light;
-  --primary: oklch(0.55 0.14 200);
+  --primary: oklch(0.55 0.22 260);
   --primary-foreground: oklch(0.99 0.003 220);
-  --sidebar-primary: oklch(0.55 0.14 200);
+  --sidebar-primary: oklch(0.55 0.22 260);
   --sidebar-primary-foreground: oklch(0.99 0.003 220);
-  --chart-1: oklch(0.55 0.14 200);
+  --chart-1: oklch(0.55 0.22 260);
   --chart-2: oklch(0.58 0.15 160);
   --chart-3: oklch(0.62 0.16 70);
   --chart-4: oklch(0.58 0.2 25);
   --chart-5: oklch(0.56 0.18 285);
-  --radius: 0.9rem;
-  --background: oklch(0.975 0.006 230);
-  --foreground: oklch(0.22 0.025 245);
-  --card: oklch(0.998 0.002 230);
+  --radius: 0.4rem;
+  --background: oklch(0.965 0.006 250);
+  --foreground: oklch(0.23 0.025 255);
+  --card: oklch(1 0 0);
   --card-foreground: oklch(0.22 0.025 245);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.22 0.025 245);
-  --secondary: oklch(0.94 0.012 230);
+  --secondary: oklch(0.955 0.008 250);
   --secondary-foreground: oklch(0.28 0.025 245);
-  --muted: oklch(0.94 0.01 230);
-  --muted-foreground: oklch(0.48 0.03 235);
-  --accent: oklch(0.91 0.03 220);
+  --muted: oklch(0.95 0.008 250);
+  --muted-foreground: oklch(0.47 0.025 250);
+  --accent: oklch(0.94 0.025 255);
   --accent-foreground: oklch(0.25 0.03 245);
   --destructive: oklch(0.58 0.22 25);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.66 0.025 235 / 24%);
-  --input: oklch(0.62 0.025 235 / 30%);
-  --ring: oklch(0.55 0.14 200);
-  --sidebar: oklch(0.955 0.012 235);
+  --border: oklch(0.72 0.025 250 / 42%);
+  --input: oklch(0.7 0.025 250 / 52%);
+  --ring: oklch(0.55 0.22 260);
+  --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0.24 0.025 245);
-  --sidebar-accent: oklch(0.9 0.03 220);
+  --sidebar-accent: oklch(0.94 0.025 255);
   --sidebar-accent-foreground: oklch(0.24 0.025 245);
-  --sidebar-border: oklch(0.66 0.025 235 / 24%);
-  --sidebar-ring: oklch(0.55 0.14 200);
-  --feature-surface: radial-gradient(circle at 84% -15%, oklch(0.84 0.09 200 / 38%), transparent 36rem), linear-gradient(135deg, oklch(1 0 0 / 98%), oklch(0.95 0.02 220 / 98%));
-  --feature-shadow: 0 22px 60px oklch(0.28 0.04 240 / 10%);
-  --protected-surface: linear-gradient(145deg, oklch(0.98 0.025 85), oklch(1 0 0));
+  --sidebar-border: oklch(0.72 0.025 250 / 42%);
+  --sidebar-ring: oklch(0.55 0.22 260);
+  --feature-surface: oklch(1 0 0);
+  --feature-shadow: none;
+  --protected-surface: oklch(0.985 0.012 85);
 }
 
 .dark {
@@ -129,7 +129,7 @@
 
 .launchpad-mobile-nav {
   border-color: var(--sidebar-border);
-  background: color-mix(in oklch, var(--sidebar) 94%, transparent);
+  background: color-mix(in oklch, var(--sidebar) 97%, transparent);
 }
 
 .launchpad-feature-surface {
@@ -177,7 +177,31 @@
 :root:not(.dark) .text-cyan-300,
 :root:not(.dark) .text-cyan-200,
 :root:not(.dark) .text-cyan-100 {
-  color: oklch(0.45 0.13 200);
+  color: var(--primary);
+}
+
+:root:not(.dark) .bg-cyan-400 {
+  background-color: var(--primary);
+}
+
+:root:not(.dark) .bg-cyan-400.text-slate-950 {
+  color: var(--primary-foreground);
+}
+
+:root:not(.dark) .hover\:bg-cyan-300:hover {
+  background-color: color-mix(in oklch, var(--primary) 90%, black);
+}
+
+:root:not(.dark) .launchpad-workspace .rounded-3xl {
+  border-radius: var(--radius);
+}
+
+:root:not(.dark) .launchpad-workspace .rounded-2xl {
+  border-radius: calc(var(--radius) + 2px);
+}
+
+:root:not(.dark) .launchpad-workspace [class*="shadow-["] {
+  box-shadow: none;
 }
 
 :root:not(.dark) .text-emerald-300,
@@ -203,9 +227,7 @@
   body {
     @apply bg-background text-foreground antialiased;
     min-height: 100vh;
-    background-image:
-      radial-gradient(circle at 78% -12%, oklch(0.57 0.12 205 / 14%), transparent 34rem),
-      radial-gradient(circle at 8% 110%, oklch(0.5 0.1 165 / 8%), transparent 28rem);
+    background-image: none;
     font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
   }
   button:not(:disabled),

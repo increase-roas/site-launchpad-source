@@ -304,14 +304,14 @@ export default function WebsiteWorkspace({ clientId }: { clientId: number }) {
   const workspace = workspaceQuery.data;
 
   return (
-    <div className="mx-auto w-full max-w-[1500px] space-y-7">
-      <section className="launchpad-feature-surface flex flex-col gap-5 rounded-3xl border p-5 sm:p-7 lg:flex-row lg:items-end lg:justify-between">
+    <div className="mx-auto w-full space-y-5">
+      <section className="launchpad-feature-surface flex flex-col gap-4 rounded-lg border p-4 sm:p-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-300">Website workspace</p>
-          <h1 className="mt-2 text-3xl font-extrabold tracking-[-0.03em] sm:text-4xl">
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
             {workspace.client.businessName}
           </h1>
-          <p className="mt-3 max-w-2xl text-base font-medium leading-relaxed text-muted-foreground">
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
             Review the main pages, then arrange the homepage in the order customers should see it.
           </p>
         </div>

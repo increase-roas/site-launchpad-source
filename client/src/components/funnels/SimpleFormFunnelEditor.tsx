@@ -25,11 +25,15 @@ import type {
 import {
   AlertCircle,
   ArrowLeft,
+  BarChart3,
   CheckCircle2,
+  ChevronRight,
   ExternalLink,
+  FileText,
   Loader2,
   Rocket,
   Save,
+  Settings2,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -348,6 +352,195 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+type FunnelWorkspaceTab = "steps" | "stats" | "settings";
+
+const FUNNEL_TABS: Array<{ value: FunnelWorkspaceTab; label: string }> = [
+  { value: "steps", label: "Steps" },
+  { value: "stats", label: "Stats" },
+  { value: "settings", label: "Settings" },
+];
+
+function FunnelEditorHeader({
+  name,
+  slug,
+  activeTab,
+  onTab,
+  onBack,
+}: {
+  name: string;
+  slug: string;
+  activeTab: FunnelWorkspaceTab;
+  onTab: (tab: FunnelWorkspaceTab) => void;
+  onBack: () => void;
+}) {
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        All funnels
+      </button>
+      <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">{name}</h1>
+          <p className="mt-1 text-xs text-muted-foreground">/{slug}</p>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Button type="button" variant="outline" size="icon-sm" className="rounded-md border-border bg-card" aria-label="Open funnel preview">
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+      <nav className="mt-4 flex gap-1 border-b border-border" aria-label="Funnel workspace tabs">
+        {FUNNEL_TABS.map(tab => (
+          <button
+            key={tab.value}
+            type="button"
+            onClick={() => onTab(tab.value)}
+            className={`relative px-3 pb-2 pt-1 text-xs font-semibold after:absolute after:inset-x-1 after:bottom-[-1px] after:h-0.5 after:bg-primary ${
+              activeTab === tab.value
+                ? "text-primary after:opacity-100"
+                : "text-muted-foreground after:opacity-0 hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+function FunnelStepsOverview({
+  businessName,
+  slug,
+  onEdit,
+}: {
+  businessName: string;
+  slug: string;
+  onEdit: () => void;
+}) {
+  const [selectedStep, setSelectedStep] = useState(0);
+  const steps = [
+    { title: "ZIP code", detail: "Qualify the service area" },
+    { title: "Contact details", detail: "Collect the lead" },
+    { title: "Thank you", detail: "Confirm the submission" },
+  ];
+  const selected = steps[selectedStep];
+
+  return (
+    <section className="mt-3 overflow-hidden rounded-md border border-border bg-card lg:grid lg:grid-cols-[255px_minmax(0,1fr)]">
+      <aside className="border-b border-border bg-blue-50/80 lg:min-h-[520px] lg:border-b-0 lg:border-r">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-semibold text-slate-600">
+          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          Funnel steps
+        </div>
+        <div>
+          {steps.map((step, index) => (
+            <button
+              key={step.title}
+              type="button"
+              onClick={() => setSelectedStep(index)}
+              className={`flex w-full items-center gap-3 border-b border-blue-100 px-4 py-3 text-left ${
+                selectedStep === index ? "bg-white text-foreground" : "text-slate-600 hover:bg-white/60"
+              }`}
+            >
+              <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-sm ${selectedStep === index ? "bg-emerald-100 text-emerald-600" : "bg-blue-100 text-blue-500"}`}>
+                <FileText className="h-3.5 w-3.5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-semibold">{index + 1}. {step.title}</span>
+                <span className="mt-0.5 block truncate text-[11px] text-slate-500">{step.detail}</span>
+              </span>
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          ))}
+        </div>
+      </aside>
+
+      <div className="p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+          <div>
+            <p className="text-sm font-semibold">{selectedStep + 1}. {selected.title}</p>
+            <p className="mt-1 text-xs text-muted-foreground">/{slug}/{selectedStep === 0 ? "zip" : selectedStep === 1 ? "contact" : "thank-you"}</p>
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={onEdit} className="rounded-md border-border bg-card text-xs">
+            <Settings2 className="h-3.5 w-3.5" /> Edit settings
+          </Button>
+        </div>
+
+        <div className="mt-5 grid gap-5 md:grid-cols-[minmax(250px,1fr)_minmax(220px,0.8fr)]">
+          <div>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-primary">Control</p>
+            <div className="grid min-h-[285px] place-items-center rounded-md border border-primary bg-white p-6">
+              <div className="w-full max-w-[230px] rounded-md border border-border bg-white p-4 shadow-sm">
+                <div className="mx-auto h-5 w-16 rounded-sm bg-primary/10" />
+                <p className="mt-4 text-center text-sm font-semibold text-slate-800">{businessName}</p>
+                <p className="mt-1 text-center text-[11px] text-slate-500">{selected.detail}</p>
+                <div className="mt-4 h-8 rounded border border-slate-200 bg-slate-50" />
+                <div className="mt-2 h-8 rounded bg-primary" />
+              </div>
+            </div>
+          </div>
+          <div>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Variation</p>
+            <button type="button" onClick={onEdit} className="grid min-h-[285px] w-full place-items-center rounded-md border border-dashed border-slate-300 bg-slate-50/50 p-6 text-primary hover:bg-blue-50">
+              <span className="text-center text-xs font-semibold">+ Configure this step</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FunnelStats({ funnelName }: { funnelName: string }) {
+  const rows = ["ZIP code", "Contact details", "Thank you"];
+  return (
+    <section className="mt-3 overflow-hidden rounded-md border border-border bg-card">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+        <div>
+          <p className="text-sm font-semibold">{funnelName} performance</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Analytics will populate after the funnel receives traffic.</p>
+        </div>
+        <Button type="button" variant="outline" size="sm" className="rounded-md border-border bg-card text-xs">
+          <BarChart3 className="h-3.5 w-3.5" /> Last 30 days
+        </Button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] border-collapse text-xs">
+          <thead className="bg-slate-50 text-slate-700">
+            <tr>
+              <th rowSpan={2} className="border-b border-r border-border px-4 py-2 text-left font-semibold">Funnel step</th>
+              <th colSpan={2} className="border-b border-r border-border px-3 py-2 font-semibold">Page views</th>
+              <th colSpan={2} className="border-b border-r border-border px-3 py-2 font-semibold">Leads</th>
+              <th colSpan={2} className="border-b border-border px-3 py-2 font-semibold">Conversion</th>
+            </tr>
+            <tr>
+              {['All', 'Unique', 'All', 'Rate', 'Completed', 'Rate'].map(label => (
+                <th key={label} className="border-b border-r border-border px-3 py-2 font-medium last:border-r-0">{label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={row} className={index % 2 ? "bg-slate-50/70" : "bg-white"}>
+                <td className="border-r border-border px-4 py-3 font-semibold text-slate-600"><span className="mr-2 text-slate-400">▱</span>{index + 1}. {row}</td>
+                {Array.from({ length: 6 }).map((_, cell) => (
+                  <td key={cell} className="border-r border-border px-3 py-3 text-center text-slate-400 last:border-r-0">—</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function SecretField({
   guide,
   present,
@@ -512,6 +705,7 @@ export function SimpleFormFunnelEditor({
     }
   );
   const [record, setRecord] = useState<SimpleFormStoredRecord | null>(null);
+  const [activeTab, setActiveTab] = useState<FunnelWorkspaceTab>("steps");
   const [zipText, setZipText] = useState("");
   const [secretDrafts, setSecretDrafts] = useState<Record<string, string>>({});
   const [integrationDrafts, setIntegrationDrafts] =
@@ -551,6 +745,10 @@ export function SimpleFormFunnelEditor({
     setSecretDrafts({});
     setIntegrationDrafts(query.data.integration);
   }, [query.data]);
+
+  useEffect(() => {
+    setActiveTab("steps");
+  }, [funnelId]);
 
   useEffect(
     () => () => publishAdvanceController.dispose(),
@@ -677,17 +875,44 @@ export function SimpleFormFunnelEditor({
     );
   }
 
+  const funnelName = query.data?.funnel.name ?? config.client.name;
+  const funnelSlug = query.data?.funnel.slug ?? "simple-form";
+  const header = (
+    <FunnelEditorHeader
+      name={funnelName}
+      slug={funnelSlug}
+      activeTab={activeTab}
+      onTab={setActiveTab}
+      onBack={onBack}
+    />
+  );
+
+  if (activeTab === "steps") {
+    return (
+      <div className="space-y-3">
+        {header}
+        <FunnelStepsOverview
+          businessName={config.client.name}
+          slug={funnelSlug}
+          onEdit={() => setActiveTab("settings")}
+        />
+      </div>
+    );
+  }
+
+  if (activeTab === "stats") {
+    return (
+      <div className="space-y-3">
+        {header}
+        <FunnelStats funnelName={funnelName} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-2 text-sm font-extrabold text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          All funnels
-        </button>
+      {header}
+      <div className="flex justify-end">
         <Button
           type="button"
           disabled={saveMutation.isPending}
@@ -704,7 +929,7 @@ export function SimpleFormFunnelEditor({
               },
             })
           }
-          className="h-11 gap-2 rounded-xl bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
+          className="h-9 gap-2 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
         >
           {saveMutation.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" />
