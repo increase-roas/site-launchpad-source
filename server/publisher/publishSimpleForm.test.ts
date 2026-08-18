@@ -1025,6 +1025,57 @@ describe("Simple Form publish state machine", () => {
     );
   });
 
+  it("transitions a legacy failed monitor job so one Retry can redispatch", async () => {
+    const store = new MemoryPublishStore();
+    const external = externalMocks();
+    const deps = dependencies(store, external);
+    await started(store, deps);
+    for (let index = 0; index < 7; index += 1) {
+      await advanceSimpleFormPublish({ clientId: 5, funnelId: 11 }, deps);
+    }
+    if (!store.job) throw new Error("Expected publish job.");
+    store.job = {
+      ...store.job,
+      status: "failed",
+      step: "monitor_workflow",
+      workflowStatus: "failure",
+      lastError: "Legacy workflow failure",
+    };
+
+    const transitioned = await advanceSimpleFormPublish(
+      { clientId: 5, funnelId: 11 },
+      deps
+    );
+
+    expect(transitioned).toMatchObject({
+      status: "pending",
+      step: "dispatch_workflow",
+      dispatchRequestedAt: null,
+      workflowRunId: "run-501",
+      workflowStatus: "failure",
+      error: null,
+    });
+    expect(external.getWorkflowRun).not.toHaveBeenCalled();
+
+    const retried = await advanceSimpleFormPublish(
+      { clientId: 5, funnelId: 11 },
+      deps
+    );
+
+    expect(retried).toMatchObject({
+      status: "pending",
+      step: "dispatch_workflow",
+      dispatchRequestedAt: FIRST_NOW,
+      workflowRunId: "run-501",
+    });
+    expect(external.ensureRepository).toHaveBeenCalledTimes(1);
+    expect(external.ensureKvNamespace).toHaveBeenCalledTimes(1);
+    expect(external.ensureD1Database).toHaveBeenCalledTimes(1);
+    expect(external.ensureQueues).toHaveBeenCalledTimes(1);
+    expect(external.commitSource).toHaveBeenCalledTimes(1);
+    expect(external.dispatchWorkflow).toHaveBeenCalledTimes(2);
+  });
+
   it("rejects a workflow run whose display title has a different source SHA", async () => {
     const store = new MemoryPublishStore();
     const external = externalMocks();

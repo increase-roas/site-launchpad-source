@@ -793,6 +793,25 @@ async function runMonitorWorkflowStep(
   leaseToken: string,
   deps: SimpleFormPublishDependencies
 ): Promise<SimpleFormPublishStatusView> {
+  if (
+    claimed.workflowStatus === "failure" ||
+    claimed.workflowStatus === "cancelled" ||
+    claimed.workflowStatus === "timed_out" ||
+    claimed.workflowStatus === "action_required"
+  ) {
+    return completeStep(
+      input,
+      claimed,
+      leaseToken,
+      {
+        nextStep: "dispatch_workflow",
+        values: {
+          dispatchRequestedAt: null,
+        },
+      },
+      deps
+    );
+  }
   const checkedAt = deps.now();
   const result = await boundedExternalCall(
     "Workflow status check",
