@@ -3,8 +3,6 @@ import {
   fetchAwaitingCancellation,
   type FetchFunction,
 } from "../../shared/requestTimeout";
-import type { SimpleFormRuntimeSecretKey } from "../../shared/simpleFormContract";
-import type { PublisherWorkerSecretKey } from "./workerSecrets";
 
 export const CLOUDFLARE_REQUEST_TIMEOUT_MS = 10_000;
 
@@ -20,6 +18,13 @@ export type ProvisionedD1Database = {
   created: boolean;
 };
 
+export type ProvisionedR2Bucket = {
+  id: string;
+  name: string;
+  publicUrl: string;
+  created: boolean;
+};
+
 export type ProvisionedQueue = {
   id: string;
   name: string;
@@ -32,7 +37,7 @@ export type ProvisionedQueues = {
 };
 
 export type WorkerSecretInput = {
-  name: PublisherWorkerSecretKey;
+  name: string;
   value: string;
 };
 
@@ -51,6 +56,10 @@ export type CloudflareApiClient = {
     name: string,
     signal: AbortSignal
   ): Promise<ProvisionedD1Database>;
+  ensureR2Bucket(
+    name: string,
+    signal: AbortSignal,
+  ): Promise<ProvisionedR2Bucket>;
   ensureQueues(input: {
     primary: string;
     deadLetter: string;
@@ -60,7 +69,7 @@ export type CloudflareApiClient = {
     scriptName: string;
     secrets: readonly WorkerSecretInput[];
     signal: AbortSignal;
-  }): Promise<{ updatedSecretNames: PublisherWorkerSecretKey[] }>;
+  }): Promise<{ updatedSecretNames: string[] }>;
   getWorkersDevStatus(input: {
     scriptName: string;
     signal: AbortSignal;
@@ -103,6 +112,8 @@ type Queue = {
   id: string;
   name: string;
 };
+
+type R2Bucket = { name: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -217,6 +228,11 @@ function parseQueue(value: unknown, operation: string): Queue {
     id: requireString(record, "queue_id", operation),
     name: requireString(record, "queue_name", operation),
   };
+}
+
+function parseR2Bucket(value: unknown, operation: string): R2Bucket {
+  const record = requireRecord(value, operation);
+  return { name: requireString(record, "name", operation) };
 }
 
 function createRequest(options: {
@@ -379,6 +395,75 @@ export function createCloudflareApiClient(options: {
         true
       );
     },
+    async ensureR2Bucket(name, signal) {
+      const listOperation = "R2 bucket listing";
+      const listEnvelope = await request(
+        listOperation,
+        `/r2/buckets?name_contains=${encodeURIComponent(name)}&per_page=1000`,
+        { method: "GET", signal },
+      );
+      const listResult = parseResultRecord(listEnvelope, listOperation);
+      if (!Array.isArray(listResult.buckets)) {
+        throw new CloudflareApiError(`${listOperation} response validation`);
+      }
+      const buckets = listResult.buckets.map(value =>
+        parseR2Bucket(value, listOperation),
+      );
+      let created = false;
+      if (!buckets.some(bucket => bucket.name === name)) {
+        signal.throwIfAborted();
+        const createdEnvelope = await request(
+          "R2 bucket creation",
+          "/r2/buckets",
+          {
+            method: "POST",
+            body: JSON.stringify({ name }),
+            signal,
+          },
+        );
+        const bucket = parseR2Bucket(
+          parseResultRecord(createdEnvelope, "R2 bucket creation"),
+          "R2 bucket creation",
+        );
+        if (bucket.name !== name) {
+          throw new CloudflareApiError(
+            "R2 bucket creation response validation",
+          );
+        }
+        created = true;
+      }
+
+      signal.throwIfAborted();
+      const publicEnvelope = await request(
+        "R2 managed domain enablement",
+        `/r2/buckets/${encodeURIComponent(name)}/domains/managed`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ enabled: true }),
+          signal,
+        },
+      );
+      const publicResult = parseResultRecord(
+        publicEnvelope,
+        "R2 managed domain enablement",
+      );
+      if (publicResult.enabled !== true) {
+        throw new CloudflareApiError(
+          "R2 managed domain enablement response validation",
+        );
+      }
+      const id = requireString(
+        publicResult,
+        "bucketId",
+        "R2 managed domain enablement",
+      );
+      const domain = requireString(
+        publicResult,
+        "domain",
+        "R2 managed domain enablement",
+      );
+      return { id, name, publicUrl: `https://${domain}`, created };
+    },
     async ensureQueues(input) {
       if (input.primary === input.deadLetter) {
         throw new Error("Primary and dead-letter queue names must differ.");
@@ -423,15 +508,9 @@ export function createCloudflareApiClient(options: {
       if (input.secrets.some(secret => !secret.value)) {
         throw new Error("Runtime secret values must not be empty.");
       }
-      const secrets: Partial<
-        Record<
-          SimpleFormRuntimeSecretKey,
-          {
-            name: SimpleFormRuntimeSecretKey;
-            type: "secret_text";
-            text: string;
-          }
-        >
+      const secrets: Record<
+        string,
+        { name: string; type: "secret_text"; text: string }
       > = {};
       for (const secret of input.secrets) {
         secrets[secret.name] = {

@@ -162,6 +162,61 @@ describe("Cloudflare publisher client", () => {
     });
   });
 
+  it("reuses an R2 bucket and idempotently enables its managed public domain", async () => {
+    const { fetchFn, requests } = createMockFetch([
+      successEnvelope({ buckets: [{ name: "northland-product-images" }] }),
+      successEnvelope({
+        bucketId: "0123456789abcdef0123456789abcdef",
+        domain: "pub-example.r2.dev",
+        enabled: true,
+      }),
+    ]);
+
+    const result = await createClient(fetchFn).ensureR2Bucket(
+      "northland-product-images",
+      activeSignal(),
+    );
+
+    expect(result).toEqual({
+      id: "0123456789abcdef0123456789abcdef",
+      name: "northland-product-images",
+      publicUrl: "https://pub-example.r2.dev",
+      created: false,
+    });
+    expect(requests.map(request => request.init?.method)).toEqual([
+      "GET",
+      "PUT",
+    ]);
+    expect(parseRequestBody(requests[1])).toEqual({ enabled: true });
+  });
+
+  it("creates a missing R2 bucket before enabling public access", async () => {
+    const { fetchFn, requests } = createMockFetch([
+      successEnvelope({ buckets: [] }),
+      successEnvelope({ name: "northland-product-images" }),
+      successEnvelope({
+        bucketId: "0123456789abcdef0123456789abcdef",
+        domain: "pub-example.r2.dev",
+        enabled: true,
+      }),
+    ]);
+
+    const result = await createClient(fetchFn).ensureR2Bucket(
+      "northland-product-images",
+      activeSignal(),
+    );
+
+    expect(result.created).toBe(true);
+    expect(requests.map(request => request.init?.method)).toEqual([
+      "GET",
+      "POST",
+      "PUT",
+    ]);
+    expect(parseRequestBody(requests[1])).toEqual({
+      name: "northland-product-images",
+    });
+  });
+
   it("provisions exactly one primary and one dead-letter queue list-first", async () => {
     const { fetchFn, requests } = createMockFetch([
       successEnvelope(

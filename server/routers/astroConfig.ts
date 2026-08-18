@@ -8,6 +8,11 @@ import { getAstroConfigView, saveAstroConfig, saveWranglerSecrets } from "../ast
 import { protectedProcedure, router } from "../_core/trpc";
 import { toClientAstroConfigView, toGeneratedConfigExport } from "../secretRedaction";
 import { mapRouterError } from "../trpcErrors";
+import {
+  advancePublish,
+  publishStatus,
+  startPublish,
+} from "../publisher/publishAstroSite";
 
 const clientIdInput = z.object({ clientId: z.number().int().positive() });
 const wranglerSecretInputSchema = z.object(
@@ -57,6 +62,32 @@ export const astroConfigRouter = router({
       return toGeneratedConfigExport("client.config.ts", view.generatedConfig);
     } catch (error) {
       throw mapRouterError(error, "Generated client config could not be exported.");
+    }
+  }),
+
+  startPublish: protectedProcedure.input(clientIdInput).mutation(async ({ input }) => {
+    try {
+      return await startPublish(input.clientId);
+    } catch (error) {
+      throw mapRouterError(error, "Website publishing could not be started.");
+    }
+  }),
+
+  advancePublish: protectedProcedure
+    .input(clientIdInput.extend({ retryFailed: z.boolean().optional() }))
+    .mutation(async ({ input }) => {
+      try {
+        return await advancePublish(input.clientId, input.retryFailed === true);
+      } catch (error) {
+        throw mapRouterError(error, "Website publishing could not be advanced.");
+      }
+    }),
+
+  publishStatus: protectedProcedure.input(clientIdInput).query(async ({ input }) => {
+    try {
+      return await publishStatus(input.clientId);
+    } catch (error) {
+      throw mapRouterError(error, "Website publish status could not be loaded.");
     }
   }),
 });

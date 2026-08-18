@@ -15,6 +15,10 @@ import {
   funnelPublishStatusValues,
   funnelPublishStepValues,
 } from "../shared/simpleFormPublish";
+import {
+  astroSitePublishStatusValues,
+  astroSitePublishStepValues,
+} from "../shared/astroSitePublish";
 
 export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
 
@@ -734,6 +738,90 @@ export const funnelPublishes = pgTable(
 
 export type FunnelPublish = typeof funnelPublishes.$inferSelect;
 export type InsertFunnelPublish = typeof funnelPublishes.$inferInsert;
+
+export const astroSitePublishStepEnum = pgEnum(
+  "astro_site_publish_step",
+  astroSitePublishStepValues,
+);
+export const astroSitePublishStatusEnum = pgEnum(
+  "astro_site_publish_status",
+  astroSitePublishStatusValues,
+);
+
+export const astroSitePublishes = pgTable(
+  "astroSitePublishes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    clientId: integer("clientId")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    externalSiteId: varchar("externalSiteId", { length: 120 }).notNull(),
+    templateKey: varchar("templateKey", { length: 80 }).notNull(),
+    templateRepo: varchar("templateRepo", { length: 240 }).notNull(),
+    contractVersion: integer("contractVersion").notNull(),
+    resourceName: varchar("resourceName", { length: 120 }).notNull(),
+    repositoryName: varchar("repositoryName", { length: 120 }).notNull(),
+    workerName: varchar("workerName", { length: 120 }).notNull(),
+    d1DatabaseName: varchar("d1DatabaseName", { length: 120 }).notNull(),
+    r2BucketName: varchar("r2BucketName", { length: 120 }).notNull(),
+    step: astroSitePublishStepEnum("step")
+      .default("create_repository")
+      .notNull(),
+    status: astroSitePublishStatusEnum("status").default("pending").notNull(),
+    repositoryId: varchar("repositoryId", { length: 120 }),
+    repositoryFullName: varchar("repositoryFullName", { length: 240 }),
+    repositoryUrl: varchar("repositoryUrl", { length: 1000 }),
+    defaultBranch: varchar("defaultBranch", { length: 120 }),
+    repositoryCreateRequestedAt: timestamp("repositoryCreateRequestedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    d1DatabaseId: varchar("d1DatabaseId", { length: 120 }),
+    r2BucketId: varchar("r2BucketId", { length: 120 }),
+    r2PublicUrl: varchar("r2PublicUrl", { length: 1000 }),
+    commitSha: varchar("commitSha", { length: 120 }),
+    liveUrl: varchar("liveUrl", { length: 1000 }),
+    dispatchRequestedAt: timestamp("dispatchRequestedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    workflowRunId: varchar("workflowRunId", { length: 120 }),
+    workflowStatus: varchar("workflowStatus", { length: 80 }),
+    workflowCheckedAt: timestamp("workflowCheckedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    runtimeSecretsPatchedAt: timestamp("runtimeSecretsPatchedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    leaseToken: uuid("leaseToken"),
+    leaseUntil: timestamp("leaseUntil", { withTimezone: true, mode: "date" }),
+    lastError: text("lastError"),
+    attemptCount: integer("attemptCount").default(0).notNull(),
+    completedAt: timestamp("completedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  table => [
+    uniqueIndex("astro_site_publishes_client_unique").on(table.clientId),
+    uniqueIndex("astro_site_publishes_external_site_unique").on(
+      table.externalSiteId,
+    ),
+    index("astro_site_publishes_status_idx").on(table.status),
+    index("astro_site_publishes_lease_until_idx").on(table.leaseUntil),
+  ],
+).enableRLS();
+
+export type AstroSitePublish = typeof astroSitePublishes.$inferSelect;
+export type InsertAstroSitePublish = typeof astroSitePublishes.$inferInsert;
 
 export const homepageSectionTypeValues = [
   "hero",

@@ -16,7 +16,7 @@ import {
   type AstroClientConfigInput,
   type WranglerSecretName,
 } from "@shared/astroConfig";
-import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, Megaphone, Save } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle2, ExternalLink, Loader2, Megaphone, Rocket, Save } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -33,6 +33,9 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
   const utils = trpc.useUtils();
   const queryInput = useMemo(() => ({ clientId }), [clientId]);
   const query = trpc.astroConfig.get.useQuery(queryInput);
+  const publishQuery = trpc.astroConfig.publishStatus.useQuery(queryInput, {
+    refetchInterval: 3_000,
+  });
   const [config, setConfig] = useState<AstroClientConfigInput | null>(null);
   const [assets, setAssets] = useState<Array<{ slot: string; storageUrl: string; filename: string; byteSize: number }>>([]);
   const [generatedConfig, setGeneratedConfig] = useState("");
@@ -45,6 +48,7 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
   const dirtyRef = useRef(false);
   const configRef = useRef<AstroClientConfigInput | null>(null);
   const saveInFlightRef = useRef(false);
+  const publishAdvanceInFlightRef = useRef(false);
   const trailingSaveRef = useRef(false);
   const inFlightPayloadRef = useRef("");
   const mountedClientIdRef = useRef(clientId);
@@ -79,6 +83,44 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
   const completeUploadMutation = trpc.assets.completeUpload.useMutation();
 
   const exportMutation = trpc.astroConfig.exportGeneratedConfig.useMutation();
+
+  const startPublishMutation = trpc.astroConfig.startPublish.useMutation({
+    onSuccess: status => {
+      utils.astroConfig.publishStatus.setData(queryInput, status);
+      toast.success("Website publishing started.");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const advancePublishMutation = trpc.astroConfig.advancePublish.useMutation({
+    onSuccess: status => {
+      utils.astroConfig.publishStatus.setData(queryInput, status);
+      if (status.status === "published") toast.success("Website published.");
+    },
+    onError: error => toast.error(error.message),
+    onSettled: () => {
+      publishAdvanceInFlightRef.current = false;
+    },
+  });
+  const publish = publishQuery.data;
+
+  useEffect(() => {
+    if (
+      !publish ||
+      (publish.status !== "pending" && publish.status !== "running") ||
+      publish.step === "published" ||
+      publishAdvanceInFlightRef.current
+    ) return;
+    const delay = publish.step === "monitor_workflow" ||
+      (publish.step === "dispatch_workflow" && publish.dispatchRequestedAt)
+      ? 2_000
+      : 0;
+    const timer = window.setTimeout(() => {
+      if (publishAdvanceInFlightRef.current) return;
+      publishAdvanceInFlightRef.current = true;
+      advancePublishMutation.mutate({ clientId, retryFailed: false });
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [advancePublishMutation, clientId, publish]);
 
   const revealGeneratedConfig = async () => {
     const exported = await exportMutation.mutateAsync({ clientId });
@@ -242,6 +284,47 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
     </header>
 
     {issues.length ? <div className="mb-5 rounded-2xl border border-red-400/20 bg-red-400/[0.05] p-4"><p className="font-extrabold text-red-200">Complete these items to save:</p><ul className="mt-2 space-y-1 text-sm font-medium text-red-100/80">{issues.map(issue => <li key={issue}>• {issue}</li>)}</ul></div> : null}
+
+    <section className="mb-5 rounded-2xl border border-white/8 bg-card/70 p-4 sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="font-extrabold">Website publishing</p>
+          <p className="mt-1 text-sm font-medium text-muted-foreground">
+            {publish
+              ? `${publish.progress.completed} of ${publish.progress.total} steps · ${publish.step.replaceAll("_", " ")}`
+              : "Create the dedicated Astro repository and deployment."}
+          </p>
+        </div>
+        {!publish ? (
+          <Button
+            type="button"
+            disabled={startPublishMutation.isPending || saveState !== "saved"}
+            onClick={() => startPublishMutation.mutate({ clientId })}
+            className="bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
+          >
+            {startPublishMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+            Publish
+          </Button>
+        ) : publish.status === "failed" ? (
+          <Button
+            type="button"
+            disabled={advancePublishMutation.isPending}
+            onClick={() => {
+              if (publishAdvanceInFlightRef.current) return;
+              publishAdvanceInFlightRef.current = true;
+              advancePublishMutation.mutate({ clientId, retryFailed: true });
+            }}
+            className="bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
+          >
+            {advancePublishMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+            Retry
+          </Button>
+        ) : null}
+      </div>
+      {publish ? <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-cyan-300 transition-[width]" style={{ width: `${Math.round((publish.progress.completed / Math.max(1, publish.progress.total)) * 100)}%` }} /></div> : null}
+      {publish?.error ? <p className="mt-3 rounded-xl border border-red-400/20 bg-red-400/[0.05] p-3 text-sm font-bold text-red-200">{publish.error}</p> : null}
+      {publish?.repositoryUrl || publish?.liveUrl ? <div className="mt-3 flex flex-wrap gap-4 text-sm font-extrabold">{publish.repositoryUrl ? <a href={publish.repositoryUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-cyan-300">Repository <ExternalLink className="h-3.5 w-3.5" /></a> : null}{publish.liveUrl ? <a href={publish.liveUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-emerald-300">Live website <ExternalLink className="h-3.5 w-3.5" /></a> : null}</div> : null}
+    </section>
 
     <Tabs defaultValue={initialTab} onValueChange={tab => window.history.replaceState({}, "", `${window.location.pathname}?tab=${tab}`)} className="space-y-5">
       <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-2xl border border-white/8 bg-card/80 p-1.5 sm:grid-cols-4"><TabsTrigger value="basic" className="min-h-12 text-sm font-extrabold">Basic Info</TabsTrigger><TabsTrigger value="branding" className="min-h-12 text-sm font-extrabold">Branding</TabsTrigger><TabsTrigger value="content" className="min-h-12 text-sm font-extrabold">Content</TabsTrigger><TabsTrigger value="technical" className="min-h-12 text-sm font-extrabold">Technical</TabsTrigger></TabsList>
