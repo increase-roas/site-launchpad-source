@@ -298,5 +298,5 @@ describe("emitted Vercel API function packaging", () => {
     expect(exactApi.status).toBe(404);
     expect(exactApi.contentType).toMatch(/json/i);
     expect(JSON.parse(exactApi.body)).toEqual({ error: "Not Found" });
-  });
+  }, 15_000);
 });

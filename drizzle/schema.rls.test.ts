@@ -9,6 +9,7 @@ import {
   clientAssets,
   clientLeadIntegrations,
   clientSecretSetups,
+  clientIntegrationProfiles,
   clients,
   funnelConfigs,
   funnelPublishes,
@@ -17,7 +18,17 @@ import {
   funnelSteps,
   funnelSurveyQuestions,
   funnels,
+  genericPaidFunnelPublishes,
   homepageSections,
+  paidFunnelGraphRevisions,
+  paidFunnelGraphs,
+  paidFunnelPublishes,
+  paidFunnelReusableSections,
+  paidFunnelSteps,
+  paidFunnelTemplateArtifacts,
+  paidFunnelTemplateVersions,
+  paidFunnelTemplates,
+  paidFunnels,
   sitePages,
   users,
   wranglerSecretSetups,
@@ -28,18 +39,34 @@ const applicationTables = {
     table: assetUploadSessions,
     databaseName: "assetUploadSessions",
   },
-  astroClientConfigs: { table: astroClientConfigs, databaseName: "astroClientConfigs" },
-  astroSitePublishes: { table: astroSitePublishes, databaseName: "astroSitePublishes" },
+  astroClientConfigs: {
+    table: astroClientConfigs,
+    databaseName: "astroClientConfigs",
+  },
+  astroSitePublishes: {
+    table: astroSitePublishes,
+    databaseName: "astroSitePublishes",
+  },
   clientAssets: { table: clientAssets, databaseName: "clientAssets" },
   clientLeadIntegrations: {
     table: clientLeadIntegrations,
     databaseName: "clientLeadIntegrations",
   },
-  clientSecretSetups: { table: clientSecretSetups, databaseName: "clientSecretSetups" },
+  clientSecretSetups: {
+    table: clientSecretSetups,
+    databaseName: "clientSecretSetups",
+  },
+  clientIntegrationProfiles: {
+    table: clientIntegrationProfiles,
+    databaseName: "client_integration_profiles",
+  },
   clients: { table: clients, databaseName: "clients" },
   funnelConfigs: { table: funnelConfigs, databaseName: "funnelConfigs" },
   funnelPublishes: { table: funnelPublishes, databaseName: "funnelPublishes" },
-  funnelRuntimeSecrets: { table: funnelRuntimeSecrets, databaseName: "funnelRuntimeSecrets" },
+  funnelRuntimeSecrets: {
+    table: funnelRuntimeSecrets,
+    databaseName: "funnelRuntimeSecrets",
+  },
   funnelSimpleFormConfigs: {
     table: funnelSimpleFormConfigs,
     databaseName: "funnelSimpleFormConfigs",
@@ -50,7 +77,47 @@ const applicationTables = {
     databaseName: "funnelSurveyQuestions",
   },
   funnels: { table: funnels, databaseName: "funnels" },
-  homepageSections: { table: homepageSections, databaseName: "homepageSections" },
+  genericPaidFunnelPublishes: {
+    table: genericPaidFunnelPublishes,
+    databaseName: "generic_paid_funnel_publishes",
+  },
+  homepageSections: {
+    table: homepageSections,
+    databaseName: "homepageSections",
+  },
+  paidFunnelGraphRevisions: {
+    table: paidFunnelGraphRevisions,
+    databaseName: "paid_funnel_graph_revisions",
+  },
+  paidFunnelGraphs: {
+    table: paidFunnelGraphs,
+    databaseName: "paid_funnel_graphs",
+  },
+  paidFunnelPublishes: {
+    table: paidFunnelPublishes,
+    databaseName: "paid_funnel_publishes",
+  },
+  paidFunnelReusableSections: {
+    table: paidFunnelReusableSections,
+    databaseName: "paid_funnel_reusable_sections",
+  },
+  paidFunnelSteps: {
+    table: paidFunnelSteps,
+    databaseName: "paid_funnel_steps",
+  },
+  paidFunnelTemplateArtifacts: {
+    table: paidFunnelTemplateArtifacts,
+    databaseName: "paid_funnel_template_artifacts",
+  },
+  paidFunnelTemplateVersions: {
+    table: paidFunnelTemplateVersions,
+    databaseName: "paid_funnel_template_versions",
+  },
+  paidFunnelTemplates: {
+    table: paidFunnelTemplates,
+    databaseName: "paid_funnel_templates",
+  },
+  paidFunnels: { table: paidFunnels, databaseName: "paid_funnels" },
   sitePages: { table: sitePages, databaseName: "sitePages" },
   users: { table: users, databaseName: "users" },
   wranglerSecretSetups: {
@@ -73,7 +140,7 @@ describe("PostgreSQL application-table RLS", () => {
       .sort((left, right) => left.exportName.localeCompare(right.exportName));
 
     expect(discovered).toEqual(expected);
-    expect(discovered).toHaveLength(18);
+    expect(discovered).toHaveLength(29);
   });
 
   it("enables RLS without schema policies on every application table", () => {
@@ -86,16 +153,18 @@ describe("PostgreSQL application-table RLS", () => {
           enableRLS: config.enableRLS,
           policyCount: config.policies.length,
         };
-      },
+      }
     );
 
     expect(rlsBoundary).toEqual(
-      Object.entries(applicationTables).map(([exportName, { databaseName }]) => ({
-        exportName,
-        databaseName,
-        enableRLS: true,
-        policyCount: 0,
-      })),
+      Object.entries(applicationTables).map(
+        ([exportName, { databaseName }]) => ({
+          exportName,
+          databaseName,
+          enableRLS: true,
+          policyCount: 0,
+        })
+      )
     );
   });
 });

@@ -365,7 +365,7 @@ export default function ClientEditor({ clientId }: { clientId?: number }) {
           />
 
           {clientId ? (
-            <section className="overflow-hidden rounded-3xl border border-white/8 bg-[radial-gradient(circle_at_85%_0%,rgba(34,211,238,0.15),transparent_40%),rgba(19,27,37,0.96)] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.24)] sm:p-6">
+            <section className="launchpad-feature-surface overflow-hidden rounded-3xl border p-5 sm:p-6">
               <div className="grid h-12 w-12 place-items-center rounded-2xl bg-cyan-400/10 text-cyan-300 ring-1 ring-cyan-300/15">
                 <Rocket className="h-6 w-6" />
               </div>

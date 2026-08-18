@@ -2,6 +2,11 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Camera, ImagePlus, Loader2, RefreshCw } from "lucide-react";
 import { useId, useRef, useState } from "react";
+import {
+  MEDIA_SPECIFICATIONS,
+  validateImageMetadata,
+  type MediaSpecification,
+} from "@shared/mediaSpecifications";
 import { StatusDot } from "./StatusDot";
 
 type StoredImage = {
@@ -16,6 +21,7 @@ type ImageUploadCardProps = {
   image?: StoredImage;
   busy: boolean;
   onFile: (file: File) => void;
+  specification?: MediaSpecification;
 };
 
 export function ImageUploadCard({
@@ -24,13 +30,40 @@ export function ImageUploadCard({
   image,
   busy,
   onFile,
+  specification = MEDIA_SPECIFICATIONS.landscape,
 }: ImageUploadCardProps) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
-  const acceptFile = (file?: File) => {
+  const acceptFile = async (file?: File) => {
     if (!file || busy) return;
+    const dimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+      const image = new Image();
+      const url = URL.createObjectURL(file);
+      image.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve({ width: image.naturalWidth, height: image.naturalHeight });
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("The image could not be read."));
+      };
+      image.src = url;
+    }).catch(() => null);
+    if (!dimensions) {
+      setValidationError("Choose a valid image file.");
+      return;
+    }
+    const error = validateImageMetadata({
+      mimeType: file.type,
+      sizeBytes: file.size,
+      width: dimensions.width,
+      height: dimensions.height,
+    }, specification);
+    setValidationError(error);
+    if (error) return;
     onFile(file);
   };
 
@@ -52,7 +85,7 @@ export function ImageUploadCard({
       onDrop={event => {
         event.preventDefault();
         setDragging(false);
-        acceptFile(event.dataTransfer.files[0]);
+        void acceptFile(event.dataTransfer.files[0]);
       }}
     >
       {image ? (
@@ -99,6 +132,12 @@ export function ImageUploadCard({
             <p className="mt-1 text-sm font-medium leading-relaxed text-muted-foreground">
               {guidance}
             </p>
+            <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-600">
+              {specification.label}
+            </p>
+            {validationError ? (
+              <p role="alert" className="mt-2 text-xs font-semibold text-red-600">{validationError}</p>
+            ) : null}
           </div>
           {image ? (
             <Button
@@ -130,11 +169,11 @@ export function ImageUploadCard({
         ref={inputRef}
         id={inputId}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/avif,image/tiff,image/gif"
+        accept={specification.mimeTypes.join(",")}
         className="sr-only"
         disabled={busy}
         onChange={event => {
-          acceptFile(event.target.files?.[0]);
+          void acceptFile(event.target.files?.[0]);
           event.currentTarget.value = "";
         }}
       />

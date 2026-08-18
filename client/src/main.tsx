@@ -5,6 +5,7 @@ import { httpLink } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
+import { installAnalytics } from "./lib/analytics";
 import "./index.css";
 
 const API_REQUEST_TIMEOUT_MS = 45_000;
@@ -51,3 +52,8 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </trpc.Provider>
 );
+
+installAnalytics(document, {
+  VITE_ANALYTICS_ENDPOINT: import.meta.env.VITE_ANALYTICS_ENDPOINT,
+  VITE_ANALYTICS_WEBSITE_ID: import.meta.env.VITE_ANALYTICS_WEBSITE_ID,
+});

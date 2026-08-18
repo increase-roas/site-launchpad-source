@@ -5,12 +5,14 @@ import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { trpc } from "@/lib/trpc";
 import {
-  HOMEPAGE_SECTION_DESCRIPTIONS,
-  HOMEPAGE_SECTION_LABELS,
   SITE_PAGE_LABELS,
-  type HomepageSectionType,
   type SitePageType,
 } from "@shared/workspace";
+import {
+  ASTRO_SECTION_DESCRIPTIONS,
+  ASTRO_SECTION_LABELS,
+  type AstroSectionType,
+} from "@shared/astroConfig";
 import {
   ArrowDown,
   ArrowUp,
@@ -31,13 +33,13 @@ import {
 } from "./editorIsolation";
 
 type SectionDraft = {
-  id: number;
-  sectionType: HomepageSectionType;
+  id: string;
+  sectionType: AstroSectionType;
   enabled: boolean;
 };
 
 function PageThumbnail({ type }: { type: SitePageType }) {
-  const shell = "h-full w-full rounded-xl border border-white/8 bg-[#09111b] p-3";
+  const shell = "h-full w-full rounded-xl border border-border bg-muted p-3";
 
   if (type === "homepage") {
     return (
@@ -172,8 +174,9 @@ function PageCard({
 export default function WebsiteWorkspace({ clientId }: { clientId: number }) {
   const utils = trpc.useUtils();
   const workspaceQuery = trpc.workspace.get.useQuery({ clientId });
+  const astroConfigQuery = trpc.astroConfig.get.useQuery({ clientId });
   const [sections, setSections] = useState<SectionDraft[]>([]);
-  const [draggedId, setDraggedId] = useState<number | null>(null);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
   const sectionBuilderRef = useRef<HTMLDivElement>(null);
   const saveInFlightRef = useRef(false);
   const queuedSectionsRef = useRef<SectionDraft[] | null>(null);
@@ -181,11 +184,11 @@ export default function WebsiteWorkspace({ clientId }: { clientId: number }) {
   const sectionsRef = useRef<SectionDraft[]>([]);
 
   useEffect(() => {
-    if (!workspaceQuery.data) return;
-    const incoming = workspaceQuery.data.sections.map(section => ({
+    if (!astroConfigQuery.data) return;
+    const incoming = astroConfigQuery.data.input.homepageSections.map(section => ({
       id: section.id,
-      sectionType: section.sectionType,
-      enabled: Boolean(section.enabled),
+      sectionType: section.type,
+      enabled: section.enabled,
     }));
     const incomingSerialized = serializeHomepageSections(incoming);
     const local = sectionsRef.current;
@@ -202,16 +205,23 @@ export default function WebsiteWorkspace({ clientId }: { clientId: number }) {
     }
     setSections(incoming);
     lastCleanSerializedRef.current = incomingSerialized;
-  }, [workspaceQuery.data]);
+  }, [astroConfigQuery.data]);
 
   sectionsRef.current = sections;
 
-  const saveSections = trpc.workspace.saveSections.useMutation();
+  const saveSections = trpc.astroConfig.saveHomepageSections.useMutation();
 
   const flushSections = (next: SectionDraft[]) => {
     saveInFlightRef.current = true;
     saveSections.mutate(
-      { clientId, sections: next },
+      {
+        clientId,
+        sections: next.map(section => ({
+          id: section.id,
+          type: section.sectionType,
+          enabled: section.enabled,
+        })),
+      },
       {
         onSuccess: async () => {
           if (queuedSectionsRef.current) {
@@ -222,7 +232,7 @@ export default function WebsiteWorkspace({ clientId }: { clientId: number }) {
           }
           saveInFlightRef.current = false;
           lastCleanSerializedRef.current = serializeHomepageSections(next);
-          await utils.workspace.get.invalidate({ clientId });
+          await utils.astroConfig.get.invalidate({ clientId });
           toast.success("Homepage order saved.");
         },
         onError: error => {
@@ -242,7 +252,7 @@ export default function WebsiteWorkspace({ clientId }: { clientId: number }) {
     flushSections(next);
   };
 
-  const moveSection = (fromId: number, toId: number) => {
+  const moveSection = (fromId: string, toId: string) => {
     if (fromId === toId) return;
     const fromIndex = sections.findIndex(section => section.id === fromId);
     const toIndex = sections.findIndex(section => section.id === toId);
@@ -253,7 +263,7 @@ export default function WebsiteWorkspace({ clientId }: { clientId: number }) {
     persistSections(next);
   };
 
-  const nudgeSection = (id: number, direction: -1 | 1) => {
+  const nudgeSection = (id: string, direction: -1 | 1) => {
     const index = sections.findIndex(section => section.id === id);
     const target = index + direction;
     if (index < 0 || target < 0 || target >= sections.length) return;
@@ -262,7 +272,7 @@ export default function WebsiteWorkspace({ clientId }: { clientId: number }) {
     persistSections(next);
   };
 
-  if (workspaceQuery.isLoading) {
+  if (workspaceQuery.isLoading || astroConfigQuery.isLoading) {
     return (
       <div className="grid min-h-[60vh] place-items-center">
         <div className="text-center">
@@ -273,11 +283,18 @@ export default function WebsiteWorkspace({ clientId }: { clientId: number }) {
     );
   }
 
-  if (!workspaceQuery.data || workspaceQuery.error) {
+  if (!workspaceQuery.data || workspaceQuery.error || !astroConfigQuery.data || astroConfigQuery.error) {
     return (
       <div className="rounded-3xl border border-red-400/20 bg-red-400/[0.05] p-8 text-center">
         <h1 className="text-2xl font-extrabold">Website pages could not be loaded</h1>
-        <Button type="button" onClick={() => workspaceQuery.refetch()} className="mt-5 bg-cyan-400 font-extrabold text-slate-950">
+        <Button
+          type="button"
+          onClick={() => {
+            workspaceQuery.refetch();
+            astroConfigQuery.refetch();
+          }}
+          className="mt-5 bg-cyan-400 font-extrabold text-slate-950"
+        >
           Try again
         </Button>
       </div>
@@ -287,14 +304,14 @@ export default function WebsiteWorkspace({ clientId }: { clientId: number }) {
   const workspace = workspaceQuery.data;
 
   return (
-    <div className="mx-auto w-full max-w-[1500px] space-y-7">
-      <section className="flex flex-col gap-5 rounded-3xl border border-white/8 bg-[radial-gradient(circle_at_88%_-10%,rgba(34,211,238,0.14),transparent_35%),rgba(17,26,37,0.88)] p-5 sm:p-7 lg:flex-row lg:items-end lg:justify-between">
+    <div className="mx-auto w-full space-y-5">
+      <section className="launchpad-feature-surface flex flex-col gap-4 rounded-lg border p-4 sm:p-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-300">Website workspace</p>
-          <h1 className="mt-2 text-3xl font-extrabold tracking-[-0.03em] sm:text-4xl">
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
             {workspace.client.businessName}
           </h1>
-          <p className="mt-3 max-w-2xl text-base font-medium leading-relaxed text-muted-foreground">
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
             Review the main pages, then arrange the homepage in the order customers should see it.
           </p>
         </div>
@@ -363,16 +380,16 @@ export default function WebsiteWorkspace({ clientId }: { clientId: number }) {
                       : "border-white/6 bg-black/15 opacity-65"
                 }`}
               >
-                <button type="button" className="grid h-10 w-8 shrink-0 cursor-grab place-items-center rounded-lg text-muted-foreground hover:bg-white/[0.04]" aria-label={`Drag ${HOMEPAGE_SECTION_LABELS[section.sectionType]}`}>
+                <button type="button" className="grid h-10 w-8 shrink-0 cursor-grab place-items-center rounded-lg text-muted-foreground hover:bg-white/[0.04]" aria-label={`Drag ${ASTRO_SECTION_LABELS[section.sectionType]}`}>
                   <GripVertical className="h-5 w-5" />
                 </button>
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-400/10 text-sm font-extrabold text-cyan-300">
                   {index + 1}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-base font-extrabold">{HOMEPAGE_SECTION_LABELS[section.sectionType]}</h3>
+                  <h3 className="truncate text-base font-extrabold">{ASTRO_SECTION_LABELS[section.sectionType]}</h3>
                   <p className="mt-0.5 truncate text-sm font-medium text-muted-foreground">
-                    {HOMEPAGE_SECTION_DESCRIPTIONS[section.sectionType]}
+                    {ASTRO_SECTION_DESCRIPTIONS[section.sectionType]}
                   </p>
                 </div>
                 <div className="hidden items-center gap-1 sm:flex">
@@ -395,14 +412,14 @@ export default function WebsiteWorkspace({ clientId }: { clientId: number }) {
                         sections.map(item => item.id === section.id ? { ...item, enabled } : item),
                       )
                     }
-                    aria-label={`${section.enabled ? "Disable" : "Enable"} ${HOMEPAGE_SECTION_LABELS[section.sectionType]}`}
+                    aria-label={`${section.enabled ? "Disable" : "Enable"} ${ASTRO_SECTION_LABELS[section.sectionType]}`}
                   />
                 </div>
               </div>
             ))}
           </div>
 
-          <aside className="rounded-2xl border border-white/8 bg-[#09111b] p-4 xl:sticky xl:top-24">
+          <aside className="rounded-2xl border border-border bg-muted/70 p-4 xl:sticky xl:top-24">
             <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-cyan-300">Visual preview</p>
             <h3 className="mt-2 text-lg font-extrabold">Customer scroll order</h3>
             <div className="mt-4 space-y-2">
@@ -411,11 +428,11 @@ export default function WebsiteWorkspace({ clientId }: { clientId: number }) {
                   <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-cyan-400/12 text-xs font-extrabold text-cyan-300">
                     {index + 1}
                   </span>
-                  <span className="text-sm font-extrabold">{HOMEPAGE_SECTION_LABELS[section.sectionType]}</span>
+                  <span className="text-sm font-extrabold">{ASTRO_SECTION_LABELS[section.sectionType]}</span>
                 </div>
               ))}
             </div>
-            {sections.find(section => section.sectionType === "testimonials" && !section.enabled) ? (
+            {sections.find(section => section.sectionType === "reviews" && !section.enabled) ? (
               <p className="mt-4 rounded-xl bg-amber-400/[0.06] p-3 text-xs font-bold leading-relaxed text-amber-200/80">
                 Testimonials stay off until approved customer feedback is available.
               </p>

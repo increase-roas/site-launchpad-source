@@ -14,6 +14,11 @@ import {
   type SecretStatus,
 } from "../../shared/client";
 import {
+  CLIENT_INTEGRATION_SECRET_KEYS,
+  clientIntegrationFieldError,
+  type ClientIntegrationProfileKey,
+} from "../../shared/clientIntegrationProfile";
+import {
   createClientWithSecrets,
   createDraftClient,
   getClientAssets,
@@ -24,10 +29,14 @@ import {
   saveClientSecretSetup,
   updateClient,
 } from "../db";
+import {
+  loadOrBackfillResolvedClientIntegrationProfile,
+  saveClientIntegrationProfile,
+} from "../clientIntegrations";
 import { encryptSetupValue, hasProtectedValue } from "../clientSecurity";
 import { observeRuntimeOperation } from "../_core/operationTelemetry";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
-import { UpdateConflictError, isDuplicateKeyError } from "../trpcErrors";
+import { UpdateConflictError, isDuplicateKeyError, mapRouterError } from "../trpcErrors";
 import type { Client, ClientAsset } from "../../drizzle/schema";
 
 const secretColumnByField = {
@@ -68,6 +77,83 @@ async function applySetupValues(clientId: number, input: SecretSetupInput): Prom
   }
 }
 
+const integrationIdentifiersInputSchema = z
+  .object({
+    GHL_LOCATION_ID: z.string().trim().min(1).max(255).nullable().optional(),
+    GOOGLE_SHEETS_ID: z
+      .string()
+      .trim()
+      .min(1)
+      .max(255)
+      .regex(/^[A-Za-z0-9_-]+$/, "Enter a valid Google Sheet ID.")
+      .nullable()
+      .optional(),
+    META_PIXEL_ID: z
+      .string()
+      .trim()
+      .regex(/^\d{8,20}$/, "Meta Pixel ID must be 8 to 20 digits.")
+      .nullable()
+      .optional(),
+  })
+  .strict();
+
+const integrationSecretsInputSchema = z
+  .object(
+    Object.fromEntries(
+      CLIENT_INTEGRATION_SECRET_KEYS.map(key => [
+        key,
+        z.string().trim().min(1).max(100_000).optional(),
+      ]),
+    ) as Record<(typeof CLIENT_INTEGRATION_SECRET_KEYS)[number], z.ZodOptional<z.ZodString>>,
+  )
+  .partial()
+  .strict();
+
+const saveIntegrationProfileInputSchema = z
+  .object({
+    clientId: z.number().int().positive(),
+    expectedUpdatedAt: z.coerce.date().nullable(),
+    identifiers: integrationIdentifiersInputSchema,
+    replaceSecrets: integrationSecretsInputSchema,
+    clearSecrets: z.array(z.enum(CLIENT_INTEGRATION_SECRET_KEYS)).optional(),
+    rotateStageWebhookSecret: z.boolean().optional(),
+  })
+  .superRefine((input, context) => {
+    const replaced = new Set(Object.keys(input.replaceSecrets));
+    for (const key of input.clearSecrets ?? []) {
+      if (replaced.has(key)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["clearSecrets"],
+          message: `${key} cannot be replaced and cleared in the same save.`,
+        });
+      }
+    }
+    if (input.rotateStageWebhookSecret && input.clearSecrets?.includes("STAGE_WEBHOOK_SECRET")) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["rotateStageWebhookSecret"],
+        message: "STAGE_WEBHOOK_SECRET cannot be rotated and cleared in the same save.",
+      });
+    }
+    for (const [key, value] of Object.entries({
+      ...input.identifiers,
+      ...input.replaceSecrets,
+    })) {
+      const message = clientIntegrationFieldError(
+        key as ClientIntegrationProfileKey,
+        value,
+      );
+      if (message) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: key in input.identifiers ? ["identifiers", key] : ["replaceSecrets", key],
+          message,
+        });
+      }
+    }
+  });
+
 function clientViewFrom(client: Client, assets: ClientAsset[], secretRow: ClientSecretSetup | undefined) {
   const secretStatus = secretStatusFromRow(secretRow);
   const readiness = buildReadiness(
@@ -105,6 +191,53 @@ export const clientsRouter = router({
   get: protectedProcedure
     .input(z.object({ clientId: z.number().int().positive() }))
     .query(({ input }) => getClientView(input.clientId)),
+
+  getIntegrationProfile: protectedProcedure
+    .input(z.object({ clientId: z.number().int().positive() }))
+    .query(async ({ input }) => {
+      try {
+        const existing = await getClientById(input.clientId);
+        if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Client not found." });
+        return (await loadOrBackfillResolvedClientIntegrationProfile(input.clientId)).dto;
+      } catch (error) {
+        throw mapRouterError(error, "Integrations could not be loaded.");
+      }
+    }),
+
+  saveIntegrationProfile: protectedProcedure
+    .input(saveIntegrationProfileInputSchema)
+    .mutation(async ({ input }) => {
+      try {
+        const existing = await getClientById(input.clientId);
+        if (!existing) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Client not found." });
+        }
+        const resolveConflictedKeys = [
+          ...Object.keys(input.identifiers),
+          ...Object.keys(input.replaceSecrets),
+          ...(input.clearSecrets ?? []),
+          ...(input.rotateStageWebhookSecret ? ["STAGE_WEBHOOK_SECRET"] : []),
+        ] as Array<
+          | (typeof CLIENT_INTEGRATION_SECRET_KEYS)[number]
+          | "GHL_LOCATION_ID"
+          | "GOOGLE_SHEETS_ID"
+          | "META_PIXEL_ID"
+        >;
+        return await saveClientIntegrationProfile(input.clientId, {
+          expectedUpdatedAt: input.expectedUpdatedAt,
+          identifiers: input.identifiers,
+          replaceSecrets: input.replaceSecrets,
+          clearSecrets: input.clearSecrets,
+          rotateStageWebhookSecret: input.rotateStageWebhookSecret,
+          resolveConflictedKeys: [...new Set(resolveConflictedKeys)],
+        });
+      } catch (error) {
+        if (error instanceof UpdateConflictError) {
+          throw new TRPCError({ code: "CONFLICT", message: error.message });
+        }
+        throw mapRouterError(error, "Integrations could not be saved.");
+      }
+    }),
 
   create: protectedProcedure
     .input(z.object({ details: clientInputSchema, setup: secretSetupInputSchema }))

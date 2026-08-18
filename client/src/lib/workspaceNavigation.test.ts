@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getClientIdFromWorkspacePath,
   getWorkspaceArea,
+  integrationsRoute,
   settingsRedirectFromLegacyClientPath,
   workspaceRoute,
 } from "./workspaceNavigation";
@@ -34,5 +35,23 @@ describe("selected-client workspace navigation", () => {
     expect(settingsRedirectFromLegacyClientPath("/clients/5")).toBe("/workspace/5/settings");
     expect(settingsRedirectFromLegacyClientPath("/clients/new")).toBeNull();
     expect(settingsRedirectFromLegacyClientPath("/workspace/5/settings")).toBeNull();
+  });
+});
+
+describe("Paid Ads funnel destinations stay under Funnels", () => {
+  it("does not add a top-level website Templates route", () => {
+    expect(workspaceRoute("funnels", 4)).toBe("/workspace/4/funnels");
+    expect(workspaceRoute("funnels", 4)).not.toContain("/templates");
+    expect(getWorkspaceArea("/templates")).toBe("clients");
+    expect(getWorkspaceArea("/workspace/4/funnels?tab=templates")).toBe("funnels");
+    expect(getWorkspaceArea("/workspace/4/funnels?studio=generic-paid-funnel")).toBe("funnels");
+  });
+});
+
+describe("Client integrations destination", () => {
+  it("keeps the thin Integrations page under the selected client", () => {
+    expect(integrationsRoute(9)).toBe("/workspace/9/integrations");
+    expect(getWorkspaceArea("/workspace/9/integrations")).toBe("settings");
+    expect(getClientIdFromWorkspacePath("/workspace/9/integrations")).toBe(9);
   });
 });

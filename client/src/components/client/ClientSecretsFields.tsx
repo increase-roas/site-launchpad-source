@@ -19,7 +19,7 @@ export function ClientSecretsFields({
   setSetup: Dispatch<SetStateAction<Record<SecretField, string>>>;
 }) {
   return (
-    <Card className="border-amber-300/15 bg-[linear-gradient(145deg,rgba(120,83,22,0.10),rgba(23,29,38,0.92))] p-5 shadow-[0_18px_55px_rgba(0,0,0,0.2)] sm:p-7">
+    <Card className="launchpad-protected-surface border-amber-500/20 p-5 shadow-[0_18px_55px_rgba(0,0,0,0.12)] sm:p-7">
       <SectionHeading
         icon={ShieldCheck}
         eyebrow="Step 5"

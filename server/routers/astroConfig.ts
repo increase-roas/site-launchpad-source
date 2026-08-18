@@ -3,8 +3,14 @@ import { z } from "zod";
 import {
   WRANGLER_SECRET_VALUES,
   astroClientConfigInputSchema,
+  astroHomepageSectionOrderSchema,
 } from "../../shared/astroConfig";
-import { getAstroConfigView, saveAstroConfig, saveWranglerSecrets } from "../astroConfigDb";
+import {
+  getAstroConfigView,
+  saveAstroConfig,
+  saveAstroHomepageSectionOrder,
+  saveWranglerSecrets,
+} from "../astroConfigDb";
 import { protectedProcedure, router } from "../_core/trpc";
 import { toClientAstroConfigView, toGeneratedConfigExport } from "../secretRedaction";
 import { mapRouterError } from "../trpcErrors";
@@ -37,6 +43,21 @@ export const astroConfigRouter = router({
         return toClientAstroConfigView(await saveAstroConfig(input.clientId, input.config));
       } catch (error) {
         throw mapRouterError(error, "Client configuration could not be saved.");
+      }
+    }),
+
+  saveHomepageSections: protectedProcedure
+    .input(z.object({
+      clientId: z.number().int().positive(),
+      sections: astroHomepageSectionOrderSchema,
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        return toClientAstroConfigView(
+          await saveAstroHomepageSectionOrder(input.clientId, input.sections),
+        );
+      } catch (error) {
+        throw mapRouterError(error, "Homepage order could not be saved.");
       }
     }),
 

@@ -127,7 +127,7 @@ function FlowPreview({ questions }: { questions: QuestionDraft[] }) {
       <div className="flex min-w-max items-center gap-2.5">
         {steps.map((step, index) => (
           <div key={step.key} className="flex items-center gap-2.5">
-            <div className="w-40 rounded-2xl border border-white/9 bg-[#0b1521] p-3.5">
+            <div className="w-40 rounded-2xl border border-border bg-card p-3.5">
               <div className="flex items-center gap-2">
                 <span className="grid h-7 w-7 place-items-center rounded-lg bg-cyan-400/10 text-xs font-extrabold text-cyan-300">
                   {index + 1}
@@ -507,7 +507,7 @@ export function FunnelConfigEditor({
 
   return (
     <div className="space-y-6">
-      <section className="flex flex-col gap-4 rounded-3xl border border-white/8 bg-[radial-gradient(circle_at_90%_0%,rgba(34,211,238,0.13),transparent_38%),rgba(17,26,37,0.88)] p-5 sm:p-7 lg:flex-row lg:items-start lg:justify-between">
+      <section className="launchpad-feature-surface flex flex-col gap-4 rounded-3xl border p-5 sm:p-7 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <Button type="button" variant="ghost" onClick={onBack} className="-ml-3 h-10 gap-2 rounded-xl font-extrabold text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-4 w-4" /> Back to funnels
@@ -636,7 +636,7 @@ export function FunnelConfigEditor({
         </aside>
       </section>
 
-      <div className="sticky bottom-20 z-30 rounded-2xl border border-white/10 bg-[rgba(8,15,24,0.94)] p-3 shadow-[0_20px_55px_rgba(0,0,0,0.4)] backdrop-blur-xl lg:bottom-4">
+      <div className="sticky bottom-20 z-30 rounded-2xl border border-border bg-card/95 p-3 shadow-[0_20px_55px_rgba(0,0,0,0.16)] backdrop-blur-xl lg:bottom-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><p className="hidden text-sm font-bold text-muted-foreground sm:block">{form.questions.length} survey question{form.questions.length === 1 ? "" : "s"} · {funnelFormStepCount(form.questions.length)} form steps · {funnelStepCount(form.questions.length)} pages including Thank You</p><div className="grid grid-cols-2 gap-2"><Button type="button" disabled={busy} onClick={save} variant="outline" className="h-11 gap-2 rounded-xl border-white/10 bg-white/[0.03] px-3 text-xs font-extrabold sm:px-4 sm:text-sm"><Save className="h-4 w-4" /><span className="sm:hidden">Save</span><span className="hidden sm:inline">Save & Generate</span></Button><Button type="button" disabled={busy || status === "deployed"} onClick={requestDeploy} className="h-11 gap-2 rounded-xl bg-cyan-400 px-3 text-xs font-extrabold text-slate-950 hover:bg-cyan-300 sm:px-4 sm:text-sm"><Send className="h-4 w-4" /> Deploy Funnel</Button></div></div>
       </div>
     </div>

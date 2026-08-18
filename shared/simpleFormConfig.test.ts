@@ -15,6 +15,8 @@ import { SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT } from "./simpleFormContract";
 const missingSecrets = {
   META_CAPI_ACCESS_TOKEN: false,
   GHL_API_KEY: false,
+  GOOGLE_SERVICE_ACCOUNT_EMAIL: false,
+  GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: false,
   STAGE_WEBHOOK_SECRET: false,
   ALERT_WEBHOOK_URL: false,
 };
@@ -22,6 +24,8 @@ const missingSecrets = {
 const readySecrets = {
   META_CAPI_ACCESS_TOKEN: true,
   GHL_API_KEY: true,
+  GOOGLE_SERVICE_ACCOUNT_EMAIL: true,
+  GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: true,
   STAGE_WEBHOOK_SECRET: true,
   ALERT_WEBHOOK_URL: false,
 };
@@ -40,10 +44,12 @@ function buildReadyRecord(): SimpleFormStoredRecord {
   });
   record.config.meta.pixelId = "123456789012345";
   record.config.serviceAreaZipCodes = ["58701"];
-  record.config.inventory.products = record.config.inventory.products.map((product, index) => ({
-    ...product,
-    ctaUrl: `https://northland.example/products/${index + 1}`,
-  }));
+  record.config.inventory.products = record.config.inventory.products.map(
+    (product, index) => ({
+      ...product,
+      ctaUrl: `https://northland.example/products/${index + 1}`,
+    })
+  );
   return record;
 }
 
@@ -58,7 +64,9 @@ describe("Simple Form operator defaults", () => {
     expect(config.meta.pixelId).toBe("");
     expect(config.serviceAreaZipCodes).toEqual([]);
     expect(config.inventory.products).toHaveLength(5);
-    expect(config.inventory.products.every(product => product.ctaUrl === "")).toBe(true);
+    expect(
+      config.inventory.products.every(product => product.ctaUrl === "")
+    ).toBe(true);
     expect(config.funnel.shape).toBe("A");
     expect(config.surveyQuestions).toEqual([]);
   });
@@ -92,6 +100,8 @@ describe("Simple Form readiness", () => {
     expect(missing).toContain("GHL Location ID");
     expect(missing).toContain("GHL API Key");
     expect(missing).toContain("Google Sheet ID");
+    expect(missing).toContain("Google service-account email");
+    expect(missing).toContain("Google service-account private key");
     expect(missing).toContain("Lifecycle Callback Secret");
     expect(missing.some(item => item.includes("CTA URL"))).toBe(true);
   });
@@ -100,7 +110,7 @@ describe("Simple Form readiness", () => {
     const readiness = buildSimpleFormReadiness(
       buildReadyRecord(),
       readySecrets,
-      readyIntegration,
+      readyIntegration
     );
 
     expect(readiness.configurationReady).toBe(true);
@@ -110,20 +120,30 @@ describe("Simple Form readiness", () => {
     ["STAGE_WEBHOOK_SECRET", "Lifecycle Callback Secret", "productionSecrets"],
     ["META_CAPI_ACCESS_TOKEN", "Meta CAPI Access Token", "meta"],
     ["GHL_API_KEY", "GHL API Key", "ghl"],
+    [
+      "GOOGLE_SERVICE_ACCOUNT_EMAIL",
+      "Google service-account email",
+      "googleSheets",
+    ],
+    [
+      "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
+      "Google service-account private key",
+      "googleSheets",
+    ],
   ] as const)(
     "requires offline conversion runtime secret %s",
     (runtimeKey, missingLabel, sectionKey) => {
       const readiness = buildSimpleFormReadiness(
         buildReadyRecord(),
         { ...readySecrets, [runtimeKey]: false },
-        readyIntegration,
+        readyIntegration
       );
 
       expect(readiness.configurationReady).toBe(false);
       expect(
-        readiness.sections.find(section => section.key === sectionKey)?.missing,
+        readiness.sections.find(section => section.key === sectionKey)?.missing
       ).toContain(missingLabel);
-    },
+    }
   );
 
   it("blocks readiness when the offline conversion contract is missing", () => {
@@ -131,13 +151,13 @@ describe("Simple Form readiness", () => {
       buildReadyRecord(),
       readySecrets,
       readyIntegration,
-      null,
+      null
     );
 
     expect(readiness.configurationReady).toBe(false);
     expect(
       readiness.sections.find(section => section.key === "offlineConversion")
-        ?.missing,
+        ?.missing
     ).toContain("Canonical offline conversion contract");
   });
 
@@ -149,13 +169,13 @@ describe("Simple Form readiness", () => {
       {
         ...SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT,
         joinKey: "leadId",
-      },
+      }
     );
 
     expect(readiness.configurationReady).toBe(false);
     expect(
       readiness.sections.find(section => section.key === "offlineConversion")
-        ?.missing,
+        ?.missing
     ).toContain("Canonical offline conversion contract");
   });
 
@@ -204,17 +224,21 @@ describe("Simple Form readiness", () => {
     const readiness = buildSimpleFormReadiness(
       record,
       readySecrets,
-      readyIntegration,
+      readyIntegration
     );
 
     expect(readiness.configurationReady).toBe(false);
   });
 
   it("rejects an invalid client Meta Pixel ID", () => {
-    const readiness = buildSimpleFormReadiness(buildReadyRecord(), readySecrets, {
-      ...readyIntegration,
-      META_PIXEL_ID: "not-a-pixel-id",
-    });
+    const readiness = buildSimpleFormReadiness(
+      buildReadyRecord(),
+      readySecrets,
+      {
+        ...readyIntegration,
+        META_PIXEL_ID: "not-a-pixel-id",
+      }
+    );
 
     expect(readiness.configurationReady).toBe(false);
   });
@@ -235,13 +259,16 @@ describe("Simple Form readiness", () => {
 
 describe("Simple Form helpers", () => {
   it("parses unique 5-digit ZIP lists", () => {
-    expect(parseServiceAreaZips("58701, 58702\n58701")).toEqual(["58701", "58702"]);
+    expect(parseServiceAreaZips("58701, 58702\n58701")).toEqual([
+      "58701",
+      "58702",
+    ]);
   });
 
   it("builds a client-specific slug without colliding", () => {
     expect(simpleFormFunnelSlug("Northland", [])).toBe("northland-simple-form");
     expect(simpleFormFunnelSlug("Northland", ["northland-simple-form"])).toBe(
-      "northland-simple-form-2",
+      "northland-simple-form-2"
     );
   });
 
@@ -251,7 +278,7 @@ describe("Simple Form helpers", () => {
     record.imageSources.logo = { mode: "client-media", slot: "logo" };
 
     expect(resolveSimpleFormImages(record, []).client.logoUrl).toBe(
-      SIMPLE_FORM_TEMPLATE_LOGO_URL,
+      SIMPLE_FORM_TEMPLATE_LOGO_URL
     );
   });
 });

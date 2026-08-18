@@ -45,6 +45,32 @@ export type AstroSectionType = (typeof ASTRO_SECTION_TYPE_VALUES)[number];
 export type AstroCategory = (typeof ASTRO_CATEGORY_VALUES)[number];
 export type AstroIntegration = (typeof ASTRO_INTEGRATION_VALUES)[number];
 
+export const ASTRO_SECTION_LABELS: Record<AstroSectionType, string> = {
+  hero: "Hero",
+  cards: "Product cards",
+  visit: "Visit showroom",
+  steps: "How it works",
+  gallery: "Gallery",
+  reviews: "Reviews",
+  bignumber: "Featured number",
+  faq: "FAQ",
+  ctaband: "Call-to-action band",
+  cta: "Call to action",
+};
+
+export const ASTRO_SECTION_DESCRIPTIONS: Record<AstroSectionType, string> = {
+  hero: "Main headline, supporting copy, and primary action.",
+  cards: "Product or service cards customers can browse.",
+  visit: "Showroom information and a reason to visit.",
+  steps: "A short sequence explaining what happens next.",
+  gallery: "Approved website imagery.",
+  reviews: "Approved customer feedback.",
+  bignumber: "One prominent proof point or business statistic.",
+  faq: "Common customer questions and answers.",
+  ctaband: "A compact conversion prompt between sections.",
+  cta: "The final action customers should take.",
+};
+
 export const ASTRO_ASSET_LABELS: Record<AstroAssetSlot, string> = {
   navLogo: "Navigation logo",
   footerLogo: "Footer logo",
@@ -96,10 +122,10 @@ export const WRANGLER_SECRET_DESCRIPTIONS: Record<WranglerSecretName, string> = 
   META_CAPI_ACCESS_TOKEN: "Meta server-side tracking token",
   META_VALUE_QUALIFIED: "Lead value used for qualified prospects",
   META_VALUE_SCHEDULE: "Lead value used for scheduled appointments",
-  META_VALUE_SHOWED: "Lead value used for completed showroom visits",
+  META_VALUE_SHOWED: "Lead value used for completed appointments",
   STAGE_WEBHOOK_SECRET: "Shared secret for stage-change webhooks",
-  GOOGLE_SHEETS_ID: "Destination Google Sheet ID",
-  GOOGLE_SERVICE_ACCOUNT_EMAIL: "Google service-account email",
+  GOOGLE_SHEETS_ID: "Destination Google Sheet ID (share the sheet with the service account below)",
+  GOOGLE_SERVICE_ACCOUNT_EMAIL: "Google service-account email that has Editor access to the destination sheet",
   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: "Google service-account private key",
   ALERT_WEBHOOK_URL: "Webhook that receives site alerts",
   ADMIN_PASSWORD: "Password for the site admin area",
@@ -201,6 +227,21 @@ export const astroHomepageSectionSchema = z
     }
   });
 
+export const astroHomepageSectionOrderSchema = z
+  .array(
+    z.object({
+      id: z.string().min(1),
+      type: z.enum(ASTRO_SECTION_TYPE_VALUES),
+      enabled: z.boolean(),
+    }),
+  )
+  .max(40)
+  .superRefine((sections, context) => {
+    if (new Set(sections.map(section => section.id)).size !== sections.length) {
+      context.addIssue({ code: "custom", message: "Each homepage section must appear once." });
+    }
+  });
+
 export const astroIntegrationSchema = z
   .object({ enabled: z.boolean(), config: z.record(z.string(), z.string().max(2000)) })
   .superRefine((integration, context) => {
@@ -208,6 +249,13 @@ export const astroIntegrationSchema = z
       context.addIssue({ code: "custom", path: ["config"], message: "Complete at least one setup field." });
     }
   });
+
+const profileBackedAstroIntegrationSchema = z.object({
+  enabled: z.boolean(),
+  // Historical rows stored GHL/Meta identifiers and even webhook values here.
+  // The canonical client profile owns them now, so parsing always strips them.
+  config: z.record(z.string(), z.string().max(2000)).transform(() => ({})),
+});
 
 export const astroClientConfigInputSchema = z.object({
   identity: z.object({
@@ -262,12 +310,20 @@ export const astroClientConfigInputSchema = z.object({
   categories: z.record(z.enum(ASTRO_CATEGORY_VALUES), astroCategorySchema),
   financing: astroFinancingSchema,
   homepageSections: z.array(astroHomepageSectionSchema).max(40),
-  integrations: z.record(z.enum(ASTRO_INTEGRATION_VALUES), astroIntegrationSchema),
+  integrations: z.object({
+    d1: astroIntegrationSchema,
+    r2: astroIntegrationSchema,
+    ghl: profileBackedAstroIntegrationSchema,
+    meta: profileBackedAstroIntegrationSchema,
+    zaraz: astroIntegrationSchema,
+    sentry: astroIntegrationSchema,
+  }),
 });
 
 export type AstroClientConfigInput = z.infer<typeof astroClientConfigInputSchema>;
 export type AstroNavigationItem = z.infer<typeof astroNavigationItemSchema>;
 export type AstroHomepageSection = z.infer<typeof astroHomepageSectionSchema>;
+export type AstroHomepageSectionOrder = z.infer<typeof astroHomepageSectionOrderSchema>;
 
 const sectionFields: Record<AstroSectionType, Record<string, string>> = {
   hero: { eyebrow: "", headline: "", subheadline: "", ctaLabel: "", ctaHref: "" },
@@ -299,8 +355,8 @@ export function createAstroHomepageSection(
 export const ASTRO_INTEGRATION_FIELDS: Record<AstroIntegration, Record<string, string>> = {
   d1: { binding: "Binding name", databaseName: "Database name" },
   r2: { binding: "Binding name", bucketName: "Bucket name" },
-  ghl: { locationId: "Location ID", webhookUrl: "Webhook URL" },
-  meta: { pixelId: "Pixel ID", datasetId: "Dataset ID" },
+  ghl: {},
+  meta: {},
   zaraz: { endpoint: "Zaraz endpoint", debug: "Debug mode" },
   sentry: { dsn: "Sentry DSN", environment: "Environment" },
 };

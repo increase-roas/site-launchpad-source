@@ -2,11 +2,17 @@ import type { TrpcContext } from "./_core/context";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createDefaultAstroConfig } from "../shared/astroConfig";
 import { BUSINESS_DAY_VALUES } from "../shared/client";
+import {
+  buildClientIntegrationProfileDto,
+  emptyIdentifiers,
+  emptySecretPresence,
+} from "../shared/clientIntegrationProfile";
 import { UNAUTHED_ERR_MSG } from "../shared/const";
 
 const mocks = vi.hoisted(() => ({
   getAstroConfigView: vi.fn(),
   saveAstroConfig: vi.fn(),
+  saveAstroHomepageSectionOrder: vi.fn(),
   saveWranglerSecrets: vi.fn(),
   startPublish: vi.fn(),
   advancePublish: vi.fn(),
@@ -16,6 +22,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("./astroConfigDb", () => ({
   getAstroConfigView: mocks.getAstroConfigView,
   saveAstroConfig: mocks.saveAstroConfig,
+  saveAstroHomepageSectionOrder: mocks.saveAstroHomepageSectionOrder,
   saveWranglerSecrets: mocks.saveWranglerSecrets,
 }));
 vi.mock("./publisher/publishAstroSite", () => ({
@@ -64,6 +71,17 @@ const config = createDefaultAstroConfig({
   theme: "mono",
 });
 
+const savedSecretPresence = emptySecretPresence();
+savedSecretPresence.GHL_API_KEY = "SET";
+const savedIntegrationProfile = buildClientIntegrationProfileDto({
+  clientId: 5,
+  identifiers: emptyIdentifiers(),
+  secretPresence: savedSecretPresence,
+  lastUpdated: new Date("2026-08-18T12:00:00.000Z"),
+  reconciliationStatus: "ready",
+  conflictedKeys: [],
+});
+
 const view = {
   clientId: 5,
   input: config,
@@ -84,6 +102,14 @@ const view = {
     ADMIN_PASSWORD: false,
     ADMIN_SESSION_SECRET: false,
   },
+  integrationProfile: buildClientIntegrationProfileDto({
+    clientId: 5,
+    identifiers: emptyIdentifiers(),
+    secretPresence: emptySecretPresence(),
+    lastUpdated: null,
+    reconciliationStatus: "pending",
+    conflictedKeys: [],
+  }),
   generatedConfig: "export const clientConfig = { pixel: 'raw-secret-pixel' } as const;",
   generatedAt: null,
 };
@@ -111,7 +137,12 @@ describe("authenticated Astro config procedures", () => {
     vi.clearAllMocks();
     mocks.getAstroConfigView.mockResolvedValue(view);
     mocks.saveAstroConfig.mockResolvedValue(view);
-    mocks.saveWranglerSecrets.mockResolvedValue({ ...view, secretStatus: { ...view.secretStatus, GHL_API_KEY: true } });
+    mocks.saveAstroHomepageSectionOrder.mockResolvedValue(view);
+    mocks.saveWranglerSecrets.mockResolvedValue({
+      ...view,
+      secretStatus: { ...view.secretStatus, GHL_API_KEY: true },
+      integrationProfile: savedIntegrationProfile,
+    });
     mocks.startPublish.mockResolvedValue({ ...publishView, status: "pending" });
     mocks.advancePublish.mockResolvedValue(publishView);
     mocks.publishStatus.mockResolvedValue(publishView);
@@ -123,6 +154,8 @@ describe("authenticated Astro config procedures", () => {
     expect(loaded.generatedConfig).toBe("");
     expect(loaded.hasGeneratedConfig).toBe(true);
     expect(JSON.stringify(loaded)).not.toContain("raw-secret-pixel");
+    expect(loaded.integrationProfile.secretPresence.GHL_API_KEY).toBe("NOT SET");
+    expect(JSON.stringify(loaded.integrationProfile)).not.toContain("secretsEncrypted");
     const saved = await caller.save({ clientId: 5, config });
     expect(mocks.getAstroConfigView).toHaveBeenCalledWith(5);
     expect(mocks.saveAstroConfig).toHaveBeenCalledWith(5, config);
@@ -149,11 +182,26 @@ describe("authenticated Astro config procedures", () => {
     );
   });
 
+  it("saves homepage order through the Astro configuration source of truth", async () => {
+    const caller = astroConfigRouter.createCaller(context());
+    const sections = [...config.homepageSections].reverse().map(section => ({
+      id: section.id,
+      type: section.type,
+      enabled: section.enabled,
+    }));
+
+    await caller.saveHomepageSections({ clientId: 5, sections });
+
+    expect(mocks.saveAstroHomepageSectionOrder).toHaveBeenCalledWith(5, sections);
+    expect(mocks.saveAstroConfig).not.toHaveBeenCalled();
+  });
+
   it("saves entered secrets without returning their raw values", async () => {
     const caller = astroConfigRouter.createCaller(context());
     const result = await caller.saveSecrets({ clientId: 5, values: { GHL_API_KEY: "raw-secret" } });
     expect(mocks.saveWranglerSecrets).toHaveBeenCalledWith(5, { GHL_API_KEY: "raw-secret" });
     expect(result.secretStatus.GHL_API_KEY).toBe(true);
+    expect(result.integrationProfile.secretPresence.GHL_API_KEY).toBe("SET");
     expect(JSON.stringify(result)).not.toContain("raw-secret");
     expect(result.generatedConfig).toBe("");
   });

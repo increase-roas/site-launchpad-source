@@ -1,6 +1,7 @@
 import {
   astroClientConfigs,
   clientAssets,
+  clientIntegrationProfiles,
   clientLeadIntegrations,
   clientSecretSetups,
   funnelConfigs,
@@ -14,6 +15,7 @@ export const postgresConflictTargets = {
   users: users.authUserId,
   clientSecretSetups: clientSecretSetups.clientId,
   clientAssets: [clientAssets.clientId, clientAssets.slot],
+  clientIntegrationProfiles: clientIntegrationProfiles.clientId,
   clientLeadIntegrations: clientLeadIntegrations.clientId,
   astroClientConfigs: astroClientConfigs.clientId,
   wranglerSecretSetups: wranglerSecretSetups.clientId,

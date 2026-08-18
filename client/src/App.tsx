@@ -9,6 +9,7 @@ import AstroClientEditor from "./pages/AstroClientEditor";
 import DraftClientCreate from "./pages/DraftClientCreate";
 import Home from "./pages/Home";
 import MediaWorkspace from "./pages/MediaWorkspace";
+import ClientIntegrationsPage from "./pages/ClientIntegrationsPage";
 import PaidAdsWorkspace from "./pages/PaidAdsWorkspace";
 import WebsiteWorkspace from "./pages/WebsiteWorkspace";
 
@@ -43,6 +44,14 @@ function Router() {
           />
         )}
       </Route>
+      <Route path="/workspace/:clientId/integrations">
+        {params => (
+          <ClientIntegrationsPage
+            key={Number(params.clientId)}
+            clientId={Number(params.clientId)}
+          />
+        )}
+      </Route>
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
@@ -52,7 +61,7 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="dark">
+      <ThemeProvider defaultTheme="light" switchable>
         <TooltipProvider>
           <Toaster />
           <DashboardLayout>

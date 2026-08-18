@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   astroClientConfigs,
   clientAssets,
+  clientIntegrationProfiles,
   clientLeadIntegrations,
   clientSecretSetups,
   funnelConfigs,
@@ -69,6 +70,18 @@ const expectedConflictCallsites = {
     {
       insertedTable: "clientLeadIntegrations",
       target: "clientLeadIntegrations",
+      usesUpdatedAt: true,
+    },
+  ],
+  "server/clientIntegrations.ts": [
+    {
+      insertedTable: "clientIntegrationProfiles",
+      target: "clientIntegrationProfiles",
+      usesUpdatedAt: true,
+    },
+    {
+      insertedTable: "clientIntegrationProfiles",
+      target: "clientIntegrationProfiles",
       usesUpdatedAt: true,
     },
   ],
@@ -159,6 +172,9 @@ describe("PostgreSQL persistence helpers", () => {
       clientAssets.clientId,
       clientAssets.slot,
     ]);
+    expect(postgresConflictTargets.clientIntegrationProfiles).toBe(
+      clientIntegrationProfiles.clientId,
+    );
     expect(postgresConflictTargets.clientLeadIntegrations).toBe(
       clientLeadIntegrations.clientId,
     );
@@ -235,6 +251,7 @@ describe("PostgreSQL query callsites", () => {
       "server/astroConfigDb.ts",
       "server/funnelConfigDb.ts",
       "server/simpleFormDb.ts",
+      "server/clientIntegrations.ts",
       "server/workspaceDb.ts",
     ]) {
       const source = readFileSync(path, "utf8");

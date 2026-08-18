@@ -37,7 +37,7 @@ export function nextSerializedSave(inFlight: boolean): "send" | "queue" {
 }
 
 export function serializeHomepageSections(
-  sections: Array<{ id: number; sectionType: string; enabled: boolean }>,
+  sections: Array<{ id: string | number; sectionType: string; enabled: boolean }>,
 ): string {
   return JSON.stringify(sections);
 }

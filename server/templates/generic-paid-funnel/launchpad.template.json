@@ -1,0 +1,1925 @@
+{
+  "schemaVersion": 1,
+  "templateKey": "generic-paid-funnel",
+  "name": "Perspective-style Astro paid funnel",
+  "version": "1.0.0",
+  "kind": "paid-funnel",
+  "framework": "astro",
+  "steps": [
+    {
+      "key": "landing",
+      "type": "landing",
+      "slug": "/",
+      "title": "Opt-in page",
+      "seo": {
+        "title": "Opt-in page | Paid offer",
+        "description": "Opt-in page step for the generic paid funnel."
+      },
+      "nextStep": "survey-homeowner"
+    },
+    {
+      "key": "survey-homeowner",
+      "type": "survey",
+      "slug": "/survey/homeowner",
+      "title": "Homeownership",
+      "seo": {
+        "title": "Homeownership",
+        "description": "Do you own the property where this will be installed?"
+      },
+      "nextStep": "survey-timeline"
+    },
+    {
+      "key": "survey-timeline",
+      "type": "survey",
+      "slug": "/survey/timeline",
+      "title": "Timeline",
+      "seo": {
+        "title": "Timeline",
+        "description": "When would you like to get started?"
+      },
+      "nextStep": "form"
+    },
+    {
+      "key": "form",
+      "type": "form",
+      "slug": "/contact",
+      "title": "Contact form",
+      "seo": {
+        "title": "Contact form | Paid offer",
+        "description": "Contact form step for the generic paid funnel."
+      },
+      "nextStep": "thankYou"
+    },
+    {
+      "key": "thankYou",
+      "type": "thankYou",
+      "slug": "/thank-you",
+      "title": "Thank you",
+      "seo": {
+        "title": "Thank you | Paid offer",
+        "description": "Thank you step for the generic paid funnel."
+      }
+    }
+  ],
+  "previewEntry": "src/pages/index.astro",
+  "sectionPresets": [
+    {
+      "key": "blank",
+      "name": "Blank"
+    },
+    {
+      "key": "full-width",
+      "name": "Full width"
+    },
+    {
+      "key": "boxed",
+      "name": "Boxed"
+    },
+    {
+      "key": "hero",
+      "name": "Hero"
+    },
+    {
+      "key": "two-column",
+      "name": "Two column"
+    },
+    {
+      "key": "three-column",
+      "name": "Three column"
+    },
+    {
+      "key": "form",
+      "name": "Form"
+    },
+    {
+      "key": "testimonial",
+      "name": "Testimonial"
+    },
+    {
+      "key": "faq",
+      "name": "FAQ"
+    },
+    {
+      "key": "cta",
+      "name": "Call to action"
+    },
+    {
+      "key": "pricing",
+      "name": "Pricing"
+    },
+    {
+      "key": "footer",
+      "name": "Footer"
+    }
+  ],
+  "assets": [],
+  "configSchema": {},
+  "defaults": {
+    "globalStyles": {
+      "fonts": {
+        "heading": "Inter",
+        "body": "Inter"
+      },
+      "colors": {
+        "background": "#ffffff",
+        "surface": "#f8fafc",
+        "text": "#172033",
+        "muted": "#64748b",
+        "primary": "#1463f3",
+        "primaryText": "#ffffff",
+        "border": "#d8e0ec"
+      },
+      "button": {
+        "background": "#1463f3",
+        "color": "#ffffff",
+        "radius": 8,
+        "paddingX": 22,
+        "paddingY": 14,
+        "fontWeight": 800
+      },
+      "containers": {
+        "boxedMaxWidth": 1120,
+        "fullMaxWidth": 1440
+      },
+      "mobile": {
+        "sectionPadding": {
+          "top": 20,
+          "right": 20,
+          "bottom": 20,
+          "left": 20
+        },
+        "rowGap": 12
+      }
+    }
+  },
+  "integrations": [
+    {
+      "key": "ghl",
+      "kind": "ghl"
+    },
+    {
+      "key": "sheets",
+      "kind": "sheets"
+    },
+    {
+      "key": "meta",
+      "kind": "meta"
+    },
+    {
+      "key": "consent",
+      "kind": "consent"
+    }
+  ],
+  "requiredRuntimeSecrets": [
+    "GHL_API_KEY",
+    "GHL_LOCATION_ID",
+    "GOOGLE_SHEETS_ID",
+    "GOOGLE_SERVICE_ACCOUNT_EMAIL",
+    "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
+    "META_PIXEL_ID",
+    "META_CAPI_ACCESS_TOKEN",
+    "STAGE_WEBHOOK_SECRET"
+  ],
+  "readinessRules": [
+    {
+      "id": "steps",
+      "description": "Every funnel step is complete.",
+      "check": "step-complete"
+    },
+    {
+      "id": "form-mapping",
+      "description": "Form maps to the lead contract.",
+      "check": "form-mapping"
+    },
+    {
+      "id": "navigation",
+      "description": "Every next-step target exists.",
+      "check": "navigation-target"
+    },
+    {
+      "id": "integrations",
+      "description": "Required integrations are configured.",
+      "check": "integration"
+    },
+    {
+      "id": "tracking",
+      "description": "Pixel and UTM preservation are configured.",
+      "check": "tracking"
+    },
+    {
+      "id": "secrets",
+      "description": "Required runtime secrets are present.",
+      "check": "runtime-secret-presence"
+    },
+    {
+      "id": "package",
+      "description": "Package contract is valid.",
+      "check": "package"
+    },
+    {
+      "id": "build",
+      "description": "Build command and output directory are set.",
+      "check": "build"
+    },
+    {
+      "id": "adapter",
+      "description": "Publish adapter check passes.",
+      "check": "adapter"
+    }
+  ],
+  "build": {
+    "command": "npm run build",
+    "outputDir": "dist"
+  },
+  "publishAdapter": "generic-paid-funnel",
+  "resources": [
+    {
+      "type": "d1",
+      "name": "paid-funnel-events",
+      "binding": "FUNNEL_DB"
+    }
+  ],
+  "offlineConversionContract": {
+    "version": 1,
+    "joinKey": "leadUuid",
+    "callback": {
+      "method": "POST",
+      "route": "/api/lead-stage",
+      "authentication": "Bearer STAGE_WEBHOOK_SECRET"
+    },
+    "stageMappings": [
+      {
+        "pipelineStage": "Hot Pursuit",
+        "callbackStage": "qualified",
+        "metaEvent": "QualifiedLead"
+      },
+      {
+        "pipelineStage": "Appointment Set",
+        "callbackStage": "appointment",
+        "metaEvent": "Schedule"
+      },
+      {
+        "pipelineStage": "Showed",
+        "callbackStage": "show",
+        "metaEvent": "Showed"
+      },
+      {
+        "pipelineStage": "Sold",
+        "callbackStage": "sale",
+        "metaEvent": "Purchase"
+      }
+    ],
+    "requiredRuntimeSecrets": [
+      "GHL_API_KEY",
+      "GHL_LOCATION_ID",
+      "GOOGLE_SHEETS_ID",
+      "GOOGLE_SERVICE_ACCOUNT_EMAIL",
+      "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
+      "META_PIXEL_ID",
+      "META_CAPI_ACCESS_TOKEN",
+      "STAGE_WEBHOOK_SECRET"
+    ],
+    "deduplication": {
+      "idempotencyKey": "downstream_conversions.external_id",
+      "eventId": "downstream_conversions.event_id"
+    },
+    "originalAttribution": {
+      "reuse": true,
+      "fields": [
+        "first_url",
+        "original_query_string",
+        "fbc",
+        "fbp",
+        "ip_address",
+        "user_agent"
+      ]
+    },
+    "purchase": {
+      "requiresExplicitPositiveValue": true
+    }
+  },
+  "graph": {
+    "version": 1,
+    "pages": [
+      {
+        "id": "fixture_1",
+        "kind": "page",
+        "stepKey": "landing",
+        "sections": [
+          {
+            "id": "fixture_38",
+            "kind": "section",
+            "preset": "hero",
+            "layout": "full",
+            "maxWidth": 1120,
+            "minHeight": 560,
+            "alignment": "center",
+            "padding": {
+              "desktop": {
+                "top": 88,
+                "right": 32,
+                "bottom": 88,
+                "left": 32
+              },
+              "mobile": {
+                "top": 56,
+                "right": 16,
+                "bottom": 56,
+                "left": 16
+              }
+            },
+            "margin": {
+              "desktop": {
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            },
+            "background": {
+              "kind": "color",
+              "color": "#eef5ff"
+            },
+            "overlay": null,
+            "borderColor": "transparent",
+            "borderWidth": 0,
+            "borderRadius": 0,
+            "shadow": "none",
+            "sticky": false,
+            "anchor": "",
+            "className": "",
+            "visibility": {
+              "desktop": true,
+              "tablet": true,
+              "mobile": true
+            },
+            "rows": [
+              {
+                "id": "fixture_37",
+                "kind": "row",
+                "gap": 16,
+                "valign": "top",
+                "wrap": true,
+                "background": {
+                  "kind": "none"
+                },
+                "padding": {
+                  "desktop": {
+                    "top": 0,
+                    "right": 0,
+                    "bottom": 0,
+                    "left": 0
+                  }
+                },
+                "columns": [
+                  {
+                    "id": "fixture_36",
+                    "kind": "column",
+                    "widths": {
+                      "desktop": 100,
+                      "tablet": 100,
+                      "mobile": 100
+                    },
+                    "alignment": "left",
+                    "padding": {
+                      "desktop": {
+                        "top": 16,
+                        "right": 16,
+                        "bottom": 16,
+                        "left": 16
+                      }
+                    },
+                    "background": {
+                      "kind": "none"
+                    },
+                    "borderColor": "transparent",
+                    "borderWidth": 0,
+                    "borderRadius": 0,
+                    "visibility": {
+                      "desktop": true,
+                      "tablet": true,
+                      "mobile": true
+                    },
+                    "elements": [
+                      {
+                        "id": "fixture_33",
+                        "kind": "element",
+                        "type": "heading",
+                        "props": {
+                          "text": "Get a personalized recommendation in minutes",
+                          "tag": "h1"
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 56,
+                            "tablet": 42,
+                            "mobile": 34
+                          },
+                          "textAlign": {
+                            "desktop": "center"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "fontWeight": 800
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      },
+                      {
+                        "id": "fixture_34",
+                        "kind": "element",
+                        "type": "text",
+                        "props": {
+                          "text": "Answer a few quick questions and get the right next step for your needs."
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 18,
+                            "mobile": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "color": "#64748b"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      },
+                      {
+                        "id": "fixture_35",
+                        "kind": "element",
+                        "type": "button",
+                        "props": {
+                          "label": "Get started",
+                          "action": {
+                            "type": "nextStep"
+                          }
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 16
+                          },
+                          "textAlign": {
+                            "desktop": "center"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "fontWeight": 800
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "fixture_44",
+            "kind": "section",
+            "preset": "form",
+            "layout": "boxed",
+            "maxWidth": 1120,
+            "minHeight": 0,
+            "alignment": "left",
+            "padding": {
+              "desktop": {
+                "top": 56,
+                "right": 24,
+                "bottom": 56,
+                "left": 24
+              }
+            },
+            "margin": {
+              "desktop": {
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            },
+            "background": {
+              "kind": "none"
+            },
+            "overlay": null,
+            "borderColor": "transparent",
+            "borderWidth": 0,
+            "borderRadius": 0,
+            "shadow": "none",
+            "sticky": false,
+            "anchor": "lead-form",
+            "className": "",
+            "visibility": {
+              "desktop": true,
+              "tablet": true,
+              "mobile": true
+            },
+            "rows": [
+              {
+                "id": "fixture_43",
+                "kind": "row",
+                "gap": 16,
+                "valign": "top",
+                "wrap": true,
+                "background": {
+                  "kind": "none"
+                },
+                "padding": {
+                  "desktop": {
+                    "top": 0,
+                    "right": 0,
+                    "bottom": 0,
+                    "left": 0
+                  }
+                },
+                "columns": [
+                  {
+                    "id": "fixture_42",
+                    "kind": "column",
+                    "widths": {
+                      "desktop": 100,
+                      "tablet": 100,
+                      "mobile": 100
+                    },
+                    "alignment": "left",
+                    "padding": {
+                      "desktop": {
+                        "top": 16,
+                        "right": 16,
+                        "bottom": 16,
+                        "left": 16
+                      }
+                    },
+                    "background": {
+                      "kind": "none"
+                    },
+                    "borderColor": "transparent",
+                    "borderWidth": 0,
+                    "borderRadius": 0,
+                    "visibility": {
+                      "desktop": true,
+                      "tablet": true,
+                      "mobile": true
+                    },
+                    "elements": [
+                      {
+                        "id": "fixture_39",
+                        "kind": "element",
+                        "type": "heading",
+                        "props": {
+                          "text": "Get your personalized next step",
+                          "tag": "h2"
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 32,
+                            "tablet": 28,
+                            "mobile": 24
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "fontWeight": 800
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      },
+                      {
+                        "id": "fixture_40",
+                        "kind": "element",
+                        "type": "text",
+                        "props": {
+                          "text": "Share your contact details and we will follow up with the right recommendation."
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 18,
+                            "mobile": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "color": "#64748b"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      },
+                      {
+                        "id": "fixture_41",
+                        "kind": "element",
+                        "type": "form",
+                        "props": {
+                          "formId": "lead-form",
+                          "fields": [
+                            "zip",
+                            "firstName",
+                            "lastName",
+                            "email",
+                            "phone",
+                            "consent"
+                          ],
+                          "submitLabel": "Get my recommendation"
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "fixture_2",
+        "kind": "page",
+        "stepKey": "survey-homeowner",
+        "sections": [
+          {
+            "id": "fixture_7",
+            "kind": "section",
+            "preset": "boxed",
+            "layout": "boxed",
+            "maxWidth": 1120,
+            "minHeight": 520,
+            "alignment": "left",
+            "padding": {
+              "desktop": {
+                "top": 56,
+                "right": 24,
+                "bottom": 56,
+                "left": 24
+              }
+            },
+            "margin": {
+              "desktop": {
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            },
+            "background": {
+              "kind": "color",
+              "color": "#ffffff"
+            },
+            "overlay": null,
+            "borderColor": "transparent",
+            "borderWidth": 0,
+            "borderRadius": 0,
+            "shadow": "none",
+            "sticky": false,
+            "anchor": "",
+            "className": "",
+            "visibility": {
+              "desktop": true,
+              "tablet": true,
+              "mobile": true
+            },
+            "rows": [
+              {
+                "id": "fixture_6",
+                "kind": "row",
+                "gap": 16,
+                "valign": "top",
+                "wrap": true,
+                "background": {
+                  "kind": "none"
+                },
+                "padding": {
+                  "desktop": {
+                    "top": 0,
+                    "right": 0,
+                    "bottom": 0,
+                    "left": 0
+                  }
+                },
+                "columns": [
+                  {
+                    "id": "fixture_5",
+                    "kind": "column",
+                    "widths": {
+                      "desktop": 100,
+                      "tablet": 100,
+                      "mobile": 100
+                    },
+                    "alignment": "left",
+                    "padding": {
+                      "desktop": {
+                        "top": 16,
+                        "right": 16,
+                        "bottom": 16,
+                        "left": 16
+                      }
+                    },
+                    "background": {
+                      "kind": "none"
+                    },
+                    "borderColor": "transparent",
+                    "borderWidth": 0,
+                    "borderRadius": 0,
+                    "visibility": {
+                      "desktop": true,
+                      "tablet": true,
+                      "mobile": true
+                    },
+                    "elements": [
+                      {
+                        "id": "fixture_3",
+                        "kind": "element",
+                        "type": "heading",
+                        "props": {
+                          "text": "Do you own the property where this will be installed?",
+                          "tag": "h1"
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      },
+                      {
+                        "id": "fixture_4",
+                        "kind": "element",
+                        "type": "multipleChoice",
+                        "props": {
+                          "field": "homeowner",
+                          "question": "Do you own the property where this will be installed?",
+                          "options": [
+                            "Yes",
+                            "No",
+                            "Not yet"
+                          ],
+                          "autoAdvance": true
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "fixture_8",
+        "kind": "page",
+        "stepKey": "survey-timeline",
+        "sections": [
+          {
+            "id": "fixture_13",
+            "kind": "section",
+            "preset": "boxed",
+            "layout": "boxed",
+            "maxWidth": 1120,
+            "minHeight": 520,
+            "alignment": "left",
+            "padding": {
+              "desktop": {
+                "top": 56,
+                "right": 24,
+                "bottom": 56,
+                "left": 24
+              }
+            },
+            "margin": {
+              "desktop": {
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            },
+            "background": {
+              "kind": "color",
+              "color": "#ffffff"
+            },
+            "overlay": null,
+            "borderColor": "transparent",
+            "borderWidth": 0,
+            "borderRadius": 0,
+            "shadow": "none",
+            "sticky": false,
+            "anchor": "",
+            "className": "",
+            "visibility": {
+              "desktop": true,
+              "tablet": true,
+              "mobile": true
+            },
+            "rows": [
+              {
+                "id": "fixture_12",
+                "kind": "row",
+                "gap": 16,
+                "valign": "top",
+                "wrap": true,
+                "background": {
+                  "kind": "none"
+                },
+                "padding": {
+                  "desktop": {
+                    "top": 0,
+                    "right": 0,
+                    "bottom": 0,
+                    "left": 0
+                  }
+                },
+                "columns": [
+                  {
+                    "id": "fixture_11",
+                    "kind": "column",
+                    "widths": {
+                      "desktop": 100,
+                      "tablet": 100,
+                      "mobile": 100
+                    },
+                    "alignment": "left",
+                    "padding": {
+                      "desktop": {
+                        "top": 16,
+                        "right": 16,
+                        "bottom": 16,
+                        "left": 16
+                      }
+                    },
+                    "background": {
+                      "kind": "none"
+                    },
+                    "borderColor": "transparent",
+                    "borderWidth": 0,
+                    "borderRadius": 0,
+                    "visibility": {
+                      "desktop": true,
+                      "tablet": true,
+                      "mobile": true
+                    },
+                    "elements": [
+                      {
+                        "id": "fixture_9",
+                        "kind": "element",
+                        "type": "heading",
+                        "props": {
+                          "text": "When would you like to get started?",
+                          "tag": "h1"
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      },
+                      {
+                        "id": "fixture_10",
+                        "kind": "element",
+                        "type": "multipleChoice",
+                        "props": {
+                          "field": "timeline",
+                          "question": "When would you like to get started?",
+                          "options": [
+                            "As soon as possible",
+                            "Within 30 days",
+                            "Just researching"
+                          ],
+                          "autoAdvance": true
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "fixture_14",
+        "kind": "page",
+        "stepKey": "form",
+        "sections": [
+          {
+            "id": "fixture_20",
+            "kind": "section",
+            "preset": "form",
+            "layout": "boxed",
+            "maxWidth": 1120,
+            "minHeight": 0,
+            "alignment": "left",
+            "padding": {
+              "desktop": {
+                "top": 56,
+                "right": 24,
+                "bottom": 56,
+                "left": 24
+              }
+            },
+            "margin": {
+              "desktop": {
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            },
+            "background": {
+              "kind": "none"
+            },
+            "overlay": null,
+            "borderColor": "transparent",
+            "borderWidth": 0,
+            "borderRadius": 0,
+            "shadow": "none",
+            "sticky": false,
+            "anchor": "lead-form",
+            "className": "",
+            "visibility": {
+              "desktop": true,
+              "tablet": true,
+              "mobile": true
+            },
+            "rows": [
+              {
+                "id": "fixture_19",
+                "kind": "row",
+                "gap": 16,
+                "valign": "top",
+                "wrap": true,
+                "background": {
+                  "kind": "none"
+                },
+                "padding": {
+                  "desktop": {
+                    "top": 0,
+                    "right": 0,
+                    "bottom": 0,
+                    "left": 0
+                  }
+                },
+                "columns": [
+                  {
+                    "id": "fixture_18",
+                    "kind": "column",
+                    "widths": {
+                      "desktop": 100,
+                      "tablet": 100,
+                      "mobile": 100
+                    },
+                    "alignment": "left",
+                    "padding": {
+                      "desktop": {
+                        "top": 16,
+                        "right": 16,
+                        "bottom": 16,
+                        "left": 16
+                      }
+                    },
+                    "background": {
+                      "kind": "none"
+                    },
+                    "borderColor": "transparent",
+                    "borderWidth": 0,
+                    "borderRadius": 0,
+                    "visibility": {
+                      "desktop": true,
+                      "tablet": true,
+                      "mobile": true
+                    },
+                    "elements": [
+                      {
+                        "id": "fixture_15",
+                        "kind": "element",
+                        "type": "heading",
+                        "props": {
+                          "text": "Get your personalized next step",
+                          "tag": "h2"
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 32,
+                            "tablet": 28,
+                            "mobile": 24
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "fontWeight": 800
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      },
+                      {
+                        "id": "fixture_16",
+                        "kind": "element",
+                        "type": "text",
+                        "props": {
+                          "text": "Share your contact details and we will follow up with the right recommendation."
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 18,
+                            "mobile": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "color": "#64748b"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      },
+                      {
+                        "id": "fixture_17",
+                        "kind": "element",
+                        "type": "form",
+                        "props": {
+                          "formId": "lead-form",
+                          "fields": [
+                            "zip",
+                            "firstName",
+                            "lastName",
+                            "email",
+                            "phone",
+                            "consent"
+                          ],
+                          "submitLabel": "Get my recommendation"
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "fixture_25",
+            "kind": "section",
+            "preset": "faq",
+            "layout": "boxed",
+            "maxWidth": 1120,
+            "minHeight": 0,
+            "alignment": "left",
+            "padding": {
+              "desktop": {
+                "top": 56,
+                "right": 24,
+                "bottom": 56,
+                "left": 24
+              }
+            },
+            "margin": {
+              "desktop": {
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            },
+            "background": {
+              "kind": "none"
+            },
+            "overlay": null,
+            "borderColor": "transparent",
+            "borderWidth": 0,
+            "borderRadius": 0,
+            "shadow": "none",
+            "sticky": false,
+            "anchor": "",
+            "className": "",
+            "visibility": {
+              "desktop": true,
+              "tablet": true,
+              "mobile": true
+            },
+            "rows": [
+              {
+                "id": "fixture_24",
+                "kind": "row",
+                "gap": 16,
+                "valign": "top",
+                "wrap": true,
+                "background": {
+                  "kind": "none"
+                },
+                "padding": {
+                  "desktop": {
+                    "top": 0,
+                    "right": 0,
+                    "bottom": 0,
+                    "left": 0
+                  }
+                },
+                "columns": [
+                  {
+                    "id": "fixture_23",
+                    "kind": "column",
+                    "widths": {
+                      "desktop": 100,
+                      "tablet": 100,
+                      "mobile": 100
+                    },
+                    "alignment": "left",
+                    "padding": {
+                      "desktop": {
+                        "top": 16,
+                        "right": 16,
+                        "bottom": 16,
+                        "left": 16
+                      }
+                    },
+                    "background": {
+                      "kind": "none"
+                    },
+                    "borderColor": "transparent",
+                    "borderWidth": 0,
+                    "borderRadius": 0,
+                    "visibility": {
+                      "desktop": true,
+                      "tablet": true,
+                      "mobile": true
+                    },
+                    "elements": [
+                      {
+                        "id": "fixture_21",
+                        "kind": "element",
+                        "type": "heading",
+                        "props": {
+                          "text": "Before you book",
+                          "tag": "h2"
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 32,
+                            "tablet": 28,
+                            "mobile": 24
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "fontWeight": 800
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      },
+                      {
+                        "id": "fixture_22",
+                        "kind": "element",
+                        "type": "faq",
+                        "props": {
+                          "items": [
+                            {
+                              "question": "What happens after I submit?",
+                              "answer": "A specialist reviews your request and follows up with the best next step."
+                            },
+                            {
+                              "question": "Do you keep the click IDs?",
+                              "answer": "UTM and click IDs are preserved through the form step."
+                            }
+                          ]
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "fixture_26",
+        "kind": "page",
+        "stepKey": "thankYou",
+        "sections": [
+          {
+            "id": "fixture_32",
+            "kind": "section",
+            "preset": "hero",
+            "layout": "full",
+            "maxWidth": 1120,
+            "minHeight": 560,
+            "alignment": "center",
+            "padding": {
+              "desktop": {
+                "top": 88,
+                "right": 32,
+                "bottom": 88,
+                "left": 32
+              },
+              "mobile": {
+                "top": 56,
+                "right": 16,
+                "bottom": 56,
+                "left": 16
+              }
+            },
+            "margin": {
+              "desktop": {
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            },
+            "background": {
+              "kind": "color",
+              "color": "#eef5ff"
+            },
+            "overlay": null,
+            "borderColor": "transparent",
+            "borderWidth": 0,
+            "borderRadius": 0,
+            "shadow": "none",
+            "sticky": false,
+            "anchor": "",
+            "className": "",
+            "visibility": {
+              "desktop": true,
+              "tablet": true,
+              "mobile": true
+            },
+            "rows": [
+              {
+                "id": "fixture_31",
+                "kind": "row",
+                "gap": 16,
+                "valign": "top",
+                "wrap": true,
+                "background": {
+                  "kind": "none"
+                },
+                "padding": {
+                  "desktop": {
+                    "top": 0,
+                    "right": 0,
+                    "bottom": 0,
+                    "left": 0
+                  }
+                },
+                "columns": [
+                  {
+                    "id": "fixture_30",
+                    "kind": "column",
+                    "widths": {
+                      "desktop": 100,
+                      "tablet": 100,
+                      "mobile": 100
+                    },
+                    "alignment": "left",
+                    "padding": {
+                      "desktop": {
+                        "top": 16,
+                        "right": 16,
+                        "bottom": 16,
+                        "left": 16
+                      }
+                    },
+                    "background": {
+                      "kind": "none"
+                    },
+                    "borderColor": "transparent",
+                    "borderWidth": 0,
+                    "borderRadius": 0,
+                    "visibility": {
+                      "desktop": true,
+                      "tablet": true,
+                      "mobile": true
+                    },
+                    "elements": [
+                      {
+                        "id": "fixture_27",
+                        "kind": "element",
+                        "type": "heading",
+                        "props": {
+                          "text": "Get a personalized recommendation in minutes",
+                          "tag": "h1"
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 56,
+                            "tablet": 42,
+                            "mobile": 34
+                          },
+                          "textAlign": {
+                            "desktop": "center"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "fontWeight": 800
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      },
+                      {
+                        "id": "fixture_28",
+                        "kind": "element",
+                        "type": "text",
+                        "props": {
+                          "text": "Answer a few quick questions and get the right next step for your needs."
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 18,
+                            "mobile": 16
+                          },
+                          "textAlign": {
+                            "desktop": "left"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "color": "#64748b"
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      },
+                      {
+                        "id": "fixture_29",
+                        "kind": "element",
+                        "type": "button",
+                        "props": {
+                          "label": "Get started",
+                          "action": {
+                            "type": "nextStep"
+                          }
+                        },
+                        "styles": {
+                          "fontSize": {
+                            "desktop": 16
+                          },
+                          "textAlign": {
+                            "desktop": "center"
+                          },
+                          "padding": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "margin": {
+                            "desktop": {
+                              "top": 0,
+                              "right": 0,
+                              "bottom": 0,
+                              "left": 0
+                            }
+                          },
+                          "background": {
+                            "kind": "none"
+                          },
+                          "borderWidth": 0,
+                          "borderRadius": 0,
+                          "borderColor": "transparent",
+                          "shadow": "none",
+                          "fontWeight": 800
+                        },
+                        "visibility": {
+                          "desktop": true,
+                          "tablet": true,
+                          "mobile": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "funnelKey": "generic-paid-funnel",
+    "name": "Generic multi-step paid funnel",
+    "globalStyles": {
+      "fonts": {
+        "heading": "Inter",
+        "body": "Inter"
+      },
+      "colors": {
+        "background": "#ffffff",
+        "surface": "#f8fafc",
+        "text": "#172033",
+        "muted": "#64748b",
+        "primary": "#1463f3",
+        "primaryText": "#ffffff",
+        "border": "#d8e0ec"
+      },
+      "button": {
+        "background": "#1463f3",
+        "color": "#ffffff",
+        "radius": 8,
+        "paddingX": 22,
+        "paddingY": 14,
+        "fontWeight": 800
+      },
+      "containers": {
+        "boxedMaxWidth": 1120,
+        "fullMaxWidth": 1440
+      },
+      "mobile": {
+        "sectionPadding": {
+          "top": 20,
+          "right": 20,
+          "bottom": 20,
+          "left": 20
+        },
+        "rowGap": 12
+      }
+    },
+    "reusableSections": []
+  }
+}

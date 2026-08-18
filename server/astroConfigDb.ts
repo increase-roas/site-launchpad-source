@@ -4,30 +4,42 @@ import {
   clients,
   wranglerSecretSetups,
   type InsertWranglerSecretSetup,
-  type WranglerSecretSetup,
 } from "../drizzle/schema";
 import {
   ASTRO_ASSET_SLOT_VALUES,
   ASTRO_CATEGORY_VALUES,
   WRANGLER_SECRET_VALUES,
+  astroClientConfigInputSchema,
   createDefaultAstroConfig,
   emptyWranglerSecretStatus,
   generateAstroClientConfig,
   type AstroAssetSlot,
   type AstroClientConfigInput,
+  type AstroHomepageSection,
+  type AstroHomepageSectionOrder,
   type WranglerSecretName,
 } from "../shared/astroConfig";
-import { decryptSetupValue, encryptSetupValue, hasProtectedValue } from "./clientSecurity";
+import { decryptSetupValue, encryptSetupValue } from "./clientSecurity";
 import {
   getClientAssets,
   getClientById,
-  getClientSecretSetup,
   getDb,
   saveClientSecretSetup,
 } from "./db";
 import { postgresConflictTargets, withUpdatedAt } from "./postgresPersistence";
 import type { ProductCategory } from "../shared/client";
 import { getAstroSiteRuntimeSecrets } from "../shared/astroSiteContract";
+import {
+  clientIntegrationProfileResolverForClient,
+  loadOrBackfillResolvedClientIntegrationProfile,
+  saveClientIntegrationProfile,
+} from "./clientIntegrations";
+import { assertAstroSitePublishProfileReady } from "./studio/website/publishProfile";
+import {
+  isIdentifierKey,
+  type ClientIntegrationProfileDto,
+  type ClientIntegrationSecretKey,
+} from "../shared/clientIntegrationProfile";
 
 async function requireDb() {
   const db = await getDb();
@@ -86,8 +98,7 @@ export function mergeStoredAstroConfig(
   defaults: AstroClientConfigInput,
   row: typeof astroClientConfigs.$inferSelect | undefined,
 ): AstroClientConfigInput {
-  if (!row) return defaults;
-  return {
+  const merged = !row ? defaults : {
     ...defaults,
     socialLinks: { ...defaults.socialLinks, ...row.socialLinks } as AstroClientConfigInput["socialLinks"],
     brand: {
@@ -115,6 +126,34 @@ export function mergeStoredAstroConfig(
       ]),
     ) as AstroClientConfigInput["integrations"],
   };
+  return {
+    ...merged,
+    integrations: {
+      ...merged.integrations,
+      ghl: { ...merged.integrations.ghl, config: {} },
+      meta: { ...merged.integrations.meta, config: {} },
+    },
+  };
+}
+
+export function applyAstroHomepageSectionOrder(
+  existing: AstroHomepageSection[],
+  requested: AstroHomepageSectionOrder,
+): AstroHomepageSection[] {
+  if (requested.length !== existing.length) {
+    throw new Error("Homepage section order does not match the saved website configuration.");
+  }
+  const existingById = new Map(existing.map(section => [section.id, section]));
+  if (existingById.size !== existing.length) {
+    throw new Error("Saved homepage sections contain duplicate IDs.");
+  }
+  return requested.map(item => {
+    const section = existingById.get(item.id);
+    if (!section || section.type !== item.type) {
+      throw new Error("Homepage section order does not match the saved website configuration.");
+    }
+    return { ...section, enabled: item.enabled };
+  });
 }
 
 export function applyAstroAssetUrls(
@@ -135,24 +174,13 @@ export function applyAstroAssetUrls(
   };
 }
 
-async function getWranglerSecretRow(clientId: number): Promise<WranglerSecretSetup | undefined> {
-  const db = await requireDb();
-  const rows = await db
-    .select()
-    .from(wranglerSecretSetups)
-    .where(eq(wranglerSecretSetups.clientId, clientId))
-    .limit(1);
-  return rows[0];
-}
-
 export async function getAstroConfigView(clientId: number) {
   const db = await requireDb();
-  const [client, configRows, assets, wranglerRow, legacySecrets] = await Promise.all([
+  const [client, configRows, assets, integrationProfile] = await Promise.all([
     getClientById(clientId),
     db.select().from(astroClientConfigs).where(eq(astroClientConfigs.clientId, clientId)).limit(1),
     getClientAssets(clientId),
-    getWranglerSecretRow(clientId),
-    getClientSecretSetup(clientId),
+    loadOrBackfillResolvedClientIntegrationProfile(clientId),
   ]);
   if (!client) throw new Error("Client not found.");
 
@@ -173,13 +201,7 @@ export async function getAstroConfigView(clientId: number) {
     assets.filter(asset => isAstroAssetSlot(asset.slot)).map(asset => [asset.slot, asset.storageUrl]),
   );
   const input = applyAstroAssetUrls(mergeStoredAstroConfig(defaults, configRows[0]), assetUrls);
-  const secretStatus = emptyWranglerSecretStatus();
-  for (const name of WRANGLER_SECRET_VALUES) {
-    const column = secretColumnByName[name];
-    secretStatus[name] = hasProtectedValue(wranglerRow?.[column] as string | null | undefined);
-  }
-  secretStatus.GHL_API_KEY ||= hasProtectedValue(legacySecrets?.ghlApiKeyEncrypted);
-  secretStatus.META_PIXEL_ID ||= hasProtectedValue(legacySecrets?.metaPixelIdEncrypted);
+  const secretStatus = wranglerSecretStatusFromProfile(integrationProfile.dto);
 
   const generatedConfig = configRows[0]?.generatedConfigEncrypted
     ? decryptSetupValue(configRows[0].generatedConfigEncrypted)
@@ -190,6 +212,7 @@ export async function getAstroConfigView(clientId: number) {
     input,
     assets: assets.filter(asset => isAstroAssetSlot(asset.slot)),
     secretStatus,
+    integrationProfile: integrationProfile.dto,
     generatedConfig,
     generatedAt: configRows[0]?.generatedAt ?? null,
   };
@@ -204,41 +227,20 @@ export type AstroSitePublishMaterial = {
 export async function getAstroSitePublishMaterial(
   clientId: number,
 ): Promise<AstroSitePublishMaterial> {
-  const [view, wranglerRow, legacySecrets] = await Promise.all([
-    getAstroConfigView(clientId),
-    getWranglerSecretRow(clientId),
-    getClientSecretSetup(clientId),
-  ]);
+  // Loading the view first also performs the safe, missing-row-only legacy
+  // backfill. The resolver then reads the exact same canonical profile.
+  const view = await getAstroConfigView(clientId);
+  const resolver = await clientIntegrationProfileResolverForClient(clientId);
   const enabledIntegrations = {
     ghl: view.input.integrations.ghl.enabled,
     meta: view.input.integrations.meta.enabled,
   };
   const requiredNames = getAstroSiteRuntimeSecrets(enabledIntegrations);
-  const runtimeSecrets: Record<string, string> = {};
-  const missing: string[] = [];
-
-  for (const name of requiredNames) {
-    const typedName = name as WranglerSecretName;
-    const column = secretColumnByName[typedName];
-    const protectedValue = wranglerRow?.[column] as string | null | undefined;
-    const legacyProtected =
-      typedName === "GHL_API_KEY"
-        ? legacySecrets?.ghlApiKeyEncrypted
-        : typedName === "META_PIXEL_ID"
-          ? legacySecrets?.metaPixelIdEncrypted
-          : null;
-    const value = protectedValue
-      ? decryptSetupValue(protectedValue)
-      : legacyProtected
-        ? decryptSetupValue(legacyProtected)
-        : "";
-    if (!value.trim()) missing.push(name);
-    else runtimeSecrets[name] = value;
-  }
-
-  if (missing.length > 0) {
-    throw new Error(`Website runtime secrets are missing: ${missing.join(", ")}.`);
-  }
+  const { runtimeSecrets } = assertAstroSitePublishProfileReady({
+    clientId,
+    resolver,
+    requiredSecretNames: requiredNames,
+  });
   if (!view.generatedAt) {
     throw new Error("Save the website configuration before publishing.");
   }
@@ -258,7 +260,10 @@ export async function saveAstroConfig(clientId: number, input: AstroClientConfig
   const assetUrls = Object.fromEntries(
     assets.filter(asset => isAstroAssetSlot(asset.slot)).map(asset => [asset.slot, asset.storageUrl]),
   );
-  const normalized = applyAstroAssetUrls(input, assetUrls);
+  const normalized = mergeStoredAstroConfig(
+    applyAstroAssetUrls(input, assetUrls),
+    undefined,
+  );
   const generatedConfig = generateAstroClientConfig(normalized, assetUrls);
   const generatedAt = new Date();
 
@@ -327,6 +332,21 @@ export async function saveAstroConfig(clientId: number, input: AstroClientConfig
   return getAstroConfigView(clientId);
 }
 
+export async function saveAstroHomepageSectionOrder(
+  clientId: number,
+  requested: AstroHomepageSectionOrder,
+) {
+  const current = await getAstroConfigView(clientId);
+  const input = astroClientConfigInputSchema.parse({
+    ...current.input,
+    homepageSections: applyAstroHomepageSectionOrder(
+      current.input.homepageSections,
+      requested,
+    ),
+  });
+  return saveAstroConfig(clientId, input);
+}
+
 export async function saveWranglerSecrets(
   clientId: number,
   input: Partial<Record<WranglerSecretName, string>>,
@@ -334,6 +354,7 @@ export async function saveWranglerSecrets(
   const db = await requireDb();
   const existingClient = await getClientById(clientId);
   if (!existingClient) throw new Error("Client not found.");
+  await loadOrBackfillResolvedClientIntegrationProfile(clientId);
   const updates = protectWranglerSecretValues(input);
 
   if (Object.keys(updates).length > 0) {
@@ -351,7 +372,40 @@ export async function saveWranglerSecrets(
   if (input.META_PIXEL_ID?.trim()) legacyUpdates.metaPixelIdEncrypted = encryptSetupValue(input.META_PIXEL_ID.trim());
   if (Object.keys(legacyUpdates).length) await saveClientSecretSetup(clientId, legacyUpdates);
 
+  const identifiers: Partial<Record<"GHL_LOCATION_ID" | "GOOGLE_SHEETS_ID" | "META_PIXEL_ID", string>> = {};
+  const replaceSecrets: Partial<Record<ClientIntegrationSecretKey, string>> = {};
+  const resolvedKeys: WranglerSecretName[] = [];
+  for (const name of WRANGLER_SECRET_VALUES) {
+    const value = input[name]?.trim();
+    if (!value) continue;
+    resolvedKeys.push(name);
+    if (isIdentifierKey(name)) identifiers[name] = value;
+    else replaceSecrets[name] = value;
+  }
+  if (resolvedKeys.length > 0) {
+    // The canonical row is the source of truth. Legacy rows remain mirrored for
+    // compatibility, and explicitly replaced keys resolve only their own
+    // reconciliation conflicts without hiding unrelated conflicts.
+    await saveClientIntegrationProfile(clientId, {
+      identifiers,
+      replaceSecrets,
+      resolveConflictedKeys: resolvedKeys,
+    });
+  }
+
   return getAstroConfigView(clientId);
+}
+
+export function wranglerSecretStatusFromProfile(
+  profile: ClientIntegrationProfileDto,
+): Record<WranglerSecretName, boolean> {
+  const status = emptyWranglerSecretStatus();
+  for (const name of WRANGLER_SECRET_VALUES) {
+    status[name] = isIdentifierKey(name)
+      ? Boolean(profile.identifiers[name]?.trim())
+      : profile.secretPresence[name] === "SET";
+  }
+  return status;
 }
 
 export function protectWranglerSecretValues(

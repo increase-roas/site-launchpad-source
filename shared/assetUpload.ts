@@ -5,9 +5,6 @@ export const SUPPORTED_IMAGE_MIME_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
-  "image/avif",
-  "image/tiff",
-  "image/gif",
 ] as const;
 export type SupportedImageMimeType = (typeof SUPPORTED_IMAGE_MIME_TYPES)[number];
 

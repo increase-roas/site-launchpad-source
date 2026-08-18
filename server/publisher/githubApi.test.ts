@@ -12,10 +12,8 @@ type RecordedRequest = {
   init: RequestInit | undefined;
 };
 
-const PERSISTED_SOURCE_SHA =
-  "0123456789abcdef0123456789abcdef01234567";
-const EXPECTED_WORKFLOW_TITLE =
-  `Deploy publish-job-123 ${PERSISTED_SOURCE_SHA}`;
+const PERSISTED_SOURCE_SHA = "0123456789abcdef0123456789abcdef01234567";
+const EXPECTED_WORKFLOW_TITLE = `Deploy publish-job-123 ${PERSISTED_SOURCE_SHA}`;
 
 function jsonResponse(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), {
@@ -65,14 +63,17 @@ describe("GitHub publisher client", () => {
     const { fetchFn } = createMockFetch([
       jsonResponse({ object: { sha: PERSISTED_SOURCE_SHA } }),
     ]);
-    const client = createGitHubApiClient({ token: "opaque-test-credential", fetchFn });
+    const client = createGitHubApiClient({
+      token: "opaque-test-credential",
+      fetchFn,
+    });
     await expect(
       client.getBranchHeadSha({
         owner: "increaseroasir",
         repository: "32-htl-website-template-astrobuild",
         branch: "main",
         signal: abortSignal(),
-      }),
+      })
     ).resolves.toBe(PERSISTED_SOURCE_SHA);
   });
 
@@ -127,6 +128,46 @@ describe("GitHub publisher client", () => {
     expect(requests[0]?.init?.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it("creates an auto-initialized public organization repository for generated source", async () => {
+    const { fetchFn, requests } = createMockFetch([
+      jsonResponse(
+        {
+          id: 102,
+          name: "funnel-northland-7",
+          full_name: "customer-repositories/funnel-northland-7",
+          html_url:
+            "https://github.com/customer-repositories/funnel-northland-7",
+          default_branch: "main",
+          private: false,
+        },
+        201
+      ),
+    ]);
+    const client = createGitHubApiClient({
+      token: "opaque-test-credential",
+      fetchFn,
+    });
+
+    await expect(
+      client.createPublicRepository({
+        owner: "customer-repositories",
+        repository: "funnel-northland-7",
+        description: "Generated generic paid funnel generic-paid-funnel-7",
+        signal: abortSignal(),
+      })
+    ).resolves.toMatchObject({ id: 102, defaultBranch: "main" });
+    expect(requests[0]).toMatchObject({
+      url: "https://api.github.com/orgs/customer-repositories/repos",
+      init: { method: "POST" },
+    });
+    expect(parseRequestBody(requests[0])).toEqual({
+      name: "funnel-northland-7",
+      description: "Generated generic paid funnel generic-paid-funnel-7",
+      private: false,
+      auto_init: true,
+    });
+  });
+
   it("gets repository identity and template provenance", async () => {
     const { fetchFn, requests } = createMockFetch([
       jsonResponse({
@@ -159,6 +200,7 @@ describe("GitHub publisher client", () => {
     ).resolves.toEqual({
       id: 101,
       ownerLogin: "customer-repositories",
+      description: null,
       name: "northland-simple-form",
       fullName: "customer-repositories/northland-simple-form",
       private: false,
@@ -176,8 +218,12 @@ describe("GitHub publisher client", () => {
   });
 
   it("treats only repository lookup 404 as absent", async () => {
-    const notFound = createMockFetch([jsonResponse({ message: "Not Found" }, 404)]);
-    const forbidden = createMockFetch([jsonResponse({ message: "Forbidden" }, 403)]);
+    const notFound = createMockFetch([
+      jsonResponse({ message: "Not Found" }, 404),
+    ]);
+    const forbidden = createMockFetch([
+      jsonResponse({ message: "Forbidden" }, 403),
+    ]);
     const notFoundClient = createGitHubApiClient({
       token: "opaque-test-credential",
       fetchFn: notFound.fetchFn,
@@ -337,6 +383,97 @@ describe("GitHub publisher client", () => {
     });
   });
 
+  it("deletes only explicitly supplied stale managed paths in the same commit", async () => {
+    const { fetchFn, requests } = createMockFetch([
+      jsonResponse({ object: { sha: "base-commit-sha" } }),
+      jsonResponse({ tree: { sha: "base-tree-sha" } }),
+      jsonResponse({ sha: "new-tree-sha" }, 201),
+      jsonResponse({ sha: "new-commit-sha" }, 201),
+      jsonResponse({ object: { sha: "new-commit-sha" } }),
+    ]);
+    const client = createGitHubApiClient({
+      token: "opaque-test-credential",
+      fetchFn,
+    });
+
+    await client.commitFiles({
+      owner: "customer-repositories",
+      repository: "northland-website",
+      branch: "main",
+      message: "republish",
+      files: [{ path: "src/pages/index.astro", content: "new" }],
+      deletePaths: ["src/pages/old-offer.astro"],
+      signal: abortSignal(),
+    });
+
+    expect(parseRequestBody(requests[2])).toMatchObject({
+      tree: [
+        expect.objectContaining({
+          path: "src/pages/index.astro",
+          content: "new",
+        }),
+        {
+          path: "src/pages/old-offer.astro",
+          mode: "100644",
+          type: "blob",
+          sha: null,
+        },
+      ],
+    });
+  });
+
+  it("preflights organization Actions secret visibility without reading values", async () => {
+    const { fetchFn, requests } = createMockFetch([
+      jsonResponse({
+        name: "CLOUDFLARE_API_TOKEN",
+        visibility: "all",
+        selected_repositories_url: "ignored",
+      }),
+    ]);
+    const client = createGitHubApiClient({
+      token: "opaque-test-credential",
+      fetchFn,
+    });
+
+    await expect(
+      client.getOrganizationActionsSecret({
+        organization: "customer-repositories",
+        secretName: "CLOUDFLARE_API_TOKEN",
+        signal: abortSignal(),
+      })
+    ).resolves.toEqual({ name: "CLOUDFLARE_API_TOKEN", visibility: "all" });
+    expect(requests[0]?.url).toBe(
+      "https://api.github.com/orgs/customer-repositories/actions/secrets/CLOUDFLARE_API_TOKEN"
+    );
+    expect(JSON.stringify(requests)).not.toContain("secret-value");
+  });
+
+  it("reads the publisher managed-file manifest as text and tolerates absence", async () => {
+    const manifest = '{"version":1,"paths":["package.json"]}\n';
+    const { fetchFn } = createMockFetch([
+      jsonResponse({
+        type: "file",
+        encoding: "base64",
+        content: Buffer.from(manifest).toString("base64"),
+      }),
+      jsonResponse({ message: "Not Found" }, 404),
+    ]);
+    const client = createGitHubApiClient({
+      token: "opaque-test-credential",
+      fetchFn,
+    });
+    const input = {
+      owner: "customer-repositories",
+      repository: "northland-website",
+      path: ".site-launchpad/managed-files.json",
+      ref: "main",
+      signal: abortSignal(),
+    };
+
+    await expect(client.getFileText(input)).resolves.toBe(manifest);
+    await expect(client.getFileText(input)).resolves.toBeNull();
+  });
+
   it("does not begin another commit request after cancellation", async () => {
     const controller = new AbortController();
     const abortReason = new DOMException("Stop publishing.", "AbortError");
@@ -494,10 +631,10 @@ describe("GitHub publisher client", () => {
         branch: "main",
         message: "Publish website job-123 source",
         signal: abortSignal(),
-      }),
+      })
     ).resolves.toEqual({ commitSha: PERSISTED_SOURCE_SHA });
     expect(requests[0]?.url).toContain(
-      "/repos/customer-repositories/northland-website/commits?sha=main&per_page=100",
+      "/repos/customer-repositories/northland-website/commits?sha=main&per_page=100"
     );
   });
 

@@ -17,18 +17,13 @@ export default function Home() {
   const needsItemsCount = clientViews.filter(view => !view.readiness.isComplete).length;
 
   return (
-    <div className="mx-auto w-full max-w-[1480px] space-y-7 pb-10 sm:space-y-9 sm:p-2 lg:p-5">
-      <header className="relative overflow-hidden rounded-3xl border border-white/8 bg-[radial-gradient(circle_at_75%_-20%,rgba(34,211,238,0.18),transparent_36%),linear-gradient(135deg,rgba(20,31,43,0.96),rgba(12,19,28,0.96))] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.28)] sm:p-8 lg:p-10">
-        <div className="relative z-10 flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-cyan-400/10 px-3 py-1.5 text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-300 ring-1 ring-cyan-300/15">
-              <UsersRound className="h-4 w-4" aria-hidden="true" />
+    <div className="mx-auto w-full space-y-5 pb-10">
+      <header className="flex flex-col gap-4 border-b border-border pb-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">
               Client launch board
-            </div>
-            <h1 className="text-3xl font-extrabold tracking-[-0.035em] text-foreground sm:text-4xl lg:text-5xl">
-              Get every client ready to launch.
             </h1>
-            <p className="mt-4 max-w-2xl text-base font-medium leading-relaxed text-muted-foreground sm:text-lg">
+            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
               Open a client to see exactly what is finished and what still needs attention.
             </p>
           </div>
@@ -36,35 +31,34 @@ export default function Home() {
             type="button"
             size="lg"
             onClick={() => setLocation("/clients/new")}
-            className="h-14 w-full gap-2 rounded-2xl bg-cyan-400 px-6 text-base font-extrabold text-slate-950 shadow-[0_12px_35px_rgba(34,211,238,0.24)] hover:bg-cyan-300 lg:w-auto"
+            className="h-9 w-full gap-1.5 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 sm:w-auto"
           >
             <Plus className="h-5 w-5" aria-hidden="true" />
             Add new client
           </Button>
-        </div>
       </header>
 
       <section className="grid gap-3 sm:grid-cols-3">
-        <Card className="border-white/8 bg-card/70 p-5">
-          <p className="text-sm font-bold text-muted-foreground">All clients</p>
-          <p className="mt-2 text-3xl font-extrabold tabular-nums">{clientViews.length}</p>
+        <Card className="gap-2 border-border bg-card p-4 shadow-none">
+          <p className="text-xs font-semibold text-muted-foreground">All clients</p>
+          <p className="text-2xl font-semibold tabular-nums">{clientViews.length}</p>
         </Card>
-        <Card className="border-emerald-400/12 bg-emerald-400/[0.04] p-5">
+        <Card className="gap-2 border-border bg-card p-4 shadow-none">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-bold text-emerald-300">Ready</p>
-              <p className="mt-2 text-3xl font-extrabold tabular-nums">{readyCount}</p>
+              <p className="text-xs font-semibold text-emerald-300">Ready</p>
+              <p className="mt-1 text-2xl font-semibold tabular-nums">{readyCount}</p>
             </div>
             <span className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-400/10 text-emerald-300">
               <CheckCircle2 className="h-6 w-6" aria-hidden="true" />
             </span>
           </div>
         </Card>
-        <Card className="border-red-400/12 bg-red-400/[0.04] p-5">
+        <Card className="gap-2 border-border bg-card p-4 shadow-none">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-bold text-red-300">Needs items</p>
-              <p className="mt-2 text-3xl font-extrabold tabular-nums">{needsItemsCount}</p>
+              <p className="text-xs font-semibold text-red-300">Needs items</p>
+              <p className="mt-1 text-2xl font-semibold tabular-nums">{needsItemsCount}</p>
             </div>
             <span className="grid h-11 w-11 place-items-center rounded-2xl bg-red-400/10 text-red-300">
               <AlertCircle className="h-6 w-6" aria-hidden="true" />

@@ -51,15 +51,15 @@ function makeDependencies(
       buffer: PROCESSED,
       mimeType: "image/webp",
       byteSize: PROCESSED.length,
-      width: 1200,
-      height: 800,
+      width: 1600,
+      height: 900,
     })),
     processAstroImage: vi.fn(async () => ({
       buffer: PROCESSED,
       mimeType: "image/webp",
       byteSize: PROCESSED.length,
-      width: 1200,
-      height: 800,
+      width: 1600,
+      height: 900,
     })),
     putObject: vi.fn(async () => undefined),
     deleteObject: vi.fn(async () => undefined),
@@ -170,6 +170,22 @@ describe("asset upload requests", () => {
 describe("asset upload completion", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("rejects an image with the wrong dimensions before permanent storage", async () => {
+    const deps = makeDependencies({
+      processClientImage: vi.fn(async () => ({
+        buffer: PROCESSED,
+        mimeType: "image/webp",
+        byteSize: PROCESSED.length,
+        width: 1200,
+        height: 800,
+      })),
+    });
+    await expect(createAssetUploadService(deps).completeUpload(UPLOAD_ID)).rejects.toThrow(
+      "16:9",
+    );
+    expect(deps.putObject).not.toHaveBeenCalled();
   });
 
   it("rejects unknown, completed, failed, and expired sessions", async () => {

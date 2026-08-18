@@ -14,8 +14,6 @@ import {
 } from "@shared/simpleFormConfig";
 import {
   SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT,
-  type SimpleFormClientIntegrationFields,
-  type SimpleFormSecretGuide,
 } from "@shared/simpleFormContract";
 import type {
   FunnelPublishStatus,
@@ -25,14 +23,20 @@ import type {
 import {
   AlertCircle,
   ArrowLeft,
+  BarChart3,
   CheckCircle2,
+  ChevronRight,
   ExternalLink,
+  FileText,
+  GripVertical,
   Loader2,
+  MousePointer2,
   Rocket,
   Save,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 type PublishStateLike = {
   status: FunnelPublishStatus;
@@ -255,6 +259,12 @@ export function shouldAutoAdvancePublish(
   );
 }
 
+export function publishPollInterval(
+  publish: PublishStateLike | null | undefined,
+): 3_000 | false {
+  return shouldAutoAdvancePublish(publish ?? null) ? 3_000 : false;
+}
+
 export function publishProgressPercent(progress: {
   completed: number;
   total: number;
@@ -342,75 +352,393 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function SecretField({
-  guide,
-  present,
-  value,
-  onChange,
-  extra,
+type FunnelWorkspaceTab = "steps" | "stats" | "settings";
+
+const FUNNEL_TABS: Array<{ value: FunnelWorkspaceTab; label: string }> = [
+  { value: "steps", label: "Steps" },
+  { value: "stats", label: "Stats" },
+  { value: "settings", label: "Settings" },
+];
+
+function FunnelEditorHeader({
+  name,
+  slug,
+  activeTab,
+  onTab,
+  onBack,
 }: {
-  guide: SimpleFormSecretGuide;
-  present: boolean;
-  value: string;
-  onChange: (value: string) => void;
-  extra?: ReactNode;
+  name: string;
+  slug: string;
+  activeTab: FunnelWorkspaceTab;
+  onTab: (tab: FunnelWorkspaceTab) => void;
+  onBack: () => void;
 }) {
-  const requirement =
-    guide.requirement === "required"
-      ? "Required"
-      : guide.requirement === "testing-only"
-        ? "Testing Only"
-        : guide.requirement === "generated"
-          ? "Generated"
-          : "Optional";
   return (
-    <div className="space-y-3 rounded-xl border border-white/8 bg-white/[0.025] p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        All funnels
+      </button>
+      <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="font-extrabold">{guide.friendlyName}</p>
-          <p className="mt-1 font-mono text-xs text-cyan-300">
-            {guide.runtimeKey}
-          </p>
+          <h1 className="text-xl font-semibold tracking-tight">{name}</h1>
+          <p className="mt-1 text-xs text-muted-foreground">/{slug}</p>
         </div>
-        <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground">
-          {requirement}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <Button type="button" variant="outline" size="icon-sm" className="rounded-md border-border bg-card" aria-label="Open funnel preview">
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
-      <p className="text-sm font-medium text-muted-foreground">
-        Required for: {guide.requiredFor}
-      </p>
-      {guide.requirement === "generated" ? (
-        extra
-      ) : (
-        <Input
-          type="password"
-          autoComplete="off"
-          value={value}
-          onChange={event => onChange(event.target.value)}
-          placeholder={
-            present ? "Saved — paste a new value to replace" : "Paste value"
-          }
-          className="h-12 rounded-xl border-white/10 bg-white/[0.035] font-mono text-sm"
-        />
-      )}
+      <nav className="mt-4 flex gap-1 border-b border-border" aria-label="Funnel workspace tabs">
+        {FUNNEL_TABS.map(tab => (
+          <button
+            key={tab.value}
+            type="button"
+            onClick={() => onTab(tab.value)}
+            className={`relative px-3 pb-2 pt-1 text-xs font-semibold after:absolute after:inset-x-1 after:bottom-[-1px] after:h-0.5 after:bg-primary ${
+              activeTab === tab.value
+                ? "text-primary after:opacity-100"
+                : "text-muted-foreground after:opacity-0 hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+type SimpleFormPageKey = "zip" | "contact" | "thank-you";
+type SimpleFormEditableField =
+  | "offer.headline"
+  | "offer.subheadline"
+  | "funnel.qualifyingLine"
+  | "funnel.ctaLabel"
+  | "trust.statement"
+  | "contact.headline"
+  | "contact.submitLabel"
+  | "contact.consent.text"
+  | "thankYou.headline"
+  | "thankYou.message"
+  | "inventory.headline"
+  | "inventory.subheadline";
+
+export function reorderSimpleFormProducts<T>(products: readonly T[], from: number, to: number): T[] {
+  if (from === to || from < 0 || to < 0 || from >= products.length || to >= products.length) {
+    return [...products];
+  }
+  const next = [...products];
+  const [moved] = next.splice(from, 1);
+  if (moved === undefined) return [...products];
+  next.splice(to, 0, moved);
+  return next;
+}
+
+function EditableCanvasBlock({
+  field,
+  selected,
+  onSelect,
+  children,
+}: {
+  field: SimpleFormEditableField;
+  selected: boolean;
+  onSelect: (field: SimpleFormEditableField) => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(field)}
+      className={`group relative block w-full rounded-md border px-4 py-3 text-left transition ${
+        selected
+          ? "border-primary bg-blue-50 ring-2 ring-primary/15"
+          : "border-transparent hover:border-primary/40 hover:bg-blue-50/60"
+      }`}
+    >
+      <span className="absolute -right-2 -top-2 hidden rounded bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground group-hover:block">
+        Edit
+      </span>
+      {children}
+    </button>
+  );
+}
+
+function SimpleFormFieldInspector({
+  field,
+  config,
+  onChange,
+}: {
+  field: SimpleFormEditableField;
+  config: SimpleFormOperatorConfig;
+  onChange: (config: SimpleFormOperatorConfig) => void;
+}) {
+  const value = (() => {
+    switch (field) {
+      case "offer.headline": return config.offer.headline;
+      case "offer.subheadline": return config.offer.subheadline;
+      case "funnel.qualifyingLine": return config.funnel.qualifyingLine;
+      case "funnel.ctaLabel": return config.funnel.ctaLabel;
+      case "trust.statement": return config.trust.statement;
+      case "contact.headline": return config.contact.headline;
+      case "contact.submitLabel": return config.contact.submitLabel;
+      case "contact.consent.text": return config.contact.consent.text;
+      case "thankYou.headline": return config.thankYou.headline;
+      case "thankYou.message": return config.thankYou.message;
+      case "inventory.headline": return config.inventory.headline;
+      case "inventory.subheadline": return config.inventory.subheadline;
+    }
+  })();
+  const multiline = field.endsWith("subheadline") || field.endsWith("message") || field.endsWith("statement") || field.endsWith("consent.text");
+  const label = field
+    .split(".")
+    .at(-1)!
+    .replace(/([A-Z])/g, " $1")
+    .replace(/^./, letter => letter.toUpperCase());
+
+  const update = (nextValue: string) => {
+    switch (field) {
+      case "offer.headline": onChange({ ...config, offer: { ...config.offer, headline: nextValue } }); break;
+      case "offer.subheadline": onChange({ ...config, offer: { ...config.offer, subheadline: nextValue } }); break;
+      case "funnel.qualifyingLine": onChange({ ...config, funnel: { ...config.funnel, qualifyingLine: nextValue } }); break;
+      case "funnel.ctaLabel": onChange({ ...config, funnel: { ...config.funnel, ctaLabel: nextValue } }); break;
+      case "trust.statement": onChange({ ...config, trust: { ...config.trust, statement: nextValue } }); break;
+      case "contact.headline": onChange({ ...config, contact: { ...config.contact, headline: nextValue } }); break;
+      case "contact.submitLabel": onChange({ ...config, contact: { ...config.contact, submitLabel: nextValue } }); break;
+      case "contact.consent.text": onChange({ ...config, contact: { ...config.contact, consent: { ...config.contact.consent, text: nextValue } } }); break;
+      case "thankYou.headline": onChange({ ...config, thankYou: { ...config.thankYou, headline: nextValue } }); break;
+      case "thankYou.message": onChange({ ...config, thankYou: { ...config.thankYou, message: nextValue } }); break;
+      case "inventory.headline": onChange({ ...config, inventory: { ...config.inventory, headline: nextValue } }); break;
+      case "inventory.subheadline": onChange({ ...config, inventory: { ...config.inventory, subheadline: nextValue } }); break;
+    }
+  };
+
+  return (
+    <div className="space-y-3">
       <div>
-        <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-muted-foreground">
-          Where do I find this?
-        </p>
-        <p className="mt-1 text-sm font-medium leading-relaxed text-muted-foreground">
-          {guide.whereToFind}
-        </p>
-        <a
-          href={guide.docsUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-2 inline-flex items-center gap-1 text-sm font-extrabold text-cyan-300"
-        >
-          Official documentation
-          <ExternalLink className="h-3.5 w-3.5" />
-        </a>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Selected element</p>
+        <p className="mt-1 text-sm font-semibold">{label}</p>
+      </div>
+      {multiline ? (
+        <Textarea aria-label={`Edit ${label}`} value={value} onChange={event => update(event.target.value)} className="min-h-32 resize-y bg-white text-sm" />
+      ) : (
+        <Input aria-label={`Edit ${label}`} value={value} onChange={event => update(event.target.value)} className="bg-white text-sm" />
+      )}
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        Changes appear on the canvas immediately. Save before leaving the funnel.
+      </p>
+    </div>
+  );
+}
+
+function FunnelStepsOverview({
+  config,
+  slug,
+  saving,
+  onConfigChange,
+  onSave,
+}: {
+  config: SimpleFormOperatorConfig;
+  slug: string;
+  saving: boolean;
+  onConfigChange: (config: SimpleFormOperatorConfig) => void;
+  onSave: () => void;
+}) {
+  const [selectedStep, setSelectedStep] = useState<SimpleFormPageKey>("zip");
+  const [selectedField, setSelectedField] = useState<SimpleFormEditableField>("offer.headline");
+  const [draggedProduct, setDraggedProduct] = useState<number | null>(null);
+  const steps: Array<{ key: SimpleFormPageKey; title: string; detail: string; defaultField: SimpleFormEditableField }> = [
+    { key: "zip", title: "ZIP code", detail: "Qualify the service area", defaultField: "offer.headline" },
+    { key: "contact", title: "Contact details", detail: "Collect the lead", defaultField: "contact.headline" },
+    { key: "thank-you", title: "Thank you", detail: "Confirm the submission", defaultField: "thankYou.headline" },
+  ];
+  const selectedIndex = steps.findIndex(step => step.key === selectedStep);
+  const selected = steps[selectedIndex] ?? steps[0]!;
+
+  const chooseStep = (step: (typeof steps)[number]) => {
+    setSelectedStep(step.key);
+    setSelectedField(step.defaultField);
+  };
+
+  const canvas = selectedStep === "zip" ? (
+    <div className="mx-auto w-full max-w-xl space-y-2 rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+      <div className="mx-auto mb-5 grid h-12 w-28 place-items-center rounded border border-dashed border-slate-300 text-xs font-semibold text-slate-500">Client logo</div>
+      <EditableCanvasBlock field="offer.headline" selected={selectedField === "offer.headline"} onSelect={setSelectedField}>
+        <h2 className="text-center text-2xl font-bold text-slate-900">{config.offer.headline}</h2>
+      </EditableCanvasBlock>
+      <EditableCanvasBlock field="offer.subheadline" selected={selectedField === "offer.subheadline"} onSelect={setSelectedField}>
+        <p className="text-center text-sm leading-relaxed text-slate-600">{config.offer.subheadline}</p>
+      </EditableCanvasBlock>
+      <div className="mx-4 mt-3 rounded-md border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-400">Enter ZIP code</div>
+      <EditableCanvasBlock field="funnel.ctaLabel" selected={selectedField === "funnel.ctaLabel"} onSelect={setSelectedField}>
+        <div className="rounded-md bg-primary px-4 py-3 text-center text-sm font-semibold text-primary-foreground">{config.funnel.ctaLabel}</div>
+      </EditableCanvasBlock>
+      <EditableCanvasBlock field="funnel.qualifyingLine" selected={selectedField === "funnel.qualifyingLine"} onSelect={setSelectedField}>
+        <p className="text-center text-xs leading-relaxed text-slate-500">{config.funnel.qualifyingLine}</p>
+      </EditableCanvasBlock>
+      <EditableCanvasBlock field="trust.statement" selected={selectedField === "trust.statement"} onSelect={setSelectedField}>
+        <p className="text-center text-xs leading-relaxed text-slate-500">{config.trust.statement}</p>
+      </EditableCanvasBlock>
+    </div>
+  ) : selectedStep === "contact" ? (
+    <div className="mx-auto w-full max-w-xl space-y-2 rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+      <EditableCanvasBlock field="contact.headline" selected={selectedField === "contact.headline"} onSelect={setSelectedField}>
+        <h2 className="text-center text-2xl font-bold text-slate-900">{config.contact.headline}</h2>
+      </EditableCanvasBlock>
+      {["First name", "Last name", "Phone", ...(config.contact.emailRequired ? ["Email"] : [])].map(label => (
+        <div key={label} className="mx-4 rounded-md border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-400">{label}</div>
+      ))}
+      <EditableCanvasBlock field="contact.consent.text" selected={selectedField === "contact.consent.text"} onSelect={setSelectedField}>
+        <p className="text-[10px] leading-relaxed text-slate-500">{config.contact.consent.text}</p>
+      </EditableCanvasBlock>
+      <EditableCanvasBlock field="contact.submitLabel" selected={selectedField === "contact.submitLabel"} onSelect={setSelectedField}>
+        <div className="rounded-md bg-primary px-4 py-3 text-center text-sm font-semibold text-primary-foreground">{config.contact.submitLabel}</div>
+      </EditableCanvasBlock>
+    </div>
+  ) : (
+    <div className="mx-auto w-full max-w-2xl space-y-2 rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+      <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full bg-emerald-100 text-xl text-emerald-600">✓</div>
+      <EditableCanvasBlock field="thankYou.headline" selected={selectedField === "thankYou.headline"} onSelect={setSelectedField}>
+        <h2 className="text-center text-2xl font-bold text-slate-900">{config.thankYou.headline}</h2>
+      </EditableCanvasBlock>
+      <EditableCanvasBlock field="thankYou.message" selected={selectedField === "thankYou.message"} onSelect={setSelectedField}>
+        <p className="text-center text-sm leading-relaxed text-slate-600">{config.thankYou.message}</p>
+      </EditableCanvasBlock>
+      <EditableCanvasBlock field="inventory.headline" selected={selectedField === "inventory.headline"} onSelect={setSelectedField}>
+        <h3 className="pt-3 text-lg font-bold text-slate-900">{config.inventory.headline}</h3>
+      </EditableCanvasBlock>
+      <EditableCanvasBlock field="inventory.subheadline" selected={selectedField === "inventory.subheadline"} onSelect={setSelectedField}>
+        <p className="text-sm leading-relaxed text-slate-600">{config.inventory.subheadline}</p>
+      </EditableCanvasBlock>
+      <p className="flex items-center gap-1.5 px-3 pt-2 text-[11px] font-semibold text-slate-500"><GripVertical className="h-3.5 w-3.5" /> Drag inventory cards to change their published order.</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {config.inventory.products.map((product, index) => (
+          <div
+            key={product.id}
+            draggable
+            onDragStart={() => setDraggedProduct(index)}
+            onDragEnd={() => setDraggedProduct(null)}
+            onDragOver={event => event.preventDefault()}
+            onDrop={event => {
+              event.preventDefault();
+              if (draggedProduct === null) return;
+              onConfigChange({
+                ...config,
+                inventory: {
+                  ...config.inventory,
+                  products: reorderSimpleFormProducts(config.inventory.products, draggedProduct, index),
+                },
+              });
+              setDraggedProduct(null);
+            }}
+            className={`flex cursor-grab items-center gap-2 rounded-md border bg-slate-50 p-3 text-xs text-slate-700 active:cursor-grabbing ${draggedProduct === index ? "border-primary opacity-50" : "border-slate-200"}`}
+          >
+            <GripVertical className="h-4 w-4 shrink-0 text-slate-400" />
+            <span className="truncate font-semibold">{product.name}</span>
+          </div>
+        ))}
       </div>
     </div>
+  );
+
+  return (
+    <section className="mt-3 overflow-hidden rounded-md border border-border bg-card lg:grid lg:grid-cols-[225px_minmax(0,1fr)]">
+      <aside className="border-b border-border bg-blue-50/80 lg:min-h-[680px] lg:border-b-0 lg:border-r">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-semibold text-slate-600">
+          <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Funnel steps
+        </div>
+        <div>
+          {steps.map((step, index) => (
+            <button
+              key={step.key}
+              type="button"
+              onClick={() => chooseStep(step)}
+              className={`flex w-full items-center gap-3 border-b border-blue-100 px-4 py-3 text-left ${selectedStep === step.key ? "bg-white text-foreground" : "text-slate-600 hover:bg-white/60"}`}
+            >
+              <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-sm ${selectedStep === step.key ? "bg-emerald-100 text-emerald-600" : "bg-blue-100 text-blue-500"}`}>
+                <FileText className="h-3.5 w-3.5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-semibold">{index + 1}. {step.title}</span>
+                <span className="mt-0.5 block truncate text-[11px] text-slate-500">{step.detail}</span>
+              </span>
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          ))}
+        </div>
+      </aside>
+
+      <div className="min-w-0 p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+          <div>
+            <p className="text-sm font-semibold">{selectedIndex + 1}. {selected.title}</p>
+            <p className="mt-1 text-xs text-muted-foreground">/{slug}/{selected.key}</p>
+          </div>
+          <Button type="button" size="sm" disabled={saving} onClick={onSave} className="rounded-md text-xs">
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Save page
+          </Button>
+        </div>
+
+        <div className="mt-4 flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+          <MousePointer2 className="h-3.5 w-3.5 shrink-0" /> Click any outlined page element to edit its real published content.
+        </div>
+        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(420px,1fr)_260px]">
+          <div className="min-h-[520px] overflow-auto rounded-md border border-slate-200 bg-slate-100 p-4 sm:p-6">{canvas}</div>
+          <div className="rounded-md border border-border bg-slate-50 p-4">
+            <SimpleFormFieldInspector field={selectedField} config={config} onChange={onConfigChange} />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FunnelStats({ funnelName }: { funnelName: string }) {
+  const rows = ["ZIP code", "Contact details", "Thank you"];
+  return (
+    <section className="mt-3 overflow-hidden rounded-md border border-border bg-card">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+        <div>
+          <p className="text-sm font-semibold">{funnelName} performance</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Analytics will populate after the funnel receives traffic.</p>
+        </div>
+        <Button type="button" variant="outline" size="sm" className="rounded-md border-border bg-card text-xs">
+          <BarChart3 className="h-3.5 w-3.5" /> Last 30 days
+        </Button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] border-collapse text-xs">
+          <thead className="bg-slate-50 text-slate-700">
+            <tr>
+              <th rowSpan={2} className="border-b border-r border-border px-4 py-2 text-left font-semibold">Funnel step</th>
+              <th colSpan={2} className="border-b border-r border-border px-3 py-2 font-semibold">Page views</th>
+              <th colSpan={2} className="border-b border-r border-border px-3 py-2 font-semibold">Leads</th>
+              <th colSpan={2} className="border-b border-border px-3 py-2 font-semibold">Conversion</th>
+            </tr>
+            <tr>
+              {['All', 'Unique', 'All', 'Rate', 'Completed', 'Rate'].map(label => (
+                <th key={label} className="border-b border-r border-border px-3 py-2 font-medium last:border-r-0">{label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={row} className={index % 2 ? "bg-slate-50/70" : "bg-white"}>
+                <td className="border-r border-border px-4 py-3 font-semibold text-slate-600"><span className="mr-2 text-slate-400">▱</span>{index + 1}. {row}</td>
+                {Array.from({ length: 6 }).map((_, cell) => (
+                  <td key={cell} className="border-r border-border px-3 py-3 text-center text-slate-400 last:border-r-0">—</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
@@ -498,20 +826,17 @@ export function SimpleFormFunnelEditor({
   onBack: () => void;
 }) {
   const utils = trpc.useUtils();
+  const [, setLocation] = useLocation();
   const query = trpc.simpleForm.get.useQuery({ clientId, funnelId });
   const publishQuery = trpc.simpleForm.publishStatus.useQuery(
     { clientId, funnelId },
-    { refetchInterval: 3_000 }
+    {
+      refetchInterval: state => publishPollInterval(state.state.data),
+    }
   );
   const [record, setRecord] = useState<SimpleFormStoredRecord | null>(null);
+  const [activeTab, setActiveTab] = useState<FunnelWorkspaceTab>("steps");
   const [zipText, setZipText] = useState("");
-  const [secretDrafts, setSecretDrafts] = useState<Record<string, string>>({});
-  const [integrationDrafts, setIntegrationDrafts] =
-    useState<SimpleFormClientIntegrationFields>({
-      GHL_LOCATION_ID: "",
-      GOOGLE_SHEETS_ID: "",
-      META_PIXEL_ID: "",
-    });
   const [activePublish, setActivePublish] = useState<{
     clientId: number;
     funnelId: number;
@@ -540,9 +865,11 @@ export function SimpleFormFunnelEditor({
     if (!query.data) return;
     setRecord(query.data.record);
     setZipText(query.data.record.config.serviceAreaZipCodes.join("\n"));
-    setSecretDrafts({});
-    setIntegrationDrafts(query.data.integration);
   }, [query.data]);
+
+  useEffect(() => {
+    setActiveTab("steps");
+  }, [funnelId]);
 
   useEffect(
     () => () => publishAdvanceController.dispose(),
@@ -554,14 +881,6 @@ export function SimpleFormFunnelEditor({
       await utils.simpleForm.get.invalidate({ clientId, funnelId });
       setRecord(view.record);
       toast.success("Funnel settings saved.");
-    },
-    onError: error => toast.error(error.message),
-  });
-  const integrationMutation = trpc.simpleForm.saveIntegration.useMutation({
-    onSuccess: async () => {
-      await utils.simpleForm.get.invalidate({ clientId, funnelId });
-      setSecretDrafts({});
-      toast.success("Lead integration settings saved.");
     },
     onError: error => toast.error(error.message),
   });
@@ -639,10 +958,6 @@ export function SimpleFormFunnelEditor({
 
   const readiness = query.data?.readiness;
   const assets = query.data?.assets ?? [];
-  const guides = useMemo(
-    () => query.data?.secretGuides ?? [],
-    [query.data?.secretGuides]
-  );
   const publishAction = publishActionForState(
     publish,
     publishAdvanceControl.pausedAfterErrorVersion
@@ -669,17 +984,46 @@ export function SimpleFormFunnelEditor({
     );
   }
 
+  const funnelName = query.data?.funnel.name ?? config.client.name;
+  const funnelSlug = query.data?.funnel.slug ?? "simple-form";
+  const header = (
+    <FunnelEditorHeader
+      name={funnelName}
+      slug={funnelSlug}
+      activeTab={activeTab}
+      onTab={setActiveTab}
+      onBack={onBack}
+    />
+  );
+
+  if (activeTab === "steps") {
+    return (
+      <div className="space-y-3">
+        {header}
+        <FunnelStepsOverview
+          config={config}
+          slug={funnelSlug}
+          saving={saveMutation.isPending}
+          onConfigChange={nextConfig => setRecord({ ...record, config: nextConfig })}
+          onSave={() => saveMutation.mutate({ clientId, funnelId, record })}
+        />
+      </div>
+    );
+  }
+
+  if (activeTab === "stats") {
+    return (
+      <div className="space-y-3">
+        {header}
+        <FunnelStats funnelName={funnelName} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-2 text-sm font-extrabold text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          All funnels
-        </button>
+      {header}
+      <div className="flex justify-end">
         <Button
           type="button"
           disabled={saveMutation.isPending}
@@ -696,7 +1040,7 @@ export function SimpleFormFunnelEditor({
               },
             })
           }
-          className="h-11 gap-2 rounded-xl bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
+          className="h-9 gap-2 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
         >
           {saveMutation.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -841,6 +1185,22 @@ export function SimpleFormFunnelEditor({
           ))}
         </div>
       </section>
+
+      <Section title="Client integrations">
+        <div className="space-y-3 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.035] p-4">
+          <p className="font-extrabold">One protected profile for this client</p>
+          <p className="text-sm font-medium text-muted-foreground">
+            GHL, Google Sheets, Meta, callback, and runtime values are entered once and reused by this funnel, every other funnel, and the website.
+          </p>
+          <Button
+            type="button"
+            onClick={() => setLocation(`/workspace/${clientId}/integrations`)}
+            className="h-11 rounded-xl bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
+          >
+            Open client integrations
+          </Button>
+        </div>
+      </Section>
 
       <Section title="Client">
         <Field label="Business name shown on the funnel">
@@ -999,20 +1359,6 @@ export function SimpleFormFunnelEditor({
       </Section>
 
       <Section title="Meta">
-        <Field
-          label="Meta Pixel ID"
-          hint="This is config, not a secret. Numbers only."
-        >
-          <Input
-            value={config.meta.pixelId}
-            onChange={event =>
-              patchConfig({
-                meta: { ...config.meta, pixelId: event.target.value },
-              })
-            }
-            className="h-12 rounded-xl border-white/10 bg-white/[0.035] font-mono"
-          />
-        </Field>
         <Field label="Lead conversion value">
           <Input
             type="number"
@@ -1029,40 +1375,9 @@ export function SimpleFormFunnelEditor({
             className="h-12 rounded-xl border-white/10 bg-white/[0.035]"
           />
         </Field>
-        {guides
-          .filter(guide => guide.runtimeKey === "META_CAPI_ACCESS_TOKEN")
-          .map(guide => (
-            <SecretField
-              key={guide.runtimeKey}
-              guide={guide}
-              present={Boolean(query.data?.secretStatus[guide.runtimeKey])}
-              value={secretDrafts[guide.runtimeKey] ?? ""}
-              onChange={value =>
-                setSecretDrafts(current => ({
-                  ...current,
-                  [guide.runtimeKey]: value,
-                }))
-              }
-            />
-          ))}
       </Section>
 
-      <Section title="GHL">
-        <Field
-          label="GHL Location ID"
-          hint="The client sub-account location ID."
-        >
-          <Input
-            value={integrationDrafts.GHL_LOCATION_ID ?? ""}
-            onChange={event =>
-              setIntegrationDrafts(current => ({
-                ...current,
-                GHL_LOCATION_ID: event.target.value,
-              }))
-            }
-            className="h-12 rounded-xl border-white/10 bg-white/[0.035] font-mono"
-          />
-        </Field>
+      <Section title="Offline conversion">
         <div className="space-y-2 rounded-xl border border-white/8 bg-white/[0.025] p-4">
           <p className="text-sm font-extrabold">
             Offline conversion callback stages
@@ -1079,81 +1394,6 @@ export function SimpleFormFunnelEditor({
             ))}
           </ul>
         </div>
-        {guides
-          .filter(guide => guide.runtimeKey === "GHL_API_KEY")
-          .map(guide => (
-            <SecretField
-              key={guide.runtimeKey}
-              guide={guide}
-              present={Boolean(query.data?.secretStatus[guide.runtimeKey])}
-              value={secretDrafts[guide.runtimeKey] ?? ""}
-              onChange={value =>
-                setSecretDrafts(current => ({
-                  ...current,
-                  [guide.runtimeKey]: value,
-                }))
-              }
-            />
-          ))}
-        <div className="space-y-3 rounded-xl border border-white/8 bg-white/[0.025] p-4">
-          <p className="font-extrabold">Lifecycle callback secret</p>
-          <p className="text-sm font-medium text-muted-foreground">
-            {query.data?.secretStatus.STAGE_WEBHOOK_SECRET
-              ? "Generated and saved. The value is never returned to the browser."
-              : "Not generated yet."}
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() =>
-              integrationMutation.mutate({
-                clientId,
-                funnelId,
-                regenerateStageWebhookSecret: true,
-              })
-            }
-            className="h-11 rounded-xl font-extrabold"
-          >
-            Generate a new secret
-          </Button>
-        </div>
-        <Button
-          type="button"
-          disabled={integrationMutation.isPending}
-          onClick={() =>
-            integrationMutation.mutate({
-              clientId,
-              funnelId,
-              GHL_LOCATION_ID: integrationDrafts.GHL_LOCATION_ID ?? "",
-              GOOGLE_SHEETS_ID: integrationDrafts.GOOGLE_SHEETS_ID ?? "",
-              META_PIXEL_ID: config.meta.pixelId,
-              GHL_API_KEY: secretDrafts.GHL_API_KEY,
-              META_CAPI_ACCESS_TOKEN: secretDrafts.META_CAPI_ACCESS_TOKEN,
-              ALERT_WEBHOOK_URL: secretDrafts.ALERT_WEBHOOK_URL,
-            })
-          }
-          className="h-11 rounded-xl bg-cyan-400 font-extrabold text-slate-950 hover:bg-cyan-300"
-        >
-          Save lead integration
-        </Button>
-      </Section>
-
-      <Section title="Google Sheets">
-        <Field
-          label="Lead vault Sheet ID"
-          hint="The spreadsheet ID used for All Leads and Missed Leads."
-        >
-          <Input
-            value={integrationDrafts.GOOGLE_SHEETS_ID ?? ""}
-            onChange={event =>
-              setIntegrationDrafts(current => ({
-                ...current,
-                GOOGLE_SHEETS_ID: event.target.value,
-              }))
-            }
-            className="h-12 rounded-xl border-white/10 bg-white/[0.035] font-mono"
-          />
-        </Field>
       </Section>
 
       <Section title="Inventory">
@@ -1364,22 +1604,6 @@ export function SimpleFormFunnelEditor({
             }
           />
         </div>
-        {guides
-          .filter(guide => guide.runtimeKey === "ALERT_WEBHOOK_URL")
-          .map(guide => (
-            <SecretField
-              key={guide.runtimeKey}
-              guide={guide}
-              present={Boolean(query.data?.secretStatus[guide.runtimeKey])}
-              value={secretDrafts[guide.runtimeKey] ?? ""}
-              onChange={value =>
-                setSecretDrafts(current => ({
-                  ...current,
-                  [guide.runtimeKey]: value,
-                }))
-              }
-            />
-          ))}
       </Section>
     </div>
   );

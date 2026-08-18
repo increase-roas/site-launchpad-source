@@ -53,9 +53,30 @@ export function toClientFunnelBuilderDetail<TFunnel, TQuestions>(detail: {
   };
 }
 
-export function toClientAstroConfigView<TView extends { generatedConfig: string }>(view: TView) {
+export function toClientAstroConfigView<
+  TView extends { generatedConfig: string; input?: unknown },
+>(view: TView) {
+  const input = view.input;
+  const safeInput =
+    input && typeof input === "object" && "integrations" in input
+      ? {
+          ...input,
+          integrations: {
+            ...(input.integrations as Record<string, unknown>),
+            ghl: {
+              ...((input.integrations as Record<string, unknown>).ghl as object | undefined),
+              config: {},
+            },
+            meta: {
+              ...((input.integrations as Record<string, unknown>).meta as object | undefined),
+              config: {},
+            },
+          },
+        }
+      : input;
   return {
     ...view,
+    ...(Object.prototype.hasOwnProperty.call(view, "input") ? { input: safeInput } : {}),
     generatedConfig: "",
     hasGeneratedConfig: Boolean(view.generatedConfig),
   };

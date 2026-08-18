@@ -8,6 +8,13 @@ export const GITHUB_API_VERSION = "2026-03-10";
 export const DEFAULT_PUBLISHER_REQUEST_TIMEOUT_MS = 10_000;
 export const REPOSITORY_GENERATION_TIMEOUT_MS = 15_000;
 
+export type CreatePublicRepositoryInput = {
+  owner: string;
+  repository: string;
+  description: string;
+  signal: AbortSignal;
+};
+
 export type GeneratePublicRepositoryInput = {
   templateOwner: string;
   templateRepository: string;
@@ -27,6 +34,7 @@ export type GeneratedRepository = {
 
 export type Repository = GeneratedRepository & {
   ownerLogin: string;
+  description: string | null;
   private: boolean;
   visibility: "public" | "private" | "internal";
   templateOwnerLogin: string | null;
@@ -57,7 +65,13 @@ export type CommitFilesInput = {
   branch: string;
   message: string;
   files: readonly { path: string; content: string }[];
+  deletePaths?: readonly string[];
   signal: AbortSignal;
+};
+
+export type OrganizationActionsSecret = {
+  name: string;
+  visibility: "all" | "private" | "selected";
 };
 
 export type DispatchWorkflowInput = {
@@ -99,10 +113,25 @@ export type GitHubApiClient = {
   generatePublicRepository(
     input: GeneratePublicRepositoryInput
   ): Promise<GeneratedRepository>;
+  createPublicRepository(
+    input: CreatePublicRepositoryInput
+  ): Promise<GeneratedRepository>;
   commitPublisherFiles(
     input: CommitPublisherFilesInput
   ): Promise<PublisherCommitResult>;
   commitFiles(input: CommitFilesInput): Promise<PublisherCommitResult>;
+  getFileText(input: {
+    owner: string;
+    repository: string;
+    path: string;
+    ref: string;
+    signal: AbortSignal;
+  }): Promise<string | null>;
+  getOrganizationActionsSecret(input: {
+    organization: string;
+    secretName: string;
+    signal: AbortSignal;
+  }): Promise<OrganizationActionsSecret | null>;
   findCommitByMessage(input: {
     owner: string;
     repository: string;
@@ -110,9 +139,7 @@ export type GitHubApiClient = {
     message: string;
     signal: AbortSignal;
   }): Promise<{ commitSha: string } | null>;
-  dispatchWorkflow(
-    input: DispatchWorkflowInput
-  ): Promise<void>;
+  dispatchWorkflow(input: DispatchWorkflowInput): Promise<void>;
   getWorkflowRun(input: {
     owner: string;
     repository: string;
@@ -216,13 +243,7 @@ function createRequest(options: {
   token: string;
   fetchFn: FetchFunction;
 }): GitHubRequest {
-  return async (
-    operation,
-    path,
-    init,
-    signal,
-    requestOptions = {}
-  ) => {
+  return async (operation, path, init, signal, requestOptions = {}) => {
     signal.throwIfAborted();
     let response: Response;
     try {
@@ -292,6 +313,10 @@ function parseRepository(value: unknown): Repository {
   return {
     id: requirePositiveInteger(record, "id", operation),
     ownerLogin: requireString(owner, "login", operation),
+    description:
+      record.description === null || record.description === undefined
+        ? null
+        : requireString(record, "description", operation),
     name: requireString(record, "name", operation),
     fullName: requireString(record, "full_name", operation),
     private: requireBoolean(record, "private", operation),
@@ -375,6 +400,37 @@ function parseWorkflowRuns(value: unknown): WorkflowRun[] {
   return record.workflow_runs.map(parseWorkflowRun);
 }
 
+function parseOrganizationActionsSecret(
+  value: unknown
+): OrganizationActionsSecret {
+  const operation = "organization Actions secret lookup";
+  const record = requireRecord(value, operation);
+  const visibility = requireString(record, "visibility", operation);
+  if (
+    visibility !== "all" &&
+    visibility !== "private" &&
+    visibility !== "selected"
+  ) {
+    throw new GitHubApiError(`${operation} response validation`);
+  }
+  return { name: requireString(record, "name", operation), visibility };
+}
+
+function parseFileText(value: unknown): string {
+  const operation = "repository file lookup";
+  const record = requireRecord(value, operation);
+  if (
+    record.type !== "file" ||
+    record.encoding !== "base64" ||
+    typeof record.content !== "string"
+  ) {
+    throw new GitHubApiError(`${operation} response validation`);
+  }
+  return Buffer.from(record.content.replace(/\s/g, ""), "base64").toString(
+    "utf8"
+  );
+}
+
 export function expectedWorkflowDisplayTitle(
   publishJobId: string,
   sourceSha: string
@@ -392,7 +448,7 @@ export function createGitHubApiClient(options: {
   });
 
   const commitFiles = async (
-    input: CommitFilesInput,
+    input: CommitFilesInput
   ): Promise<PublisherCommitResult> => {
     if (input.files.length === 0) {
       throw new Error("At least one file is required for a publisher commit.");
@@ -401,8 +457,26 @@ export function createGitHubApiClient(options: {
     if (new Set(paths).size !== paths.length) {
       throw new Error("Publisher commit file paths must be unique.");
     }
-    if (paths.some(path => !path || path.startsWith("/") || path.includes(".."))) {
-      throw new Error("Publisher commit file paths must be repository-relative.");
+    if (
+      paths.some(path => !path || path.startsWith("/") || path.includes(".."))
+    ) {
+      throw new Error(
+        "Publisher commit file paths must be repository-relative."
+      );
+    }
+    const deletePaths = [...(input.deletePaths ?? [])];
+    if (new Set(deletePaths).size !== deletePaths.length) {
+      throw new Error("Publisher deletion paths must be unique.");
+    }
+    if (
+      deletePaths.some(
+        path => !path || path.startsWith("/") || path.includes("..")
+      ) ||
+      deletePaths.some(path => paths.includes(path))
+    ) {
+      throw new Error(
+        "Publisher deletion paths must be distinct repository-relative paths."
+      );
     }
     const repositoryPath = `/repos/${encoded(input.owner)}/${encoded(input.repository)}`;
     const branch = encoded(input.branch);
@@ -410,14 +484,14 @@ export function createGitHubApiClient(options: {
       "branch lookup",
       `${repositoryPath}/git/ref/heads/${branch}`,
       { method: "GET" },
-      input.signal,
+      input.signal
     );
     const parentCommitSha = parseObjectSha(refResponse, "branch lookup");
     const commitResponse = await request(
       "commit lookup",
       `${repositoryPath}/git/commits/${encoded(parentCommitSha)}`,
       { method: "GET" },
-      input.signal,
+      input.signal
     );
     const baseTreeSha = parseCommitTreeSha(commitResponse);
     const treeResponse = await request(
@@ -427,15 +501,24 @@ export function createGitHubApiClient(options: {
         method: "POST",
         body: JSON.stringify({
           base_tree: baseTreeSha,
-          tree: input.files.map(file => ({
-            path: file.path,
-            mode: "100644",
-            type: "blob",
-            content: file.content,
-          })),
+          tree: input.files
+            .map(file => ({
+              path: file.path,
+              mode: "100644",
+              type: "blob",
+              content: file.content,
+            }))
+            .concat(
+              deletePaths.map(path => ({
+                path,
+                mode: "100644",
+                type: "blob",
+                sha: null,
+              })) as never
+            ),
         }),
       },
-      input.signal,
+      input.signal
     );
     const treeSha = parseSha(treeResponse, "tree creation");
     const newCommitResponse = await request(
@@ -449,7 +532,7 @@ export function createGitHubApiClient(options: {
           parents: [parentCommitSha],
         }),
       },
-      input.signal,
+      input.signal
     );
     const commitSha = parseSha(newCommitResponse, "commit creation");
     const updateResponse = await request(
@@ -459,7 +542,7 @@ export function createGitHubApiClient(options: {
         method: "PATCH",
         body: JSON.stringify({ sha: commitSha, force: false }),
       },
-      input.signal,
+      input.signal
     );
     const updatedSha = parseObjectSha(updateResponse, "branch update");
     if (updatedSha !== commitSha) {
@@ -469,6 +552,28 @@ export function createGitHubApiClient(options: {
   };
 
   return {
+    async getFileText(input) {
+      const response = await request(
+        "repository file lookup",
+        `/repos/${encoded(input.owner)}/${encoded(input.repository)}/contents/${input.path.split("/").map(encoded).join("/")}?ref=${encoded(input.ref)}`,
+        { method: "GET" },
+        input.signal,
+        { allowNotFound: true }
+      );
+      return response === null ? null : parseFileText(response);
+    },
+    async getOrganizationActionsSecret(input) {
+      const response = await request(
+        "organization Actions secret lookup",
+        `/orgs/${encoded(input.organization)}/actions/secrets/${encoded(input.secretName)}`,
+        { method: "GET" },
+        input.signal,
+        { allowNotFound: true }
+      );
+      return response === null
+        ? null
+        : parseOrganizationActionsSecret(response);
+    },
     async getRepository(input) {
       const response = await request(
         "repository lookup",
@@ -484,7 +589,7 @@ export function createGitHubApiClient(options: {
         "branch head lookup",
         `/repos/${encoded(input.owner)}/${encoded(input.repository)}/git/ref/heads/${encoded(input.branch)}`,
         { method: "GET" },
-        input.signal,
+        input.signal
       );
       return parseObjectSha(response, "branch head lookup");
     },
@@ -509,6 +614,24 @@ export function createGitHubApiClient(options: {
       );
       return parseGeneratedRepository(response);
     },
+    async createPublicRepository(input) {
+      const response = await request(
+        "repository creation",
+        `/orgs/${encoded(input.owner)}/repos`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: input.repository,
+            description: input.description,
+            private: false,
+            auto_init: true,
+          }),
+        },
+        input.signal,
+        { timeoutMs: REPOSITORY_GENERATION_TIMEOUT_MS }
+      );
+      return parseGeneratedRepository(response);
+    },
     async commitPublisherFiles(input) {
       return commitFiles({
         ...input,
@@ -523,7 +646,7 @@ export function createGitHubApiClient(options: {
         "commit reconciliation",
         `/repos/${encoded(input.owner)}/${encoded(input.repository)}/commits?sha=${encoded(input.branch)}&per_page=100`,
         { method: "GET" },
-        input.signal,
+        input.signal
       );
       if (!Array.isArray(response)) {
         throw new GitHubApiError("commit reconciliation response validation");
@@ -531,8 +654,13 @@ export function createGitHubApiClient(options: {
       for (const value of response) {
         const record = requireRecord(value, "commit reconciliation");
         const commit = requireRecord(record.commit, "commit reconciliation");
-        if (requireString(commit, "message", "commit reconciliation") === input.message) {
-          return { commitSha: requireString(record, "sha", "commit reconciliation") };
+        if (
+          requireString(commit, "message", "commit reconciliation") ===
+          input.message
+        ) {
+          return {
+            commitSha: requireString(record, "sha", "commit reconciliation"),
+          };
         }
       }
       return null;

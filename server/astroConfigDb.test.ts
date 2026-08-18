@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   applyAstroAssetUrls,
+  applyAstroHomepageSectionOrder,
   mergeStoredAstroConfig,
   protectWranglerSecretValues,
   resolveProductCategories,
@@ -80,7 +81,14 @@ describe("Astro config persistence helpers", () => {
       categories: defaults.categories,
       financing: defaults.financing,
       homepageSections,
-      integrations: defaults.integrations,
+      integrations: {
+        ...defaults.integrations,
+        ghl: {
+          enabled: true,
+          config: { webhookUrl: "https://legacy.example/secret-webhook" },
+        },
+        meta: { enabled: true, config: { pixelId: "123456789012345" } },
+      },
       generatedConfigEncrypted: null,
       generatedAt: null,
       createdAt: new Date(),
@@ -89,6 +97,43 @@ describe("Astro config persistence helpers", () => {
     const reloaded = mergeStoredAstroConfig(defaults, stored);
     expect(reloaded.navigationItems.map(item => item.id)).toEqual(navigationItems.map(item => item.id));
     expect(reloaded.homepageSections.map(section => section.id)).toEqual(homepageSections.map(section => section.id));
+    expect(reloaded.integrations.ghl.config).toEqual({});
+    expect(reloaded.integrations.meta.config).toEqual({});
+    expect(JSON.stringify(reloaded)).not.toContain("secret-webhook");
+  });
+
+  it("reorders Astro homepage sections without losing their configured fields", () => {
+    const existing = defaultConfig().homepageSections.map((section, index) => ({
+      ...section,
+      fields: { ...section.fields, marker: `configured-${index}` },
+    }));
+    const requested = [...existing].reverse().map((section, index) => ({
+      id: section.id,
+      type: section.type,
+      enabled: index % 2 === 0,
+    }));
+
+    const reordered = applyAstroHomepageSectionOrder(existing, requested);
+
+    expect(reordered.map(section => section.id)).toEqual(requested.map(section => section.id));
+    expect(reordered.map(section => section.enabled)).toEqual(requested.map(section => section.enabled));
+    expect(reordered.map(section => section.fields.marker)).toEqual(
+      [...existing].reverse().map(section => section.fields.marker),
+    );
+  });
+
+  it("rejects stale homepage order instead of overwriting the current Astro config", () => {
+    const existing = defaultConfig().homepageSections;
+    expect(() => applyAstroHomepageSectionOrder(existing, existing.slice(1).map(section => ({
+      id: section.id,
+      type: section.type,
+      enabled: section.enabled,
+    })))).toThrow("does not match");
+    expect(() => applyAstroHomepageSectionOrder(existing, existing.map((section, index) => ({
+      id: index === 0 ? "stale-section" : section.id,
+      type: section.type,
+      enabled: section.enabled,
+    })))).toThrow("does not match");
   });
 
   it("keeps existing launch categories when the first Settings save has none enabled", () => {
