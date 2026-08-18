@@ -78,6 +78,13 @@
       "when": 1787064000000,
       "tag": "0010_paid_funnel_survey_step",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787083200000,
+      "tag": "0011_generic_paid_funnel_publish",
+      "breakpoints": true
     }
   ]
 }

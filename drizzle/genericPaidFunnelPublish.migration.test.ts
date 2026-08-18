@@ -17,4 +17,17 @@ describe("generic paid funnel publisher migration", () => {
     expect(sql).not.toMatch(/^\s*(DROP\b|DELETE\s+FROM\b|TRUNCATE\b)/im);
     expect(sql).not.toContain('ALTER TABLE "paid_funnel_publishes"');
   });
+
+  it("is registered in the migration journal", () => {
+    const journal = JSON.parse(
+      readFileSync("drizzle/postgres/meta/_journal.json", "utf8"),
+    ) as { entries: Array<{ idx: number; tag: string }> };
+
+    expect(journal.entries.at(-1)).toEqual(
+      expect.objectContaining({
+        idx: 11,
+        tag: "0011_generic_paid_funnel_publish",
+      }),
+    );
+  });
 });
