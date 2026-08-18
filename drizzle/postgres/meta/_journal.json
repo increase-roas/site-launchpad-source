@@ -57,6 +57,13 @@
       "when": 1787012000000,
       "tag": "0008_paid_funnel_registry",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787013600000,
+      "tag": "0009_client_integration_profile",
+      "breakpoints": true
     }
   ]
 }
