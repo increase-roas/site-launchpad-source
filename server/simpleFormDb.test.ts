@@ -409,6 +409,7 @@ describe("Simple Form private candidate validation", () => {
     expect(JSON.stringify(detail)).not.toContain("astro-saved-ghl-key");
     expect(JSON.stringify(detail)).not.toContain("astro-private-key");
     expect(material.runtimeSecrets.GHL_API_KEY).toBe("astro-saved-ghl-key");
+    expect(material.config.meta.pixelId).toBe("123456789012345");
     expect(material.runtimeSecrets.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY).toBe(
       "astro-private-key",
     );

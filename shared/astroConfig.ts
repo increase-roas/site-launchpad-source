@@ -209,6 +209,13 @@ export const astroIntegrationSchema = z
     }
   });
 
+const profileBackedAstroIntegrationSchema = z.object({
+  enabled: z.boolean(),
+  // Historical rows stored GHL/Meta identifiers and even webhook values here.
+  // The canonical client profile owns them now, so parsing always strips them.
+  config: z.record(z.string(), z.string().max(2000)).transform(() => ({})),
+});
+
 export const astroClientConfigInputSchema = z.object({
   identity: z.object({
     businessName: z.string().trim().min(2).max(160),
@@ -262,7 +269,14 @@ export const astroClientConfigInputSchema = z.object({
   categories: z.record(z.enum(ASTRO_CATEGORY_VALUES), astroCategorySchema),
   financing: astroFinancingSchema,
   homepageSections: z.array(astroHomepageSectionSchema).max(40),
-  integrations: z.record(z.enum(ASTRO_INTEGRATION_VALUES), astroIntegrationSchema),
+  integrations: z.object({
+    d1: astroIntegrationSchema,
+    r2: astroIntegrationSchema,
+    ghl: profileBackedAstroIntegrationSchema,
+    meta: profileBackedAstroIntegrationSchema,
+    zaraz: astroIntegrationSchema,
+    sentry: astroIntegrationSchema,
+  }),
 });
 
 export type AstroClientConfigInput = z.infer<typeof astroClientConfigInputSchema>;
@@ -299,8 +313,8 @@ export function createAstroHomepageSection(
 export const ASTRO_INTEGRATION_FIELDS: Record<AstroIntegration, Record<string, string>> = {
   d1: { binding: "Binding name", databaseName: "Database name" },
   r2: { binding: "Binding name", bucketName: "Bucket name" },
-  ghl: { locationId: "Location ID", webhookUrl: "Webhook URL" },
-  meta: { pixelId: "Pixel ID", datasetId: "Dataset ID" },
+  ghl: {},
+  meta: {},
   zaraz: { endpoint: "Zaraz endpoint", debug: "Debug mode" },
   sentry: { dsn: "Sentry DSN", environment: "Environment" },
 };

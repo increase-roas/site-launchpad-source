@@ -1,11 +1,258 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { integrationsRoute } from "@/lib/workspaceNavigation";
 import { publicErrorMessage } from "@shared/safePublicError";
 import { trpc } from "@/lib/trpc";
+import { WRANGLER_SECRET_DESCRIPTIONS } from "@shared/astroConfig";
 import { integrationPresenceRows } from "@shared/paidFunnel/integrationPresence";
-import { AlertCircle, ArrowLeft, Loader2, PlugZap } from "lucide-react";
+import {
+  CLIENT_INTEGRATION_IDENTIFIER_KEYS,
+  CLIENT_INTEGRATION_SECRET_KEYS,
+  isIdentifierKey,
+  isSecretKey,
+  type ClientIntegrationIdentifierKey,
+  type ClientIntegrationProfileDto,
+  type ClientIntegrationSecretKey,
+} from "@shared/clientIntegrationProfile";
+import { AlertCircle, ArrowLeft, Loader2, PlugZap, RefreshCw, Save } from "lucide-react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { useLocation } from "wouter";
+
+type IdentifierDrafts = Record<ClientIntegrationIdentifierKey, string>;
+type SecretDrafts = Partial<Record<ClientIntegrationSecretKey, string>>;
+
+function identifierDraftsFrom(dto: ClientIntegrationProfileDto): IdentifierDrafts {
+  return {
+    GHL_LOCATION_ID: dto.identifiers.GHL_LOCATION_ID ?? "",
+    GOOGLE_SHEETS_ID: dto.identifiers.GOOGLE_SHEETS_ID ?? "",
+    META_PIXEL_ID: dto.identifiers.META_PIXEL_ID ?? "",
+  };
+}
+
+function IntegrationEditor({ dto }: { dto: ClientIntegrationProfileDto }) {
+  const utils = trpc.useUtils();
+  const [identifiers, setIdentifiers] = useState<IdentifierDrafts>(() =>
+    identifierDraftsFrom(dto),
+  );
+  const [baseUpdatedAt, setBaseUpdatedAt] = useState<Date | null>(dto.lastUpdated);
+  const [secrets, setSecrets] = useState<SecretDrafts>({});
+  const [clearSecrets, setClearSecrets] = useState<ClientIntegrationSecretKey[]>([]);
+  const [rotateStageWebhookSecret, setRotateStageWebhookSecret] = useState(false);
+  const groups = integrationPresenceRows(dto);
+  const identifiersChanged = useMemo(
+    () =>
+      CLIENT_INTEGRATION_IDENTIFIER_KEYS.some(
+        key => identifiers[key].trim() !== (dto.identifiers[key] ?? ""),
+      ),
+    [dto.identifiers, identifiers],
+  );
+  const hasSecretChanges = CLIENT_INTEGRATION_SECRET_KEYS.some(
+    key => Boolean(secrets[key]?.trim()),
+  );
+  const saveMutation = trpc.clients.saveIntegrationProfile.useMutation({
+    onSuccess: saved => {
+      setIdentifiers(identifierDraftsFrom(saved));
+      setBaseUpdatedAt(saved.lastUpdated);
+      setSecrets({});
+      setClearSecrets([]);
+      setRotateStageWebhookSecret(false);
+      utils.clients.getIntegrationProfile.setData({ clientId: dto.clientId }, saved);
+      toast.success("Client integrations saved for the website and every funnel.");
+    },
+    onError: async error => {
+      if (error.data?.code === "CONFLICT") {
+        try {
+          const refreshed = await utils.clients.getIntegrationProfile.fetch({
+            clientId: dto.clientId,
+          });
+          setIdentifiers(identifierDraftsFrom(refreshed));
+          setBaseUpdatedAt(refreshed.lastUpdated);
+          toast.error(
+            "This client changed in another session. Latest identifiers were reloaded; unsaved secret replacements were kept.",
+          );
+        } catch {
+          await utils.clients.getIntegrationProfile.invalidate({ clientId: dto.clientId });
+          toast.error("This client changed in another session. Reload before saving again.");
+        }
+        return;
+      }
+      toast.error(publicErrorMessage(error.message, "Integrations could not be saved."));
+    },
+  });
+
+  const save = () => {
+    const replaceSecrets = Object.fromEntries(
+      CLIENT_INTEGRATION_SECRET_KEYS.flatMap(key => {
+        const value = secrets[key]?.trim();
+        return value ? [[key, value]] : [];
+      }),
+    ) as Partial<Record<ClientIntegrationSecretKey, string>>;
+    const changedIdentifiers = Object.fromEntries(
+      CLIENT_INTEGRATION_IDENTIFIER_KEYS.flatMap(key =>
+        identifiers[key].trim() !== (dto.identifiers[key] ?? "")
+          ? [[key, identifiers[key].trim() || null]]
+          : [],
+      ),
+    ) as Partial<Record<ClientIntegrationIdentifierKey, string | null>>;
+    saveMutation.mutate({
+      clientId: dto.clientId,
+      // Keep the version captured with these drafts. A background refetch must
+      // not bless stale identifiers with a newer optimistic-lock token.
+      expectedUpdatedAt: baseUpdatedAt,
+      identifiers: changedIdentifiers,
+      replaceSecrets,
+      clearSecrets,
+      rotateStageWebhookSecret: rotateStageWebhookSecret || undefined,
+    });
+  };
+
+  return (
+    <>
+      <section className="grid gap-3 sm:grid-cols-3">
+        <Card className="border-white/8 bg-card/70 p-4">
+          <p className="text-xs font-bold text-muted-foreground">Website ready</p>
+          <p className="mt-1 text-xl font-extrabold">{dto.readiness.websiteReady ? "SET" : "NOT SET"}</p>
+        </Card>
+        <Card className="border-white/8 bg-card/70 p-4">
+          <p className="text-xs font-bold text-muted-foreground">Every funnel ready</p>
+          <p className="mt-1 text-xl font-extrabold">{dto.readiness.funnelReady ? "SET" : "NOT SET"}</p>
+        </Card>
+        <Card className="border-white/8 bg-card/70 p-4">
+          <p className="text-xs font-bold text-muted-foreground">Reconciliation</p>
+          <p className="mt-1 text-xl font-extrabold capitalize">{dto.reconciliationStatus}</p>
+        </Card>
+      </section>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {groups.map(group => (
+          <Card key={group.id} className="border-white/8 bg-card/70 p-5">
+            <h2 className="text-lg font-extrabold">{group.label}</h2>
+            <div className="mt-4 space-y-4">
+              {group.fields.map(field => {
+                const identifierKey = isIdentifierKey(field.key) ? field.key : null;
+                const secretKey = isSecretKey(field.key) ? field.key : null;
+                if (!identifierKey && !secretKey) return null;
+                const value = identifierKey
+                  ? identifiers[identifierKey]
+                  : (secrets[secretKey!] ?? "");
+                return (
+                  <div key={field.key} className="space-y-2">
+                    <label className="block space-y-2">
+                      <span className="flex items-center justify-between gap-3 text-xs font-extrabold">
+                        <span className="truncate text-muted-foreground">{field.key}</span>
+                        <span className={field.presence === "SET" ? "text-emerald-300" : "text-red-300"}>
+                          {field.presence}
+                        </span>
+                      </span>
+                      <Input
+                        aria-label={field.key}
+                        type={secretKey ? "password" : "text"}
+                        autoComplete={secretKey ? "new-password" : "off"}
+                        disabled={Boolean(secretKey && clearSecrets.includes(secretKey))}
+                        value={value}
+                        placeholder={
+                          secretKey && field.presence === "SET"
+                            ? "Stored — enter a new value to replace"
+                            : "Enter value"
+                        }
+                        onChange={event => {
+                          if (identifierKey) {
+                            setIdentifiers(current => ({
+                              ...current,
+                              [identifierKey]: event.target.value,
+                            }));
+                          } else if (secretKey) {
+                            setSecrets(current => ({
+                              ...current,
+                              [secretKey]: event.target.value,
+                            }));
+                            setClearSecrets(current => current.filter(key => key !== secretKey));
+                            if (secretKey === "STAGE_WEBHOOK_SECRET") {
+                              setRotateStageWebhookSecret(false);
+                            }
+                          }
+                        }}
+                        className="h-11 rounded-xl border-white/10 bg-white/[0.035] font-mono text-sm"
+                      />
+                      <span className="block text-[11px] font-medium text-muted-foreground">
+                        {WRANGLER_SECRET_DESCRIPTIONS[identifierKey ?? secretKey!]}
+                      </span>
+                      {secretKey ? (
+                        <span className="block text-[11px] font-medium text-muted-foreground">
+                          Leave blank to keep the stored value. Stored values are never returned.
+                        </span>
+                      ) : null}
+                    </label>
+                    {secretKey && field.presence === "SET" ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => {
+                          const willClear = !clearSecrets.includes(secretKey);
+                          setClearSecrets(current =>
+                            willClear
+                              ? [...current.filter(key => key !== secretKey), secretKey]
+                              : current.filter(key => key !== secretKey),
+                          );
+                          if (willClear) {
+                            setSecrets(current => ({ ...current, [secretKey]: "" }));
+                            if (secretKey === "STAGE_WEBHOOK_SECRET") {
+                              setRotateStageWebhookSecret(false);
+                            }
+                          }
+                        }}
+                        className="h-8 px-2 text-xs font-extrabold text-muted-foreground"
+                      >
+                        {clearSecrets.includes(secretKey) ? "Keep stored value" : "Clear on save"}
+                      </Button>
+                    ) : null}
+                    {secretKey === "STAGE_WEBHOOK_SECRET" ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setSecrets(current => ({ ...current, STAGE_WEBHOOK_SECRET: "" }));
+                          setClearSecrets(current =>
+                            current.filter(key => key !== "STAGE_WEBHOOK_SECRET"),
+                          );
+                          setRotateStageWebhookSecret(true);
+                        }}
+                        className="h-9 gap-2 text-xs font-extrabold"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        {rotateStageWebhookSecret ? "Will generate on save" : "Generate / rotate"}
+                      </Button>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      <div className="sticky bottom-4 flex justify-end">
+        <Button
+          type="button"
+          onClick={save}
+          disabled={
+            saveMutation.isPending ||
+            (!identifiersChanged &&
+              !hasSecretChanges &&
+              !rotateStageWebhookSecret &&
+              clearSecrets.length === 0)
+          }
+          className="h-12 gap-2 rounded-xl bg-cyan-300 px-6 font-extrabold text-slate-950 hover:bg-cyan-200"
+        >
+          {saveMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+          Save once for website + funnels
+        </Button>
+      </div>
+    </>
+  );
+}
 
 export default function ClientIntegrationsPage({ clientId }: { clientId: number }) {
   const [, setLocation] = useLocation();
@@ -30,7 +277,6 @@ export default function ClientIntegrationsPage({ clientId }: { clientId: number 
   }
 
   const dto = query.data;
-  const groups = integrationPresenceRows(dto);
 
   return (
     <div className="mx-auto w-full max-w-[1100px] space-y-6">
@@ -50,46 +296,15 @@ export default function ClientIntegrationsPage({ clientId }: { clientId: number 
           </span>
           <div>
             <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-300">Client integrations</p>
-            <h1 className="mt-1 text-3xl font-extrabold tracking-[-0.03em]">SET / NOT SET</h1>
+            <h1 className="mt-1 text-3xl font-extrabold tracking-[-0.03em]">Enter once. Reuse everywhere.</h1>
             <p className="mt-2 max-w-2xl text-sm font-medium text-muted-foreground">
-              Presence only. Secret values are never shown. Path: {integrationsRoute(clientId)}
+              These client-level values power the website and every funnel. Secret fields stay blank after saving and are never returned. Path: {integrationsRoute(clientId)}
             </p>
           </div>
         </div>
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-3">
-        <Card className="border-white/8 bg-card/70 p-4">
-          <p className="text-xs font-bold text-muted-foreground">Website ready</p>
-          <p className="mt-1 text-xl font-extrabold">{dto.readiness.websiteReady ? "SET" : "NOT SET"}</p>
-        </Card>
-        <Card className="border-white/8 bg-card/70 p-4">
-          <p className="text-xs font-bold text-muted-foreground">Funnel ready</p>
-          <p className="mt-1 text-xl font-extrabold">{dto.readiness.funnelReady ? "SET" : "NOT SET"}</p>
-        </Card>
-        <Card className="border-white/8 bg-card/70 p-4">
-          <p className="text-xs font-bold text-muted-foreground">Reconciliation</p>
-          <p className="mt-1 text-xl font-extrabold capitalize">{dto.reconciliationStatus}</p>
-        </Card>
-      </section>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        {groups.map(group => (
-          <Card key={group.id} className="border-white/8 bg-card/70 p-5">
-            <h2 className="text-lg font-extrabold">{group.label}</h2>
-            <ul className="mt-3 space-y-2">
-              {group.fields.map(field => (
-                <li key={field.key} className="flex items-center justify-between gap-3 text-sm font-bold">
-                  <span className="truncate text-muted-foreground">{field.key}</span>
-                  <span className={field.presence === "SET" ? "text-emerald-300" : "text-red-300"}>
-                    {field.presence}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        ))}
-      </div>
+      <IntegrationEditor dto={dto} />
     </div>
   );
 }

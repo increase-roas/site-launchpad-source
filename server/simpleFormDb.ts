@@ -431,7 +431,15 @@ export async function getSimpleFormPublishMaterial(input: {
   const profile =
     await loadOrBackfillResolvedClientIntegrationProfile(input.clientId);
   return {
-    config: detail.config,
+    config: {
+      ...detail.config,
+      meta: {
+        ...detail.config.meta,
+        // The pixel belongs to the client profile, so every funnel and the
+        // website receive the same current identifier at publish time.
+        pixelId: profile.dto.identifiers.META_PIXEL_ID ?? "",
+      },
+    },
     runtimeSecrets: {
       GHL_API_KEY: profile.secrets.GHL_API_KEY ?? null,
       GHL_LOCATION_ID: profile.dto.identifiers.GHL_LOCATION_ID,

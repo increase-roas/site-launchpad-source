@@ -17,7 +17,9 @@ import {
   getClientIntegrationProfile,
   loadOrBackfillResolvedClientIntegrationProfile,
   loadResolvedPaidFunnelProfile,
+  saveClientIntegrationProfile,
 } from "./clientIntegrations";
+import { UpdateConflictError } from "./trpcErrors";
 
 describe("ClientIntegrationProfile database reads", () => {
   beforeEach(() => {
@@ -102,5 +104,98 @@ describe("ClientIntegrationProfile database reads", () => {
     const resolved = await loadOrBackfillResolvedClientIntegrationProfile(7);
     expect(resolved.dto.identifiers.GHL_LOCATION_ID).toBe("canonical-location");
     expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("locks the canonical row, checks its version, and returns presence without secret values", async () => {
+    const originalUpdatedAt = new Date("2026-08-18T12:00:00.000Z");
+    let current = {
+      clientId: 7,
+      profileVersion: 1,
+      ghlLocationId: "canonical-location",
+      googleSheetsId: null,
+      metaPixelId: null,
+      secretsEncrypted: null as string | null,
+      reconciliationStatus: "ready" as const,
+      conflictedKeys: [] as string[],
+      createdAt: originalUpdatedAt,
+      updatedAt: originalUpdatedAt,
+    };
+    const lock = vi.fn(async () => [current]);
+    const onConflictDoUpdate = vi.fn(async ({ set }: { set: Partial<typeof current> }) => {
+      current = { ...current, ...set };
+    });
+    const transaction = {
+      select: () => ({
+        from: () => ({ where: () => ({ for: lock }) }),
+      }),
+      insert: () => ({
+        values: (row: Partial<typeof current>) => ({
+          onConflictDoUpdate: async (config: { set: Partial<typeof current> }) => {
+            current = { ...current, ...row };
+            await onConflictDoUpdate(config);
+          },
+        }),
+      }),
+    };
+    dbMocks.getDb.mockResolvedValue({
+      transaction: (callback: (tx: typeof transaction) => Promise<void>) => callback(transaction),
+      select: () => ({
+        from: () => ({
+          where: () => ({ limit: async () => [current] }),
+        }),
+      }),
+    });
+
+    const dto = await saveClientIntegrationProfile(7, {
+      expectedUpdatedAt: originalUpdatedAt,
+      replaceSecrets: { GHL_API_KEY: "server-only-replacement-secret" },
+    });
+
+    expect(lock).toHaveBeenCalledWith("update");
+    expect(onConflictDoUpdate).toHaveBeenCalledOnce();
+    expect(dto.secretPresence.GHL_API_KEY).toBe("SET");
+    expect(JSON.stringify(dto)).not.toContain("server-only-replacement-secret");
+    expect("secrets" in dto).toBe(false);
+    expect("secretsEncrypted" in dto).toBe(false);
+    expect(dto.lastUpdated?.getTime()).toBeGreaterThan(originalUpdatedAt.getTime());
+  });
+
+  it("rejects a stale canonical profile version before writing", async () => {
+    const currentUpdatedAt = new Date("2026-08-18T12:00:01.000Z");
+    const onConflictDoUpdate = vi.fn();
+    const transaction = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            for: async () => [
+              {
+                clientId: 7,
+                profileVersion: 1,
+                ghlLocationId: null,
+                googleSheetsId: null,
+                metaPixelId: null,
+                secretsEncrypted: null,
+                reconciliationStatus: "ready",
+                conflictedKeys: [],
+                createdAt: currentUpdatedAt,
+                updatedAt: currentUpdatedAt,
+              },
+            ],
+          }),
+        }),
+      }),
+      insert: () => ({ values: () => ({ onConflictDoUpdate }) }),
+    };
+    dbMocks.getDb.mockResolvedValue({
+      transaction: (callback: (tx: typeof transaction) => Promise<void>) => callback(transaction),
+    });
+
+    await expect(
+      saveClientIntegrationProfile(7, {
+        expectedUpdatedAt: new Date("2026-08-18T12:00:00.000Z"),
+        replaceSecrets: { GHL_API_KEY: "must-not-write" },
+      }),
+    ).rejects.toBeInstanceOf(UpdateConflictError);
+    expect(onConflictDoUpdate).not.toHaveBeenCalled();
   });
 });

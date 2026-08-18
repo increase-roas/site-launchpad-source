@@ -26,6 +26,7 @@ import {
   getAstroSitePublishMaterial,
   saveWranglerSecrets,
 } from "./astroConfigDb";
+import { saveClientIntegrationProfile } from "./clientIntegrations";
 
 type TestState = {
   astro: Record<string, unknown>;
@@ -44,7 +45,7 @@ function databaseFor(state: TestState) {
     throw new Error("Unexpected table read in Astro profile test.");
   };
 
-  return {
+  const database = {
     select: () => ({
       from: (table: unknown) => {
         if (table === funnels) {
@@ -90,6 +91,32 @@ function databaseFor(state: TestState) {
         },
       }),
     }),
+  };
+  return {
+    ...database,
+    transaction: async (
+      callback: (transaction: {
+        select: () => {
+          from: (table: unknown) => {
+            where: () => { for: (mode: "update") => Promise<Record<string, unknown>[]> };
+          };
+        };
+        insert: typeof database.insert;
+      }) => Promise<void>,
+    ) =>
+      callback({
+        select: () => ({
+          from: (table: unknown) => ({
+            where: () => ({
+              for: async (mode: "update") => {
+                expect(mode).toBe("update");
+                return rowsFor(table);
+              },
+            }),
+          }),
+        }),
+        insert: database.insert,
+      }),
   };
 }
 
@@ -139,8 +166,8 @@ describe("Astro canonical integration profile database flow", () => {
       facebookUrl: "",
       theme: "aqua",
     });
-    defaultConfig.integrations.ghl = { enabled: true, config: { locationId: "location-123" } };
-    defaultConfig.integrations.meta = { enabled: true, config: { pixelId: "123456789012345" } };
+    defaultConfig.integrations.ghl = { enabled: true, config: {} };
+    defaultConfig.integrations.meta = { enabled: true, config: {} };
 
     const state: TestState = {
       profile: null,
@@ -225,8 +252,15 @@ describe("Astro canonical integration profile database flow", () => {
     expect(saved.integrationProfile.secretPresence.GHL_API_KEY).toBe("SET");
     expect(JSON.stringify(saved.integrationProfile)).not.toContain(rotated);
 
+    const canonicalOnlyRotation = "canonical-editor-rotation";
+    await saveClientIntegrationProfile(5, {
+      expectedUpdatedAt: saved.integrationProfile.lastUpdated,
+      replaceSecrets: { GHL_API_KEY: canonicalOnlyRotation },
+      resolveConflictedKeys: ["GHL_API_KEY"],
+    });
+
     const material = await getAstroSitePublishMaterial(5);
-    expect(material.runtimeSecrets.GHL_API_KEY).toBe(rotated);
+    expect(material.runtimeSecrets.GHL_API_KEY).toBe(canonicalOnlyRotation);
     expect(material.runtimeSecrets.GHL_LOCATION_ID).toBe(raw.GHL_LOCATION_ID);
     expect(material.runtimeSecrets.META_CAPI_ACCESS_TOKEN).toBe(raw.META_CAPI_ACCESS_TOKEN);
   });

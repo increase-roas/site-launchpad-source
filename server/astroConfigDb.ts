@@ -4,7 +4,6 @@ import {
   clients,
   wranglerSecretSetups,
   type InsertWranglerSecretSetup,
-  type WranglerSecretSetup,
 } from "../drizzle/schema";
 import {
   ASTRO_ASSET_SLOT_VALUES,
@@ -21,7 +20,6 @@ import { decryptSetupValue, encryptSetupValue } from "./clientSecurity";
 import {
   getClientAssets,
   getClientById,
-  getClientSecretSetup,
   getDb,
   saveClientSecretSetup,
 } from "./db";
@@ -30,7 +28,6 @@ import type { ProductCategory } from "../shared/client";
 import { getAstroSiteRuntimeSecrets } from "../shared/astroSiteContract";
 import {
   clientIntegrationProfileResolverForClient,
-  contributionsFromLegacyRows,
   loadOrBackfillResolvedClientIntegrationProfile,
   saveClientIntegrationProfile,
 } from "./clientIntegrations";
@@ -98,8 +95,7 @@ export function mergeStoredAstroConfig(
   defaults: AstroClientConfigInput,
   row: typeof astroClientConfigs.$inferSelect | undefined,
 ): AstroClientConfigInput {
-  if (!row) return defaults;
-  return {
+  const merged = !row ? defaults : {
     ...defaults,
     socialLinks: { ...defaults.socialLinks, ...row.socialLinks } as AstroClientConfigInput["socialLinks"],
     brand: {
@@ -127,6 +123,14 @@ export function mergeStoredAstroConfig(
       ]),
     ) as AstroClientConfigInput["integrations"],
   };
+  return {
+    ...merged,
+    integrations: {
+      ...merged.integrations,
+      ghl: { ...merged.integrations.ghl, config: {} },
+      meta: { ...merged.integrations.meta, config: {} },
+    },
+  };
 }
 
 export function applyAstroAssetUrls(
@@ -145,16 +149,6 @@ export function applyAstroAssetUrls(
       ]),
     ) as AstroClientConfigInput["categories"],
   };
-}
-
-async function getWranglerSecretRow(clientId: number): Promise<WranglerSecretSetup | undefined> {
-  const db = await requireDb();
-  const rows = await db
-    .select()
-    .from(wranglerSecretSetups)
-    .where(eq(wranglerSecretSetups.clientId, clientId))
-    .limit(1);
-  return rows[0];
 }
 
 export async function getAstroConfigView(clientId: number) {
@@ -213,26 +207,16 @@ export async function getAstroSitePublishMaterial(
   // Loading the view first also performs the safe, missing-row-only legacy
   // backfill. The resolver then reads the exact same canonical profile.
   const view = await getAstroConfigView(clientId);
-  const [wranglerRow, legacySecrets, resolver] = await Promise.all([
-    getWranglerSecretRow(clientId),
-    getClientSecretSetup(clientId),
-    clientIntegrationProfileResolverForClient(clientId),
-  ]);
+  const resolver = await clientIntegrationProfileResolverForClient(clientId);
   const enabledIntegrations = {
     ghl: view.input.integrations.ghl.enabled,
     meta: view.input.integrations.meta.enabled,
   };
   const requiredNames = getAstroSiteRuntimeSecrets(enabledIntegrations);
-  const legacyValues = contributionsFromLegacyRows({
-    clientId,
-    wrangler: wranglerRow ?? null,
-    clientSecrets: legacySecrets ?? null,
-  });
   const { runtimeSecrets } = assertAstroSitePublishProfileReady({
     clientId,
     resolver,
     requiredSecretNames: requiredNames,
-    legacyValues,
   });
   if (!view.generatedAt) {
     throw new Error("Save the website configuration before publishing.");
@@ -253,7 +237,10 @@ export async function saveAstroConfig(clientId: number, input: AstroClientConfig
   const assetUrls = Object.fromEntries(
     assets.filter(asset => isAstroAssetSlot(asset.slot)).map(asset => [asset.slot, asset.storageUrl]),
   );
-  const normalized = applyAstroAssetUrls(input, assetUrls);
+  const normalized = mergeStoredAstroConfig(
+    applyAstroAssetUrls(input, assetUrls),
+    undefined,
+  );
   const generatedConfig = generateAstroClientConfig(normalized, assetUrls);
   const generatedAt = new Date();
 

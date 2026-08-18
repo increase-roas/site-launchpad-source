@@ -37,6 +37,7 @@ import {
 import { getDb } from "./db";
 import { isUndefinedRelationError } from "../shared/safePublicError";
 import { postgresConflictTargets, withUpdatedAt } from "./postgresPersistence";
+import { UpdateConflictError, assertWritableVersion } from "./trpcErrors";
 import type {
   ClientIntegrationProfileResolver,
   PaidFunnelResolvedProfile,
@@ -346,6 +347,7 @@ export async function getClientIntegrationProfile(clientId: number): Promise<Cli
 export async function saveClientIntegrationProfile(
   clientId: number,
   input: {
+    expectedUpdatedAt?: Date | null;
     identifiers?: Partial<ClientIntegrationIdentifiers>;
     replaceSecrets?: Partial<Record<ClientIntegrationSecretKey, string>>;
     clearSecrets?: ClientIntegrationSecretKey[];
@@ -354,48 +356,60 @@ export async function saveClientIntegrationProfile(
   },
 ): Promise<ClientIntegrationProfileDto> {
   const db = await requireDb();
-  const existing = (
-    await db
-      .select()
-      .from(clientIntegrationProfiles)
-      .where(eq(clientIntegrationProfiles.clientId, clientId))
-      .limit(1)
-  )[0];
-  const identifiers = identifiersFromRow(existing);
-  if (input.identifiers) {
-    for (const key of ["GHL_LOCATION_ID", "GOOGLE_SHEETS_ID", "META_PIXEL_ID"] as const) {
-      if (input.identifiers[key] !== undefined) identifiers[key] = input.identifiers[key];
+  await db.transaction(async transaction => {
+    const existing = (
+      await transaction
+        .select()
+        .from(clientIntegrationProfiles)
+        .where(eq(clientIntegrationProfiles.clientId, clientId))
+        .for("update")
+    )[0];
+    if (input.expectedUpdatedAt !== undefined) {
+      if (!existing || input.expectedUpdatedAt === null) {
+        if (existing || input.expectedUpdatedAt !== null) throw new UpdateConflictError();
+      } else {
+        assertWritableVersion(existing.updatedAt, input.expectedUpdatedAt);
+      }
     }
-  }
-  const secrets = decryptSecretBlob(existing?.secretsEncrypted);
-  for (const [key, value] of Object.entries(input.replaceSecrets ?? {})) {
-    if (isSecretKey(key) && value?.trim()) secrets[key] = value.trim();
-  }
-  for (const key of input.clearSecrets ?? []) delete secrets[key];
-  if (input.rotateStageWebhookSecret) {
-    secrets.STAGE_WEBHOOK_SECRET = generateCrmCallbackSecret();
-  }
-  const resolvedConflicts = new Set(input.resolveConflictedKeys ?? []);
-  const conflictedKeys = (existing?.conflictedKeys ?? []).filter(
-    key => !resolvedConflicts.has(key as ClientIntegrationProfileKey),
-  );
-  const row = {
-    clientId,
-    profileVersion: existing?.profileVersion ?? 1,
-    ghlLocationId: identifiers.GHL_LOCATION_ID,
-    googleSheetsId: identifiers.GOOGLE_SHEETS_ID,
-    metaPixelId: identifiers.META_PIXEL_ID,
-    secretsEncrypted: encryptSecretBlob(secrets),
-    reconciliationStatus: conflictedKeys.length > 0 ? ("conflict" as const) : ("ready" as const),
-    conflictedKeys,
-  };
-  await db
-    .insert(clientIntegrationProfiles)
-    .values(row)
-    .onConflictDoUpdate({
-      target: postgresConflictTargets.clientIntegrationProfiles,
-      set: withUpdatedAt(row),
-    });
+    const identifiers = identifiersFromRow(existing);
+    if (input.identifiers) {
+      for (const key of ["GHL_LOCATION_ID", "GOOGLE_SHEETS_ID", "META_PIXEL_ID"] as const) {
+        if (input.identifiers[key] !== undefined) identifiers[key] = input.identifiers[key];
+      }
+    }
+    const secrets = decryptSecretBlob(existing?.secretsEncrypted);
+    for (const [key, value] of Object.entries(input.replaceSecrets ?? {})) {
+      if (isSecretKey(key) && value?.trim()) secrets[key] = value.trim();
+    }
+    for (const key of input.clearSecrets ?? []) delete secrets[key];
+    if (input.rotateStageWebhookSecret) {
+      secrets.STAGE_WEBHOOK_SECRET = generateCrmCallbackSecret();
+    }
+    const resolvedConflicts = new Set(input.resolveConflictedKeys ?? []);
+    const conflictedKeys = (existing?.conflictedKeys ?? []).filter(
+      key => !resolvedConflicts.has(key as ClientIntegrationProfileKey),
+    );
+    const row = {
+      clientId,
+      profileVersion: existing?.profileVersion ?? 1,
+      ghlLocationId: identifiers.GHL_LOCATION_ID,
+      googleSheetsId: identifiers.GOOGLE_SHEETS_ID,
+      metaPixelId: identifiers.META_PIXEL_ID,
+      secretsEncrypted: encryptSecretBlob(secrets),
+      reconciliationStatus: conflictedKeys.length > 0 ? ("conflict" as const) : ("ready" as const),
+      conflictedKeys,
+    };
+    const nextUpdatedAt = new Date(
+      Math.max(Date.now(), (existing?.updatedAt?.getTime() ?? 0) + 1),
+    );
+    await transaction
+      .insert(clientIntegrationProfiles)
+      .values(row)
+      .onConflictDoUpdate({
+        target: postgresConflictTargets.clientIntegrationProfiles,
+        set: withUpdatedAt(row, nextUpdatedAt),
+      });
+  });
   return getClientIntegrationProfile(clientId);
 }
 

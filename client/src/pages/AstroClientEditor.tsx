@@ -51,7 +51,6 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
   const [assets, setAssets] = useState<Array<{ slot: string; storageUrl: string; filename: string; byteSize: number }>>([]);
   const [generatedConfig, setGeneratedConfig] = useState("");
   const [secretStatus, setSecretStatus] = useState<Record<WranglerSecretName, boolean> | null>(null);
-  const [secretDrafts, setSecretDrafts] = useState<Partial<Record<WranglerSecretName, string>>>({});
   const [uploadingSlot, setUploadingSlot] = useState<AstroAssetSlot | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [issues, setIssues] = useState<string[]>([]);
@@ -81,14 +80,6 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
     hydratedForClientIdRef.current = clientId;
   }, [query.data, clientId]);
 
-  const secretMutation = trpc.astroConfig.saveSecrets.useMutation({
-    onSuccess: view => {
-      setSecretStatus(view.secretStatus);
-      setSecretDrafts({});
-      toast.success("Protected values saved.");
-    },
-    onError: error => toast.error(error.message),
-  });
 
   const requestUploadMutation = trpc.assets.requestUpload.useMutation();
   const completeUploadMutation = trpc.assets.completeUpload.useMutation();
@@ -343,7 +334,7 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
       <TabsContent value="basic"><BasicInfoTab value={config} onChange={changeConfig} /></TabsContent>
       <TabsContent value="branding"><BrandingTab value={config} onChange={changeConfig} assets={assets} uploadingSlot={uploadingSlot} onUpload={uploadFile} /></TabsContent>
       <TabsContent value="content"><ContentTab value={config} onChange={changeConfig} assets={assets} uploadingSlot={uploadingSlot} onUpload={uploadFile} /></TabsContent>
-      <TabsContent value="technical"><TechnicalTab value={config} onChange={changeConfig} secretStatus={secretStatus} secretDrafts={secretDrafts} onSecretChange={(name, value) => setSecretDrafts(current => ({ ...current, [name]: value }))} onSaveSecrets={() => secretMutation.mutate({ clientId, values: secretDrafts })} savingSecrets={secretMutation.isPending} generatedConfig={generatedConfig} onGenerate={() => saveNow({ revealConfig: true })} generating={saveMutation.isPending || exportMutation.isPending} onRevealConfig={revealGeneratedConfig} revealing={exportMutation.isPending} /></TabsContent>
+      <TabsContent value="technical"><TechnicalTab value={config} onChange={changeConfig} secretStatus={secretStatus} onOpenClientIntegrations={() => setLocation(`/workspace/${clientId}/integrations`)} generatedConfig={generatedConfig} onGenerate={() => saveNow({ revealConfig: true })} generating={saveMutation.isPending || exportMutation.isPending} onRevealConfig={revealGeneratedConfig} revealing={exportMutation.isPending} /></TabsContent>
     </Tabs>
   </div>;
 }
