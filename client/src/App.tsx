@@ -5,7 +5,6 @@ import { Redirect, Route, Switch } from "wouter";
 import DashboardLayout from "./components/DashboardLayout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import AuthCallback from "./pages/AuthCallback";
 import AstroClientEditor from "./pages/AstroClientEditor";
 import DraftClientCreate from "./pages/DraftClientCreate";
 import Home from "./pages/Home";
@@ -65,14 +64,9 @@ function App() {
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <Toaster />
-          <Switch>
-            <Route path="/auth/callback" component={AuthCallback} />
-            <Route>
-              <DashboardLayout>
-                <Router />
-              </DashboardLayout>
-            </Route>
-          </Switch>
+          <DashboardLayout>
+            <Router />
+          </DashboardLayout>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

@@ -51,6 +51,15 @@ export type PublisherCommitResult = {
   treeSha: string;
 };
 
+export type CommitFilesInput = {
+  owner: string;
+  repository: string;
+  branch: string;
+  message: string;
+  files: readonly { path: string; content: string }[];
+  signal: AbortSignal;
+};
+
 export type DispatchWorkflowInput = {
   owner: string;
   repository: string;
@@ -81,12 +90,26 @@ export type GitHubApiClient = {
     repository: string;
     signal: AbortSignal;
   }): Promise<Repository | null>;
+  getBranchHeadSha(input: {
+    owner: string;
+    repository: string;
+    branch: string;
+    signal: AbortSignal;
+  }): Promise<string>;
   generatePublicRepository(
     input: GeneratePublicRepositoryInput
   ): Promise<GeneratedRepository>;
   commitPublisherFiles(
     input: CommitPublisherFilesInput
   ): Promise<PublisherCommitResult>;
+  commitFiles(input: CommitFilesInput): Promise<PublisherCommitResult>;
+  findCommitByMessage(input: {
+    owner: string;
+    repository: string;
+    branch: string;
+    message: string;
+    signal: AbortSignal;
+  }): Promise<{ commitSha: string } | null>;
   dispatchWorkflow(
     input: DispatchWorkflowInput
   ): Promise<void>;
@@ -368,6 +391,83 @@ export function createGitHubApiClient(options: {
     fetchFn: options.fetchFn ?? globalThis.fetch,
   });
 
+  const commitFiles = async (
+    input: CommitFilesInput,
+  ): Promise<PublisherCommitResult> => {
+    if (input.files.length === 0) {
+      throw new Error("At least one file is required for a publisher commit.");
+    }
+    const paths = input.files.map(file => file.path);
+    if (new Set(paths).size !== paths.length) {
+      throw new Error("Publisher commit file paths must be unique.");
+    }
+    if (paths.some(path => !path || path.startsWith("/") || path.includes(".."))) {
+      throw new Error("Publisher commit file paths must be repository-relative.");
+    }
+    const repositoryPath = `/repos/${encoded(input.owner)}/${encoded(input.repository)}`;
+    const branch = encoded(input.branch);
+    const refResponse = await request(
+      "branch lookup",
+      `${repositoryPath}/git/ref/heads/${branch}`,
+      { method: "GET" },
+      input.signal,
+    );
+    const parentCommitSha = parseObjectSha(refResponse, "branch lookup");
+    const commitResponse = await request(
+      "commit lookup",
+      `${repositoryPath}/git/commits/${encoded(parentCommitSha)}`,
+      { method: "GET" },
+      input.signal,
+    );
+    const baseTreeSha = parseCommitTreeSha(commitResponse);
+    const treeResponse = await request(
+      "tree creation",
+      `${repositoryPath}/git/trees`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          base_tree: baseTreeSha,
+          tree: input.files.map(file => ({
+            path: file.path,
+            mode: "100644",
+            type: "blob",
+            content: file.content,
+          })),
+        }),
+      },
+      input.signal,
+    );
+    const treeSha = parseSha(treeResponse, "tree creation");
+    const newCommitResponse = await request(
+      "commit creation",
+      `${repositoryPath}/git/commits`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          message: input.message,
+          tree: treeSha,
+          parents: [parentCommitSha],
+        }),
+      },
+      input.signal,
+    );
+    const commitSha = parseSha(newCommitResponse, "commit creation");
+    const updateResponse = await request(
+      "branch update",
+      `${repositoryPath}/git/refs/heads/${branch}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ sha: commitSha, force: false }),
+      },
+      input.signal,
+    );
+    const updatedSha = parseObjectSha(updateResponse, "branch update");
+    if (updatedSha !== commitSha) {
+      throw new GitHubApiError("branch update response validation");
+    }
+    return { branch: input.branch, commitSha, treeSha };
+  };
+
   return {
     async getRepository(input) {
       const response = await request(
@@ -378,6 +478,15 @@ export function createGitHubApiClient(options: {
         { allowNotFound: true }
       );
       return response === null ? null : parseRepository(response);
+    },
+    async getBranchHeadSha(input) {
+      const response = await request(
+        "branch head lookup",
+        `/repos/${encoded(input.owner)}/${encoded(input.repository)}/git/ref/heads/${encoded(input.branch)}`,
+        { method: "GET" },
+        input.signal,
+      );
+      return parseObjectSha(response, "branch head lookup");
     },
     async generatePublicRepository(input) {
       const response = await request(
@@ -401,84 +510,34 @@ export function createGitHubApiClient(options: {
       return parseGeneratedRepository(response);
     },
     async commitPublisherFiles(input) {
-      const repositoryPath = `/repos/${encoded(input.owner)}/${encoded(input.repository)}`;
-      const branch = encoded(input.branch);
-      const refResponse = await request(
-        "branch lookup",
-        `${repositoryPath}/git/ref/heads/${branch}`,
-        { method: "GET" },
-        input.signal
-      );
-      const parentCommitSha = parseObjectSha(refResponse, "branch lookup");
-      const commitResponse = await request(
-        "commit lookup",
-        `${repositoryPath}/git/commits/${encoded(parentCommitSha)}`,
-        { method: "GET" },
-        input.signal
-      );
-      const baseTreeSha = parseCommitTreeSha(commitResponse);
-      const treeResponse = await request(
-        "tree creation",
-        `${repositoryPath}/git/trees`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            base_tree: baseTreeSha,
-            tree: [
-              {
-                path: "wrangler.toml",
-                mode: "100644",
-                type: "blob",
-                content: input.files.wranglerToml,
-              },
-              {
-                path: "funnel.config.ts",
-                mode: "100644",
-                type: "blob",
-                content: input.files.funnelConfigTs,
-              },
-            ],
-          }),
-        },
-        input.signal
-      );
-      const treeSha = parseSha(treeResponse, "tree creation");
-      const newCommitResponse = await request(
-        "commit creation",
-        `${repositoryPath}/git/commits`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            message: input.message,
-            tree: treeSha,
-            parents: [parentCommitSha],
-          }),
-        },
-        input.signal
-      );
-      const commitSha = parseSha(newCommitResponse, "commit creation");
-      const updateResponse = await request(
-        "branch update",
-        `${repositoryPath}/git/refs/heads/${branch}`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            sha: commitSha,
-            force: false,
-          }),
-        },
-        input.signal
-      );
-      const updatedSha = parseObjectSha(updateResponse, "branch update");
-      if (updatedSha !== commitSha) {
-        throw new GitHubApiError("branch update response validation");
-      }
-      return {
-        branch: input.branch,
-        commitSha,
-        treeSha,
-      };
+      return commitFiles({
+        ...input,
+        files: [
+          { path: "wrangler.toml", content: input.files.wranglerToml },
+          { path: "funnel.config.ts", content: input.files.funnelConfigTs },
+        ],
+      });
     },
+    async findCommitByMessage(input) {
+      const response = await request(
+        "commit reconciliation",
+        `/repos/${encoded(input.owner)}/${encoded(input.repository)}/commits?sha=${encoded(input.branch)}&per_page=100`,
+        { method: "GET" },
+        input.signal,
+      );
+      if (!Array.isArray(response)) {
+        throw new GitHubApiError("commit reconciliation response validation");
+      }
+      for (const value of response) {
+        const record = requireRecord(value, "commit reconciliation");
+        const commit = requireRecord(record.commit, "commit reconciliation");
+        if (requireString(commit, "message", "commit reconciliation") === input.message) {
+          return { commitSha: requireString(record, "sha", "commit reconciliation") };
+        }
+      }
+      return null;
+    },
+    commitFiles,
     async dispatchWorkflow(input) {
       await request(
         "workflow dispatch",
