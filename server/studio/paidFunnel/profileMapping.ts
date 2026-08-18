@@ -214,7 +214,7 @@ export function buildReadyPaidFunnelProfileDto(
   clientId = 5
 ): ClientIntegrationProfileDto {
   const secretPresence: ClientIntegrationSecretPresence = emptySecretPresence();
-  for (const key of CLIENT_INTEGRATION_SECRET_KEYS) {
+  for (const key of Object.keys(secretPresence) as Array<keyof ClientIntegrationSecretPresence>) {
     secretPresence[key] = "SET";
   }
   return buildClientIntegrationProfileDto({

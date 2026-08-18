@@ -270,7 +270,7 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
       </section>
 
       {studio ? (
-        <PaidFunnelBuilder clientId={clientId} initialGraph={studio.document.graph} onBack={closeStudio} />
+        <PaidFunnelBuilder clientId={clientId} state={studio} onChange={setStudio} onBack={closeStudio} />
       ) : selectedFunnelId ? (
         selectedIsSimpleForm ? (
           <SimpleFormFunnelEditor

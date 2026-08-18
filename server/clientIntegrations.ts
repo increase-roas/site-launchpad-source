@@ -35,6 +35,10 @@ import {
 } from "./clientSecurity";
 import { getDb } from "./db";
 import { postgresConflictTargets, withUpdatedAt } from "./postgresPersistence";
+import type {
+  ClientIntegrationProfileResolver,
+  PaidFunnelResolvedProfile,
+} from "./studio/paidFunnel/profileMapping";
 
 export type ProfileContribution = {
   source: ClientIntegrationSource;
@@ -167,68 +171,81 @@ function decodeMaybeEncrypted(value: string | null | undefined): string | null {
   return value.trim();
 }
 
+function stringRecord(row: object | null | undefined): Record<string, string | null | undefined> | null {
+  if (!row) return null;
+  const out: Record<string, string | null | undefined> = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (typeof value === "string" || value == null) out[key] = value ?? null;
+  }
+  return out;
+}
+
 export function contributionsFromLegacyRows(input: {
   clientId: number;
-  lead?: Record<string, string | null | undefined> | null;
-  wrangler?: Record<string, string | null | undefined> | null;
-  clientSecrets?: Record<string, string | null | undefined> | null;
-  funnelSecrets?: Array<{ funnelId: number; row: Record<string, string | null | undefined> }>;
+  lead?: object | null;
+  wrangler?: object | null;
+  clientSecrets?: object | null;
+  funnelSecrets?: Array<{ funnelId: number; row: object }>;
 }): ProfileContribution[] {
   const contributions: ProfileContribution[] = [];
 
-  if (input.lead) {
+  const lead = stringRecord(input.lead);
+  const wrangler = stringRecord(input.wrangler);
+  const clientSecrets = stringRecord(input.clientSecrets);
+
+  if (lead) {
     contributions.push({
       source: "clientLeadIntegrations",
       sourceId: String(input.clientId),
       identifiers: {
-        GHL_LOCATION_ID: decodeMaybeEncrypted(input.lead.ghlLocationId) ?? undefined,
-        GOOGLE_SHEETS_ID: decodeMaybeEncrypted(input.lead.googleSheetsId) ?? undefined,
-        META_PIXEL_ID: decodeMaybeEncrypted(input.lead.metaPixelId) ?? undefined,
+        GHL_LOCATION_ID: decodeMaybeEncrypted(lead.ghlLocationId) ?? undefined,
+        GOOGLE_SHEETS_ID: decodeMaybeEncrypted(lead.googleSheetsId) ?? undefined,
+        META_PIXEL_ID: decodeMaybeEncrypted(lead.metaPixelId) ?? undefined,
       },
       secrets: {
-        GHL_API_KEY: decodeMaybeEncrypted(input.lead.ghlApiKeyEncrypted) ?? undefined,
-        META_CAPI_ACCESS_TOKEN: decodeMaybeEncrypted(input.lead.metaCapiAccessTokenEncrypted) ?? undefined,
-        STAGE_WEBHOOK_SECRET: decodeMaybeEncrypted(input.lead.stageWebhookSecretEncrypted) ?? undefined,
-        ALERT_WEBHOOK_URL: decodeMaybeEncrypted(input.lead.alertWebhookUrlEncrypted) ?? undefined,
+        GHL_API_KEY: decodeMaybeEncrypted(lead.ghlApiKeyEncrypted) ?? undefined,
+        META_CAPI_ACCESS_TOKEN: decodeMaybeEncrypted(lead.metaCapiAccessTokenEncrypted) ?? undefined,
+        STAGE_WEBHOOK_SECRET: decodeMaybeEncrypted(lead.stageWebhookSecretEncrypted) ?? undefined,
+        ALERT_WEBHOOK_URL: decodeMaybeEncrypted(lead.alertWebhookUrlEncrypted) ?? undefined,
       },
     });
   }
 
-  if (input.wrangler) {
+  if (wrangler) {
     contributions.push({
       source: "wranglerSecretSetups",
       sourceId: String(input.clientId),
       identifiers: {
-        GHL_LOCATION_ID: decodeMaybeEncrypted(input.wrangler.ghlLocationIdEncrypted) ?? undefined,
-        GOOGLE_SHEETS_ID: decodeMaybeEncrypted(input.wrangler.googleSheetsIdEncrypted) ?? undefined,
-        META_PIXEL_ID: decodeMaybeEncrypted(input.wrangler.metaPixelIdEncrypted) ?? undefined,
+        GHL_LOCATION_ID: decodeMaybeEncrypted(wrangler.ghlLocationIdEncrypted) ?? undefined,
+        GOOGLE_SHEETS_ID: decodeMaybeEncrypted(wrangler.googleSheetsIdEncrypted) ?? undefined,
+        META_PIXEL_ID: decodeMaybeEncrypted(wrangler.metaPixelIdEncrypted) ?? undefined,
       },
       secrets: {
-        GHL_API_KEY: decodeMaybeEncrypted(input.wrangler.ghlApiKeyEncrypted) ?? undefined,
-        META_CAPI_ACCESS_TOKEN: decodeMaybeEncrypted(input.wrangler.metaCapiAccessTokenEncrypted) ?? undefined,
-        STAGE_WEBHOOK_SECRET: decodeMaybeEncrypted(input.wrangler.stageWebhookSecretEncrypted) ?? undefined,
+        GHL_API_KEY: decodeMaybeEncrypted(wrangler.ghlApiKeyEncrypted) ?? undefined,
+        META_CAPI_ACCESS_TOKEN: decodeMaybeEncrypted(wrangler.metaCapiAccessTokenEncrypted) ?? undefined,
+        STAGE_WEBHOOK_SECRET: decodeMaybeEncrypted(wrangler.stageWebhookSecretEncrypted) ?? undefined,
         GOOGLE_SERVICE_ACCOUNT_EMAIL:
-          decodeMaybeEncrypted(input.wrangler.googleServiceAccountEmailEncrypted) ?? undefined,
+          decodeMaybeEncrypted(wrangler.googleServiceAccountEmailEncrypted) ?? undefined,
         GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY:
-          decodeMaybeEncrypted(input.wrangler.googleServiceAccountPrivateKeyEncrypted) ?? undefined,
-        ALERT_WEBHOOK_URL: decodeMaybeEncrypted(input.wrangler.alertWebhookUrlEncrypted) ?? undefined,
-        ADMIN_PASSWORD: decodeMaybeEncrypted(input.wrangler.adminPasswordEncrypted) ?? undefined,
-        ADMIN_SESSION_SECRET: decodeMaybeEncrypted(input.wrangler.adminSessionSecretEncrypted) ?? undefined,
-        META_VALUE_QUALIFIED: decodeMaybeEncrypted(input.wrangler.metaValueQualifiedEncrypted) ?? undefined,
-        META_VALUE_SCHEDULE: decodeMaybeEncrypted(input.wrangler.metaValueScheduleEncrypted) ?? undefined,
-        META_VALUE_SHOWED: decodeMaybeEncrypted(input.wrangler.metaValueShowedEncrypted) ?? undefined,
+          decodeMaybeEncrypted(wrangler.googleServiceAccountPrivateKeyEncrypted) ?? undefined,
+        ALERT_WEBHOOK_URL: decodeMaybeEncrypted(wrangler.alertWebhookUrlEncrypted) ?? undefined,
+        ADMIN_PASSWORD: decodeMaybeEncrypted(wrangler.adminPasswordEncrypted) ?? undefined,
+        ADMIN_SESSION_SECRET: decodeMaybeEncrypted(wrangler.adminSessionSecretEncrypted) ?? undefined,
+        META_VALUE_QUALIFIED: decodeMaybeEncrypted(wrangler.metaValueQualifiedEncrypted) ?? undefined,
+        META_VALUE_SCHEDULE: decodeMaybeEncrypted(wrangler.metaValueScheduleEncrypted) ?? undefined,
+        META_VALUE_SHOWED: decodeMaybeEncrypted(wrangler.metaValueShowedEncrypted) ?? undefined,
       },
     });
   }
 
-  if (input.clientSecrets) {
-    const ghlApiKey = decodeMaybeEncrypted(input.clientSecrets.ghlApiKeyEncrypted);
-    const legacyWebhook = decodeMaybeEncrypted(input.clientSecrets.ghlWebhookUrlEncrypted);
+  if (clientSecrets) {
+    const ghlApiKey = decodeMaybeEncrypted(clientSecrets.ghlApiKeyEncrypted);
+    const legacyWebhook = decodeMaybeEncrypted(clientSecrets.ghlWebhookUrlEncrypted);
     contributions.push({
       source: "clientSecretSetups",
       sourceId: String(input.clientId),
       identifiers: {
-        META_PIXEL_ID: decodeMaybeEncrypted(input.clientSecrets.metaPixelIdEncrypted) ?? undefined,
+        META_PIXEL_ID: decodeMaybeEncrypted(clientSecrets.metaPixelIdEncrypted) ?? undefined,
       },
       secrets: {
         GHL_API_KEY: ghlApiKey ?? legacyWebhook ?? undefined,
@@ -246,10 +263,11 @@ export function contributionsFromLegacyRows(input: {
 
   for (const item of input.funnelSecrets ?? []) {
     const mapped: Partial<Record<ClientIntegrationSecretKey, string>> = {};
-    const ghl = decodeMaybeEncrypted(item.row.ghlWebhookUrlEncrypted);
-    const callback = decodeMaybeEncrypted(item.row.crmCallbackSecretEncrypted);
-    const capi = decodeMaybeEncrypted(item.row.metaCapiAccessTokenEncrypted);
-    const alert = decodeMaybeEncrypted(item.row.submissionAlertWebhookUrlEncrypted);
+    const secretRow = stringRecord(item.row) ?? {};
+    const ghl = decodeMaybeEncrypted(secretRow.ghlWebhookUrlEncrypted);
+    const callback = decodeMaybeEncrypted(secretRow.crmCallbackSecretEncrypted);
+    const capi = decodeMaybeEncrypted(secretRow.metaCapiAccessTokenEncrypted);
+    const alert = decodeMaybeEncrypted(secretRow.submissionAlertWebhookUrlEncrypted);
     if (ghl) mapped[canonicalizeLegacyKey("GHL_WEBHOOK_URL") as ClientIntegrationSecretKey] = ghl;
     if (callback) mapped[canonicalizeLegacyKey("CRM_CALLBACK_SECRET") as ClientIntegrationSecretKey] = callback;
     if (capi) mapped.META_CAPI_ACCESS_TOKEN = capi;
@@ -354,7 +372,7 @@ export async function saveClientIntegrationProfile(
     googleSheetsId: identifiers.GOOGLE_SHEETS_ID,
     metaPixelId: identifiers.META_PIXEL_ID,
     secretsEncrypted: encryptSecretBlob(secrets),
-    reconciliationStatus: existing?.reconciliationStatus === "conflict" ? "conflict" : "ready",
+    reconciliationStatus: existing?.reconciliationStatus === "conflict" ? ("conflict" as const) : ("ready" as const),
     conflictedKeys: existing?.conflictedKeys ?? [],
   };
   await db
@@ -386,7 +404,7 @@ export async function reconcileClientIntegrationProfile(clientId: number): Promi
     clientSecrets: clientSecrets[0] ?? null,
     funnelSecrets: funnelRows
       .filter(row => row.secrets)
-      .map(row => ({ funnelId: row.funnelId, row: row.secrets as Record<string, string | null> })),
+      .map(row => ({ funnelId: row.funnelId, row: row.secrets as object })),
   });
   const reconciled = reconcileContributions(contributions);
   const row = {
@@ -411,4 +429,40 @@ export async function reconcileClientIntegrationProfile(clientId: number): Promi
 
 export function resolvePublisherMappings(blob: string | null | undefined) {
   return decryptSecretBlob(blob);
+}
+
+export async function loadResolvedPaidFunnelProfile(
+  clientId: number,
+): Promise<PaidFunnelResolvedProfile | null> {
+  const db = await requireDb();
+  const rows = await db
+    .select()
+    .from(clientIntegrationProfiles)
+    .where(eq(clientIntegrationProfiles.clientId, clientId))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    clientId,
+    dto: toProfileDto(row, clientId),
+    secrets: decryptSecretBlob(row.secretsEncrypted),
+  };
+}
+
+export function createClientIntegrationProfileResolver(
+  profiles: readonly PaidFunnelResolvedProfile[],
+): ClientIntegrationProfileResolver {
+  const byId = new Map(profiles.map(profile => [profile.clientId, profile]));
+  return {
+    resolveByClientId(id) {
+      return byId.get(id) ?? null;
+    },
+  };
+}
+
+export async function clientIntegrationProfileResolverForClient(
+  clientId: number,
+): Promise<ClientIntegrationProfileResolver> {
+  const profile = await loadResolvedPaidFunnelProfile(clientId);
+  return createClientIntegrationProfileResolver(profile ? [profile] : []);
 }

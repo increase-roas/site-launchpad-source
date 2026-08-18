@@ -27,10 +27,16 @@ export type ClientIntegrationIdentifierKey =
   (typeof CLIENT_INTEGRATION_IDENTIFIER_KEYS)[number];
 
 const SHARED_SECRET_FROM_SIMPLE_FORM = SIMPLE_FORM_CLIENT_SECRET_KEYS.filter(
-  key => !(CLIENT_INTEGRATION_IDENTIFIER_KEYS as readonly string[]).includes(key),
+  (key): key is Exclude<
+    (typeof SIMPLE_FORM_CLIENT_SECRET_KEYS)[number],
+    ClientIntegrationIdentifierKey
+  > => !(CLIENT_INTEGRATION_IDENTIFIER_KEYS as readonly string[]).includes(key),
 );
 const SHARED_SECRET_FROM_RUNTIME = SIMPLE_FORM_RUNTIME_SECRET_KEYS.filter(
-  key =>
+  (key): key is Exclude<
+    (typeof SIMPLE_FORM_RUNTIME_SECRET_KEYS)[number],
+    ClientIntegrationIdentifierKey | (typeof SHARED_SECRET_FROM_SIMPLE_FORM)[number]
+  > =>
     !(CLIENT_INTEGRATION_IDENTIFIER_KEYS as readonly string[]).includes(key) &&
     !(SHARED_SECRET_FROM_SIMPLE_FORM as readonly string[]).includes(key),
 );
@@ -44,7 +50,10 @@ export type ClientIntegrationSharedSecretKey =
   (typeof CLIENT_INTEGRATION_SHARED_SECRET_KEYS)[number];
 
 export const CLIENT_INTEGRATION_WEBSITE_ONLY_KEYS = WRANGLER_SECRET_VALUES.filter(
-  key =>
+  (key): key is Exclude<
+    WranglerSecretName,
+    ClientIntegrationIdentifierKey | ClientIntegrationSharedSecretKey
+  > =>
     !(CLIENT_INTEGRATION_IDENTIFIER_KEYS as readonly string[]).includes(key) &&
     !(CLIENT_INTEGRATION_SHARED_SECRET_KEYS as readonly string[]).includes(key),
 );
@@ -240,7 +249,7 @@ export function computeClientIntegrationReadiness(input: {
   for (const key of CLIENT_INTEGRATION_IDENTIFIER_KEYS) {
     if (input.identifiers[key]?.trim()) set.add(key);
   }
-  for (const key of CLIENT_INTEGRATION_SECRET_KEYS) {
+  for (const key of Object.keys(input.secretPresence) as Array<keyof ClientIntegrationSecretPresence>) {
     if (input.secretPresence[key] === "SET") set.add(key);
   }
   const blocked = input.reconciliationStatus === "conflict";

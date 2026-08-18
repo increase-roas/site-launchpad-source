@@ -482,8 +482,15 @@ export function PaidFunnelInspector({
               guidance="Uses the existing media upload flow."
               busy={requestUpload.isPending || completeUpload.isPending}
               onFile={file => {
-                void uploadAssetDirectly(file, { clientId, assetKind: "photo", slot: inspector.id }, {
-                  requestUpload: input => requestUpload.mutateAsync(input),
+                void uploadAssetDirectly(file, { clientId, assetKind: "client", slot: "product" }, {
+                  requestUpload: input => requestUpload.mutateAsync({
+                    clientId: input.clientId,
+                    assetKind: "client",
+                    slot: "product",
+                    originalFilename: input.originalFilename,
+                    mimeType: input.mimeType,
+                    sizeBytes: input.sizeBytes,
+                  }),
                   completeUpload: input => completeUpload.mutateAsync(input),
                   fetchFn: fetch,
                 }).then(result => {

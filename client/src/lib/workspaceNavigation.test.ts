@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getClientIdFromWorkspacePath,
   getWorkspaceArea,
+  integrationsRoute,
   settingsRedirectFromLegacyClientPath,
   workspaceRoute,
 } from "./workspaceNavigation";
@@ -44,5 +45,13 @@ describe("Paid Ads funnel destinations stay under Funnels", () => {
     expect(getWorkspaceArea("/templates")).toBe("clients");
     expect(getWorkspaceArea("/workspace/4/funnels?tab=templates")).toBe("funnels");
     expect(getWorkspaceArea("/workspace/4/funnels?studio=generic-paid-funnel")).toBe("funnels");
+  });
+});
+
+describe("Client integrations destination", () => {
+  it("keeps the thin Integrations page under the selected client", () => {
+    expect(integrationsRoute(9)).toBe("/workspace/9/integrations");
+    expect(getWorkspaceArea("/workspace/9/integrations")).toBe("settings");
+    expect(getClientIdFromWorkspacePath("/workspace/9/integrations")).toBe(9);
   });
 });

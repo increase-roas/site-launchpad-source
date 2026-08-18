@@ -81,7 +81,7 @@ function CanvasPreview({
         ...box.style,
         outline: box.selected ? "2px solid #22d3ee" : box.kind === "element" ? "1px dashed rgba(255,255,255,0.08)" : "1px dashed rgba(255,255,255,0.04)",
         opacity: box.visible ? 1 : 0.35,
-        display: box.kind === "row" ? "flex" : box.style.display,
+        display: box.kind === "row" ? "flex" : typeof box.style.display === "string" ? box.style.display : undefined,
       }}
       className="relative min-h-8"
     >

@@ -50,11 +50,15 @@ export type StudioClipboard =
   | { kind: "column"; node: FunnelColumn }
   | { kind: "element"; node: FunnelElement };
 
+function isPaletteItem(item: PaletteItem | StudioClipboard): item is PaletteItem {
+  return "source" in item;
+}
+
 export function isValidDrop(target: DropTarget, item: PaletteItem | StudioClipboard): boolean {
-  if (item.source === "section" || item.source === "reusable" || ("kind" in item && item.kind === "section")) {
+  if ((isPaletteItem(item) && (item.source === "section" || item.source === "reusable")) || ("kind" in item && item.kind === "section")) {
     return target.parentKind === "page";
   }
-  if (item.source === "row" || ("kind" in item && item.kind === "row")) {
+  if ((isPaletteItem(item) && item.source === "row") || ("kind" in item && item.kind === "row")) {
     return target.parentKind === "section";
   }
   if ("kind" in item && item.kind === "column") {

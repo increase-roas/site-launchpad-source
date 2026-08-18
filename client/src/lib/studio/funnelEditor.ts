@@ -28,7 +28,7 @@ import {
 } from "@shared/paidFunnel/ops";
 import { createSectionPreset } from "@shared/paidFunnel/presets";
 
-export type SaveStatus = "idle" | "saving" | "saved" | "error" | "conflict";
+export type SaveStatus = "idle" | "saving" | "saved" | "dirty" | "error" | "conflict";
 
 export type FunnelEditorSnapshot = {
   graph: PaidFunnelGraph;

@@ -49,6 +49,7 @@ function breadcrumbItems(location: string, clientName?: string): string[] {
     return [name, "Paid Ads", "Funnels"];
   }
   if (area === "media") return [name, "Media"];
+  if (location.includes("/integrations")) return [name, "Integrations"];
   if (area === "settings") return [name, "Settings"];
   return ["Clients"];
 }

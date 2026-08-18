@@ -24,6 +24,7 @@ import {
   saveClientSecretSetup,
   updateClient,
 } from "../db";
+import { getClientIntegrationProfile } from "../clientIntegrations";
 import { encryptSetupValue, hasProtectedValue } from "../clientSecurity";
 import { observeRuntimeOperation } from "../_core/operationTelemetry";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
@@ -105,6 +106,14 @@ export const clientsRouter = router({
   get: protectedProcedure
     .input(z.object({ clientId: z.number().int().positive() }))
     .query(({ input }) => getClientView(input.clientId)),
+
+  getIntegrationProfile: protectedProcedure
+    .input(z.object({ clientId: z.number().int().positive() }))
+    .query(async ({ input }) => {
+      const existing = await getClientById(input.clientId);
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Client not found." });
+      return getClientIntegrationProfile(input.clientId);
+    }),
 
   create: protectedProcedure
     .input(z.object({ details: clientInputSchema, setup: secretSetupInputSchema }))

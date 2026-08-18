@@ -265,8 +265,8 @@ function checkSecrets(
       if (!profile.identifiers[name]?.trim()) missing.push(name);
       continue;
     }
-    if (isSecretKey(name)) {
-      if (profile.secretPresence[name] !== "SET") missing.push(name);
+    if (isSecretKey(name) && name in profile.secretPresence) {
+      if (profile.secretPresence[name as keyof typeof profile.secretPresence] !== "SET") missing.push(name);
       continue;
     }
     missing.push(name);
