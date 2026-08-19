@@ -134,9 +134,6 @@ describe("Astro canonical integration profile database flow", () => {
       GHL_LOCATION_ID: "location-123",
       META_PIXEL_ID: "123456789012345",
       META_CAPI_ACCESS_TOKEN: "meta-capi-secret",
-      META_VALUE_QUALIFIED: "50",
-      META_VALUE_SCHEDULE: "75",
-      META_VALUE_SHOWED: "100",
       STAGE_WEBHOOK_SECRET: "stage-webhook-secret",
       GOOGLE_SHEETS_ID: "sheet-123",
       GOOGLE_SERVICE_ACCOUNT_EMAIL: "service@example.com",
@@ -178,9 +175,9 @@ describe("Astro canonical integration profile database flow", () => {
         ghlLocationIdEncrypted: encryptSetupValue(raw.GHL_LOCATION_ID),
         metaPixelIdEncrypted: encryptSetupValue(raw.META_PIXEL_ID),
         metaCapiAccessTokenEncrypted: encryptSetupValue(raw.META_CAPI_ACCESS_TOKEN),
-        metaValueQualifiedEncrypted: encryptSetupValue(raw.META_VALUE_QUALIFIED),
-        metaValueScheduleEncrypted: encryptSetupValue(raw.META_VALUE_SCHEDULE),
-        metaValueShowedEncrypted: encryptSetupValue(raw.META_VALUE_SHOWED),
+        metaValueQualifiedEncrypted: encryptSetupValue("legacy-qualified-value-unused"),
+        metaValueScheduleEncrypted: encryptSetupValue("legacy-schedule-value-unused"),
+        metaValueShowedEncrypted: encryptSetupValue("legacy-showed-value-unused"),
         stageWebhookSecretEncrypted: encryptSetupValue(raw.STAGE_WEBHOOK_SECRET),
         googleSheetsIdEncrypted: encryptSetupValue(raw.GOOGLE_SHEETS_ID),
         googleServiceAccountEmailEncrypted: encryptSetupValue(raw.GOOGLE_SERVICE_ACCOUNT_EMAIL),
@@ -246,6 +243,11 @@ describe("Astro canonical integration profile database flow", () => {
     }
     expect(JSON.stringify(backfilled.integrationProfile)).not.toContain(raw.GHL_API_KEY);
     expect(JSON.stringify(backfilled.integrationProfile)).not.toContain(raw.ADMIN_PASSWORD);
+    expect(JSON.stringify(backfilled.integrationProfile)).not.toContain("META_VALUE_");
+    expect(JSON.stringify(backfilled.integrationProfile)).not.toContain("legacy-qualified-value-unused");
+    expect(backfilled.secretStatus).not.toHaveProperty("META_VALUE_QUALIFIED");
+    expect(backfilled.secretStatus).not.toHaveProperty("META_VALUE_SCHEDULE");
+    expect(backfilled.secretStatus).not.toHaveProperty("META_VALUE_SHOWED");
 
     const rotated = "ghl-rotated-secret";
     const saved = await saveWranglerSecrets(5, { GHL_API_KEY: rotated });

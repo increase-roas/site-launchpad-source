@@ -39,6 +39,10 @@ describe("generic paid-funnel source bundle", () => {
         "GHL_API_KEY",
         "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
         "META_CAPI_ACCESS_TOKEN",
+      ])
+    );
+    expect(result.bindings.bindingNames).not.toEqual(
+      expect.arrayContaining([
         "META_VALUE_QUALIFIED",
         "META_VALUE_SCHEDULE",
         "META_VALUE_SHOWED",

@@ -289,9 +289,6 @@ export function mapGenericPaidFunnelProfileBindings(input: {
       requiredNames: [
         ...requiredPaidFunnelSecretNames(input.package),
         "ALERT_WEBHOOK_URL",
-        "META_VALUE_QUALIFIED",
-        "META_VALUE_SCHEDULE",
-        "META_VALUE_SHOWED",
       ],
     }),
   };

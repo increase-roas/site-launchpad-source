@@ -58,14 +58,8 @@ export function buildGenericPaidFunnelSourceBundle(input: {
 
   const files = compilePaidFunnelToAstro(input.graph);
   const serialized = JSON.stringify(files);
-  const nonSensitiveNumericSettings = new Set([
-    "META_VALUE_QUALIFIED",
-    "META_VALUE_SCHEDULE",
-    "META_VALUE_SHOWED",
-  ]);
   for (const [name, value] of Object.entries(mapped.bindings.secrets)) {
     if (isIdentifierKey(name)) continue;
-    if (nonSensitiveNumericSettings.has(name)) continue;
     if (value?.trim() && serialized.includes(value)) {
       throw new Error(
         "A client integration secret was compiled into the Astro source bundle."

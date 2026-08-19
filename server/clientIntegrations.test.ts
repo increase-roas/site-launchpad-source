@@ -42,9 +42,6 @@ const SECRET_VALUES = {
   ALERT_WEBHOOK_URL: "https://alerts.example/hook",
   ADMIN_PASSWORD: "admin-password-XYZ",
   ADMIN_SESSION_SECRET: "admin-session-secret-XYZ",
-  META_VALUE_QUALIFIED: "meta-qualified-value-50",
-  META_VALUE_SCHEDULE: "meta-schedule-value-75",
-  META_VALUE_SHOWED: "meta-showed-value-100",
 } as const;
 
 function fullSecrets() {
@@ -284,5 +281,47 @@ describe("ClientIntegrationProfile store and DTOs", () => {
     expect(JSON.stringify(logs)).not.toContain("ghl-live-api-key-AAA");
     log.mockRestore();
     info.mockRestore();
+  });
+
+  it("leaves unused wrangler META_VALUE columns out of active contributions and DTOs", () => {
+    const leftover = {
+      qualified: "legacy-qualified-value-unused",
+      schedule: "legacy-schedule-value-unused",
+      showed: "legacy-showed-value-unused",
+    };
+    const contributions = contributionsFromLegacyRows({
+      clientId: 5,
+      wrangler: {
+        ghlApiKeyEncrypted: encryptSetupValue("ghl-live-api-key-AAA"),
+        ghlLocationIdEncrypted: encryptSetupValue("loc_1"),
+        metaValueQualifiedEncrypted: encryptSetupValue(leftover.qualified),
+        metaValueScheduleEncrypted: encryptSetupValue(leftover.schedule),
+        metaValueShowedEncrypted: encryptSetupValue(leftover.showed),
+      },
+    });
+    const reconciled = reconcileContributions(contributions);
+    expect(reconciled.acceptedSecrets).not.toHaveProperty("META_VALUE_QUALIFIED");
+    expect(reconciled.acceptedSecrets).not.toHaveProperty("META_VALUE_SCHEDULE");
+    expect(reconciled.acceptedSecrets).not.toHaveProperty("META_VALUE_SHOWED");
+    const dto = toProfileDto(
+      {
+        clientId: 5,
+        profileVersion: 1,
+        ghlLocationId: reconciled.identifiers.GHL_LOCATION_ID,
+        googleSheetsId: null,
+        metaPixelId: null,
+        secretsEncrypted: encryptSecretBlob(reconciled.acceptedSecrets),
+        reconciliationStatus: reconciled.status,
+        conflictedKeys: reconciled.conflictedKeys,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      5,
+    );
+    expect(JSON.stringify(dto)).not.toMatch(/META_VALUE_/);
+    expect(JSON.stringify(dto)).not.toContain(leftover.qualified);
+    expect(JSON.stringify(dto)).not.toContain(leftover.schedule);
+    expect(JSON.stringify(dto)).not.toContain(leftover.showed);
+    assertDtoOmitsSecretValues(dto, Object.values(leftover));
   });
 });

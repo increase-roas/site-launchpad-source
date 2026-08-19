@@ -108,17 +108,17 @@ describe("operational launch summary", () => {
 });
 
 describe("runtime configuration counter", () => {
-  it("labels the 14 wrangler values without treating optional alert as failure", () => {
+  it("labels the 11 wrangler values without treating optional alert as failure", () => {
     const status = emptyWranglerSecretStatus();
     for (const name of WRANGLER_SECRET_VALUES) {
       if (name !== "ALERT_WEBHOOK_URL") status[name] = true;
     }
     const summary = summarizeRuntimeConfiguration(status);
-    expect(WRANGLER_SECRET_VALUES).toHaveLength(14);
+    expect(WRANGLER_SECRET_VALUES).toHaveLength(11);
     expect(summary).toMatchObject({
-      set: 13,
-      total: 14,
-      label: "Runtime configuration — 13 of 14 set",
+      set: 10,
+      total: 11,
+      label: "Runtime configuration — 10 of 11 set",
       optionalUnset: ["ALERT_WEBHOOK_URL"],
       blocksLaunch: false,
     });

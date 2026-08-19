@@ -234,9 +234,6 @@ export function contributionsFromLegacyRows(input: {
         ALERT_WEBHOOK_URL: decodeMaybeEncrypted(wrangler.alertWebhookUrlEncrypted) ?? undefined,
         ADMIN_PASSWORD: decodeMaybeEncrypted(wrangler.adminPasswordEncrypted) ?? undefined,
         ADMIN_SESSION_SECRET: decodeMaybeEncrypted(wrangler.adminSessionSecretEncrypted) ?? undefined,
-        META_VALUE_QUALIFIED: decodeMaybeEncrypted(wrangler.metaValueQualifiedEncrypted) ?? undefined,
-        META_VALUE_SCHEDULE: decodeMaybeEncrypted(wrangler.metaValueScheduleEncrypted) ?? undefined,
-        META_VALUE_SHOWED: decodeMaybeEncrypted(wrangler.metaValueShowedEncrypted) ?? undefined,
       },
     });
   }

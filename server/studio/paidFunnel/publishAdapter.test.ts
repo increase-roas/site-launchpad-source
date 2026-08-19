@@ -203,9 +203,16 @@ describe("generic paid-funnel publish adapter", () => {
     expect(mapped.bindings.secrets.ALERT_WEBHOOK_URL).toBe(
       "https://alerts.example/hook"
     );
-    expect(mapped.bindings.secrets.META_VALUE_QUALIFIED).toBe("50");
-    expect(mapped.bindings.secrets.META_VALUE_SCHEDULE).toBe("75");
-    expect(mapped.bindings.secrets.META_VALUE_SHOWED).toBe("100");
+    expect(mapped.bindings.secrets).not.toHaveProperty("META_VALUE_QUALIFIED");
+    expect(mapped.bindings.secrets).not.toHaveProperty("META_VALUE_SCHEDULE");
+    expect(mapped.bindings.secrets).not.toHaveProperty("META_VALUE_SHOWED");
     expect(JSON.stringify(planned)).not.toContain("ghl-live-api-key-AAA");
+    expect(mapped.bindings.bindingNames).not.toEqual(
+      expect.arrayContaining([
+        "META_VALUE_QUALIFIED",
+        "META_VALUE_SCHEDULE",
+        "META_VALUE_SHOWED",
+      ])
+    );
   });
 });

@@ -65,7 +65,6 @@ describe("ClientIntegrationProfile contract", () => {
     expect(clientIntegrationFieldError("GOOGLE_SERVICE_ACCOUNT_EMAIL", "person@example.com")).toMatch(/service-account/);
     expect(clientIntegrationFieldError("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY", "not-a-key")).toMatch(/PEM/);
     expect(clientIntegrationFieldError("ALERT_WEBHOOK_URL", "http://example.com/hook")).toMatch(/HTTPS/);
-    expect(clientIntegrationFieldError("META_VALUE_QUALIFIED", "-1")).toMatch(/non-negative/);
     expect(clientIntegrationFieldError("META_PIXEL_ID", "123456789012345")).toBeNull();
     expect(clientIntegrationFieldError("GOOGLE_SERVICE_ACCOUNT_EMAIL", "launch@project.iam.gserviceaccount.com")).toBeNull();
     expect(clientIntegrationFieldError("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY", "-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----")).toBeNull();
@@ -161,5 +160,35 @@ describe("ClientIntegrationProfile contract", () => {
   it("exposes UI groups without leftover identifier or secret keys", () => {
     const grouped = CLIENT_INTEGRATION_UI_GROUPS.flatMap(group => [...group.keys]);
     expect(grouped.sort()).toEqual([...CLIENT_INTEGRATION_PROFILE_KEYS].sort());
+  });
+
+  it("keeps META_VALUE_* out of active profile, UI, DTO, and required secrets", () => {
+    const removed = [
+      "META_VALUE_QUALIFIED",
+      "META_VALUE_SCHEDULE",
+      "META_VALUE_SHOWED",
+    ];
+    expect(WRANGLER_SECRET_VALUES).not.toEqual(expect.arrayContaining(removed));
+    expect(CLIENT_INTEGRATION_PROFILE_KEYS).not.toEqual(expect.arrayContaining(removed));
+    expect(CLIENT_INTEGRATION_SECRET_KEYS).not.toEqual(expect.arrayContaining(removed));
+    expect(WEBSITE_REQUIRED_PROFILE_KEYS).not.toEqual(expect.arrayContaining(removed));
+    expect(FUNNEL_REQUIRED_PROFILE_KEYS).toEqual(
+      SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT.requiredRuntimeSecrets,
+    );
+    expect(FUNNEL_REQUIRED_PROFILE_KEYS).toHaveLength(8);
+    expect(FUNNEL_REQUIRED_PROFILE_KEYS).not.toEqual(expect.arrayContaining(removed));
+    const grouped = CLIENT_INTEGRATION_UI_GROUPS.flatMap(group => [...group.keys]);
+    expect(grouped).not.toEqual(expect.arrayContaining(removed));
+    const dto = buildClientIntegrationProfileDto({
+      clientId: 3,
+      identifiers: emptyIdentifiers(),
+      secretPresence: emptySecretPresence(),
+      lastUpdated: null,
+      reconciliationStatus: "pending",
+      conflictedKeys: [],
+    });
+    expect(JSON.stringify(dto)).not.toMatch(/META_VALUE_/);
+    expect(Object.keys(dto.secretPresence)).not.toEqual(expect.arrayContaining(removed));
+    assertDtoOmitsSecretValues(dto, ["legacy-qualified-value-unused"]);
   });
 });

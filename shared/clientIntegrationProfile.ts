@@ -86,9 +86,6 @@ export const CLIENT_INTEGRATION_FIELD_LABELS: Record<ClientIntegrationProfileKey
   ALERT_WEBHOOK_URL: "Alert webhook URL",
   ADMIN_PASSWORD: "Website admin password",
   ADMIN_SESSION_SECRET: "Website admin session secret",
-  META_VALUE_QUALIFIED: "Meta qualified-lead value",
-  META_VALUE_SCHEDULE: "Meta scheduled-lead value",
-  META_VALUE_SHOWED: "Meta showed-lead value",
 };
 
 export const FORBIDDEN_PROFILE_KEYS = ["GHL_WEBHOOK_URL", "CRM_CALLBACK_SECRET"] as const;
@@ -142,9 +139,6 @@ export const CLIENT_INTEGRATION_UI_GROUPS = [
     keys: [
       "META_PIXEL_ID",
       "META_CAPI_ACCESS_TOKEN",
-      "META_VALUE_QUALIFIED",
-      "META_VALUE_SCHEDULE",
-      "META_VALUE_SHOWED",
     ] as const,
   },
   {
@@ -175,9 +169,6 @@ export const secretPresenceSchema = z.strictObject({
   ALERT_WEBHOOK_URL: z.enum(SECRET_PRESENCE_VALUES),
   ADMIN_PASSWORD: z.enum(SECRET_PRESENCE_VALUES),
   ADMIN_SESSION_SECRET: z.enum(SECRET_PRESENCE_VALUES),
-  META_VALUE_QUALIFIED: z.enum(SECRET_PRESENCE_VALUES),
-  META_VALUE_SCHEDULE: z.enum(SECRET_PRESENCE_VALUES),
-  META_VALUE_SHOWED: z.enum(SECRET_PRESENCE_VALUES),
 });
 export type ClientIntegrationSecretPresence = z.infer<typeof secretPresenceSchema>;
 
@@ -228,9 +219,6 @@ export function emptySecretPresence(): ClientIntegrationSecretPresence {
     ALERT_WEBHOOK_URL: "NOT SET",
     ADMIN_PASSWORD: "NOT SET",
     ADMIN_SESSION_SECRET: "NOT SET",
-    META_VALUE_QUALIFIED: "NOT SET",
-    META_VALUE_SCHEDULE: "NOT SET",
-    META_VALUE_SHOWED: "NOT SET",
   };
 }
 
@@ -294,14 +282,6 @@ export function clientIntegrationFieldError(
   }
   if (key === "ALERT_WEBHOOK_URL" && !validHttpsUrl(value)) {
     return `${label} must be an HTTPS URL.`;
-  }
-  if (
-    (key === "META_VALUE_QUALIFIED" ||
-      key === "META_VALUE_SCHEDULE" ||
-      key === "META_VALUE_SHOWED") &&
-    (!Number.isFinite(Number(value)) || Number(value) < 0)
-  ) {
-    return `${label} must be a non-negative number.`;
   }
   if ((key === "GHL_API_KEY" || key === "META_CAPI_ACCESS_TOKEN") && value.length < 8) {
     return `${label} is too short.`;

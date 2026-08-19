@@ -250,9 +250,6 @@ export function buildReadyPaidFunnelSecrets(): Partial<
     ALERT_WEBHOOK_URL: "https://alerts.example/hook",
     ADMIN_PASSWORD: "admin-password-XYZ",
     ADMIN_SESSION_SECRET: "admin-session-secret-XYZ",
-    META_VALUE_QUALIFIED: "50",
-    META_VALUE_SCHEDULE: "75",
-    META_VALUE_SHOWED: "100",
   };
 }
 
