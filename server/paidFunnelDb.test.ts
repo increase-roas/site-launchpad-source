@@ -20,6 +20,7 @@ vi.mock("./db", () => dbMocks);
 
 import {
   createPaidFunnelFromTemplate,
+  createBlankPaidFunnel,
   getPaidFunnelDetail,
   importPaidFunnelZip,
   isPaidFunnelRegistryUnavailable,
@@ -33,6 +34,7 @@ import {
   createDocumentFromPersist,
   createStudioState,
   deleteStudioSurveyQuestion,
+  insertPaletteOnCanvas,
 } from "../shared/paidFunnel/store";
 
 type Row = Record<string, unknown> & { id?: number };
@@ -368,5 +370,47 @@ describe("paid funnel registry persistence", () => {
       graph: studioToStorageGraph(protectedGraph),
       steps: studioToPersistSteps(protectedGraph),
     })).rejects.toThrow("Only custom survey questions can be removed");
+  });
+
+  it("creates a blank funnel with an empty canvas, then saves and reloads an edit", async () => {
+    const created = await createBlankPaidFunnel(5);
+    expect(created.alreadyExists).toBe(false);
+    expect(created.funnelId).toBeGreaterThan(0);
+    const steps = db.inserted.filter(row => row.table === paidFunnelSteps);
+    expect(steps.map(row => row.values.key)).toEqual(["landing"]);
+    const funnel = (db.tables.get(paidFunnels) ?? [])[0];
+    expect(funnel?.source).toBe("template");
+    expect(funnel?.templateVersionId).toBeNull();
+    expect(funnel?.name).toBe("Northland Spas Funnel");
+
+    const detail = await getPaidFunnelDetail(5, created.funnelId);
+    expect(detail.studio?.graph.steps).toHaveLength(1);
+    expect(detail.studio?.graph.pages.landing.sections).toEqual([]);
+    expect(detail.studio?.graph.steps.map(step => step.key)).not.toContain("form");
+
+    let state = createStudioState(createDocumentFromPersist({
+      clientId: 5,
+      funnelId: created.funnelId,
+      stepId: detail.studio!.stepId,
+      expectedUpdatedAt: detail.studio!.expectedUpdatedAt,
+      graph: detail.studio!.graph,
+    }));
+    state = insertPaletteOnCanvas(state, { source: "section", preset: "cta" });
+    expect(state.document.graph.pages.landing.sections).toHaveLength(1);
+
+    const saved = await savePaidFunnelGraph({
+      clientId: 5,
+      funnelId: created.funnelId,
+      stepId: detail.studio!.stepId,
+      expectedUpdatedAt: detail.studio!.expectedUpdatedAt,
+      graph: studioToStorageGraph(state.document.graph),
+      steps: studioToPersistSteps(state.document.graph),
+    });
+    expect(saved.studio?.graph.pages.landing.sections).toHaveLength(1);
+
+    const reloaded = await getPaidFunnelDetail(5, created.funnelId);
+    expect(reloaded.studio?.graph.pages.landing.sections).toHaveLength(1);
+    expect(reloaded.studio?.graph.pages.landing.sections[0]?.preset).toBe("cta");
+    expect(reloaded.steps.map(step => step.key)).toEqual(["landing"]);
   });
 });

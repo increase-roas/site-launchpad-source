@@ -4,6 +4,7 @@ import { paidFunnelSectionSchema } from "../../shared/paidFunnelGraph";
 import { paidFunnelPersistStepsSchema } from "../../shared/paidFunnel/persist";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
+  createBlankPaidFunnel,
   createPaidFunnelFromTemplate,
   getPaidFunnelDetail,
   importPaidFunnelZip,
@@ -71,6 +72,21 @@ export const paidFunnelRouter = router({
           error,
           "Paid funnel could not be created from the template."
         );
+      }
+    }),
+
+  createBlank: protectedProcedure
+    .input(
+      z.object({
+        clientId: z.number().int().positive(),
+        name: z.string().trim().min(1).max(160).optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        return await createBlankPaidFunnel(input.clientId, input.name);
+      } catch (error) {
+        throw mapRouterError(error, "Blank funnel could not be created.");
       }
     }),
 

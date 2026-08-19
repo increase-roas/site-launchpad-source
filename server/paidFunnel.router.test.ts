@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   listPaidFunnelTemplates: vi.fn(),
   importPaidFunnelZip: vi.fn(),
   createPaidFunnelFromTemplate: vi.fn(),
+  createBlankPaidFunnel: vi.fn(),
   listPaidFunnels: vi.fn(),
   getPaidFunnelDetail: vi.fn(),
   savePaidFunnelGraph: vi.fn(),
@@ -62,6 +63,10 @@ describe("paid funnel registry procedures", () => {
     mocks.createPaidFunnelFromTemplate.mockResolvedValue({
       alreadyExists: false,
       funnelId: 21,
+    });
+    mocks.createBlankPaidFunnel.mockResolvedValue({
+      alreadyExists: false,
+      funnelId: 44,
     });
     mocks.importPaidFunnelZip.mockResolvedValue({
       status: "draft",
@@ -120,6 +125,32 @@ describe("paid funnel registry procedures", () => {
       templateKey: "generic-paid-funnel",
     });
     expect(created).toEqual({ alreadyExists: false, funnelId: 21 });
+  });
+
+  it("creates a blank funnel without a template key", async () => {
+    const caller = paidFunnelRouter.createCaller(context());
+    const created = await caller.createBlank({ clientId: 5 });
+    expect(created).toEqual({ alreadyExists: false, funnelId: 44 });
+    expect(mocks.createBlankPaidFunnel).toHaveBeenCalledWith(5, undefined);
+    expect(mocks.createPaidFunnelFromTemplate).not.toHaveBeenCalled();
+  });
+
+  it("maps createBlank connection failures to a public 500 without SQL", async () => {
+    mocks.createBlankPaidFunnel.mockRejectedValueOnce(
+      Object.assign(
+        new Error('Failed query: insert into paid_funnels ("slug") values ($1)'),
+        {
+          cause: Object.assign(new Error("CONNECTION_CLOSED"), {
+            code: "CONNECTION_CLOSED",
+          }),
+        },
+      ),
+    );
+    const caller = paidFunnelRouter.createCaller(context());
+    await expect(caller.createBlank({ clientId: 5 })).rejects.toMatchObject({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "The database is temporarily unavailable. Please try again.",
+    });
   });
 
   it("maps createFromTemplate connection failures to a public 500 without SQL", async () => {

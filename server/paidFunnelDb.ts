@@ -29,7 +29,14 @@ import {
   assembleStudioGraph,
   paidFunnelPersistStepsSchema,
   persistGraphInput,
+  studioToPersistSteps,
+  studioToStorageGraph,
 } from "../shared/paidFunnel/persist";
+import { createEmptyGraph, createIdFactory } from "../shared/paidFunnel/graph";
+import {
+  blankFunnelName,
+  blankFunnelSlug,
+} from "../shared/paidFunnel/library";
 import { ingestPaidFunnelZip } from "../shared/paidFunnelZip";
 import { getClientById, getDb } from "./db";
 import { isUndefinedRelationError } from "../shared/safePublicError";
@@ -395,6 +402,103 @@ async function createPaidFunnelFromTemplateUnsafe(
     )
   );
   return { alreadyExists: false as const, funnelId };
+}
+
+export async function createBlankPaidFunnel(clientId: number, name?: string) {
+  try {
+    return await createBlankPaidFunnelUnsafe(clientId, name);
+  } catch (error) {
+    if (isPaidFunnelRegistryUnavailable(error)) {
+      throw new Error("Blank funnel could not be created.");
+    }
+    throw error;
+  }
+}
+
+async function createBlankPaidFunnelUnsafe(clientId: number, name?: string) {
+  const client = await getClientById(clientId);
+  if (!client) throw new Error("Client not found.");
+  const db = await requireDb();
+  const used = await db
+    .select({ slug: paidFunnels.slug, name: paidFunnels.name })
+    .from(paidFunnels)
+    .where(eq(paidFunnels.clientId, clientId));
+  const funnelName = uniqueFunnelName(
+    name?.trim() || blankFunnelName(client.businessName),
+    used.map(row => row.name)
+  );
+  const slug = blankFunnelSlug(
+    client.shortName,
+    used.map(row => row.slug)
+  );
+  const studioGraph = createEmptyGraph({
+    funnelKey: slug,
+    name: funnelName,
+    nextId: createIdFactory("blank"),
+  });
+  const storageGraph = persistGraphInput(studioToStorageGraph(studioGraph));
+  const persistSteps = studioToPersistSteps(studioGraph);
+
+  return db.transaction(async transaction => {
+    const insertedFunnel = await transaction
+      .insert(paidFunnels)
+      .values({
+        clientId,
+        templateVersionId: null,
+        name: funnelName,
+        slug,
+        source: "template",
+        status: "draft",
+      })
+      .returning({ id: paidFunnels.id });
+    const funnelId = requireSinglePositiveId(
+      insertedFunnel,
+      "Blank funnel could not be created."
+    );
+
+    const landing = persistSteps[0];
+    if (!landing) throw new Error("Blank funnel is missing its empty page.");
+    const insertedStep = await transaction
+      .insert(paidFunnelSteps)
+      .values({
+        funnelId,
+        position: landing.position,
+        key: landing.key,
+        stepType: landing.stepType,
+        slug: landing.slug,
+        title: landing.title,
+        seo: landing.seo,
+        nextStep: landing.nextStep,
+        previewState: landing.previewState,
+        publishState: landing.publishState,
+      })
+      .returning({ id: paidFunnelSteps.id });
+    const stepId = requireSinglePositiveId(
+      insertedStep,
+      "Funnel step could not be created."
+    );
+
+    const insertedGraph = await transaction
+      .insert(paidFunnelGraphs)
+      .values({
+        funnelId,
+        stepId,
+        graphVersion: storageGraph.version,
+        graphJson: storageGraph as Record<string, unknown>,
+      })
+      .returning({ id: paidFunnelGraphs.id });
+    const graphId = requireSinglePositiveId(
+      insertedGraph,
+      "Funnel graph could not be created."
+    );
+    await transaction.insert(paidFunnelGraphRevisions).values({
+      graphId,
+      revision: 1,
+      graphJson: storageGraph as Record<string, unknown>,
+    });
+
+    return { alreadyExists: false as const, funnelId };
+  });
 }
 
 export async function importPaidFunnelZip(input: {
