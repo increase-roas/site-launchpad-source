@@ -22,12 +22,15 @@ import {
   type ActiveDrag,
 } from "@shared/paidFunnel/dropRouting";
 import {
+  addStudioBlankPage,
   addStudioSurveyQuestion,
   applyStudioOptInTemplate,
   canDeleteStudioSurveyQuestion,
   canRedoStudio,
   canUndoStudio,
+  deleteStudioPage,
   deleteStudioSurveyQuestion,
+  duplicateStudioPage,
   insertPaletteOnCanvas,
   insertStudioItem,
   moveCurrentStudioNode,
@@ -39,6 +42,8 @@ import {
   studioHotkey,
   type StudioState,
 } from "@shared/paidFunnel/store";
+import { graphSupportsPuck } from "@shared/paidFunnel/puckAdapter";
+import { PaidFunnelPuckEditor } from "./PaidFunnelPuckEditor";
 import {
   OPT_IN_TEMPLATE_LABELS,
   OPT_IN_TEMPLATE_VALUES,
@@ -475,6 +480,7 @@ export function PaidFunnelBuilder({
   const stateRef = useRef(state);
   stateRef.current = state;
   const page = graph.pages[state.stepKey];
+  const usePuck = graphSupportsPuck(graph);
   const saveLabel = state.document.conflict
     ? "error"
     : state.document.saveStatus;
@@ -911,10 +917,41 @@ export function PaidFunnelBuilder({
               type="button"
               variant="outline"
               className="mt-3 w-full border-dashed border-blue-300 bg-white text-blue-700"
+              onClick={() => onChange(addStudioBlankPage(state, { title: "Page" }))}
+            >
+              <Plus className="h-4 w-4" /> Add blank page
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-2 w-full bg-white"
+              onClick={() => onChange(duplicateStudioPage(state))}
+            >
+              Duplicate page
+            </Button>
+            {graph.steps.length > 1 ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-2 w-full border-red-200 bg-white text-red-700 hover:bg-red-50"
+                onClick={() => {
+                  if (!window.confirm("Delete this page and reconnect incoming routes?")) return;
+                  onChange(current => (current ? deleteStudioPage(current) : current));
+                }}
+              >
+                <Trash2 className="h-4 w-4" /> Delete page
+              </Button>
+            ) : null}
+            {usePuck ? null : (
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-3 w-full border-dashed border-blue-300 bg-white text-blue-700"
               onClick={() => onChange(addStudioSurveyQuestion(state))}
             >
               <Plus className="h-4 w-4" /> Add survey question
             </Button>
+            )}
             {canDeleteStudioSurveyQuestion(state) ? (
               <Button
                 type="button"
@@ -966,6 +1003,12 @@ export function PaidFunnelBuilder({
               </div>
             ) : null}
           </div>
+          {usePuck ? (
+            <p className="px-3 py-3 text-xs font-bold text-slate-500">
+              Drag Section, Columns, Heading, Text, Image, Button, or Form in the canvas. Pages save as PaidFunnelGraph.
+            </p>
+          ) : (
+          <>
           <div className="flex border-b border-slate-200">
             {(["section", "row", "element"] as const).map(tab => (
               <button
@@ -1097,6 +1140,8 @@ export function PaidFunnelBuilder({
                 })
               : null}
           </div>
+          </>
+          )}
         </aside>
 
         <section className="flex min-w-0 flex-col">
@@ -1142,6 +1187,9 @@ export function PaidFunnelBuilder({
               </button>
             </div>
           </div>
+          {usePuck ? (
+            <PaidFunnelPuckEditor state={state} onChange={onChange} />
+          ) : (
           <div className="flex-1 overflow-auto bg-slate-100 p-6">
             <div
               style={{
@@ -1174,6 +1222,7 @@ export function PaidFunnelBuilder({
               )}
             </div>
           </div>
+          )}
         </section>
 
         <PaidFunnelInspector
