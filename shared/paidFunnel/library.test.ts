@@ -4,15 +4,24 @@ import {
   inspectPaidFunnelZipIntake,
   isWebsiteTemplatesRoute,
   libraryItems,
+  blankFunnelName,
+  blankFunnelSlug,
+  CREATE_BLANK_FUNNEL_LABEL,
+  PAID_ADS_LIBRARY_TAB_ITEMS,
+  PAID_ADS_PRIMARY_TAB,
+  isBlankPaidFunnel,
   paidAdsBuilderPath,
   paidAdsFunnelBreadcrumbs,
   paidAdsLibraryPath,
   paidAdsSimpleFormPath,
+  paidFunnelLibrarySourceLabel,
   parsePaidAdsFunnelSearch,
 } from "./library";
 
 describe("Paid Ads funnel library lives inside Funnels", () => {
   it("keeps Templates, My Funnels, ZIP, and Builder under Paid Ads / Funnels", () => {
+    expect(PAID_ADS_PRIMARY_TAB).toBe("mine");
+    expect(PAID_ADS_LIBRARY_TAB_ITEMS.map(([key]) => key)).toEqual(["mine", "templates"]);
     expect(paidAdsLibraryPath(4, "templates")).toBe("/workspace/4/funnels?tab=templates");
     expect(paidAdsLibraryPath(4, "mine")).toBe("/workspace/4/funnels?tab=mine");
     expect(paidAdsBuilderPath(4, "generic-paid-funnel")).toBe("/workspace/4/funnels?studio=generic-paid-funnel");
@@ -20,14 +29,30 @@ describe("Paid Ads funnel library lives inside Funnels", () => {
     expect(paidAdsLibraryPath(4, "templates")).not.toContain("/templates");
     expect(isWebsiteTemplatesRoute("/workspace/4/funnels")).toBe(false);
     expect(isWebsiteTemplatesRoute("/templates")).toBe(true);
+    expect(parsePaidAdsFunnelSearch("").view).toBe("mine");
     expect(parsePaidAdsFunnelSearch("?tab=templates").view).toBe("templates");
     expect(parsePaidAdsFunnelSearch("?tab=mine").view).toBe("mine");
     expect(parsePaidAdsFunnelSearch("?studio=generic-paid-funnel").view).toBe("builder");
     expect(parsePaidAdsFunnelSearch("?funnel=12").view).toBe("simple-form");
+    expect(paidAdsFunnelBreadcrumbs("Paradise", "")).toEqual(["Paradise", "Paid Ads", "Funnels", "My Funnels"]);
     expect(paidAdsFunnelBreadcrumbs("Paradise", "?tab=templates")).toEqual(["Paradise", "Paid Ads", "Funnels", "Templates"]);
     expect(paidAdsFunnelBreadcrumbs("Paradise", "?studio=x")).toEqual(["Paradise", "Paid Ads", "Funnels", "Builder"]);
     expect(libraryItems().simpleFormKey).toBe(SIMPLE_FORM_TEMPLATE_KEY);
     expect(libraryItems().zipDropzone).toBe("inside-paid-ads-funnels");
+    expect(libraryItems().primaryAction).toBe(CREATE_BLANK_FUNNEL_LABEL);
+    expect(libraryItems().primaryTab).toBe("mine");
+    expect(libraryItems().templatesOptional).toBe(true);
+  });
+
+  it("names blank funnels without cloning a template slug", () => {
+    expect(blankFunnelName("Northland Spas")).toBe("Northland Spas Funnel");
+    expect(blankFunnelName("Northland Spas", ["Northland Spas Funnel"])).toBe("Northland Spas Funnel 2");
+    expect(blankFunnelSlug("northland", [])).toBe("northland-funnel");
+    expect(blankFunnelSlug("northland", ["northland-funnel"])).toBe("northland-funnel-2");
+    expect(isBlankPaidFunnel({ source: "template", templateVersionId: null })).toBe(true);
+    expect(isBlankPaidFunnel({ source: "fixture", templateVersionId: 3 })).toBe(false);
+    expect(paidFunnelLibrarySourceLabel({ source: "template", templateVersionId: null })).toBe("blank");
+    expect(paidFunnelLibrarySourceLabel({ source: "fixture", templateVersionId: 1 })).toBe("fixture");
   });
 
   it("rejects traversal, credentials, executables, and oversized ZIP intake", () => {

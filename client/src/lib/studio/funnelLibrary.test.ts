@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   SITE_NAV_INCLUDES_TEMPLATES,
+  createBlankDraft,
   createDraftFromFixture,
   intakeImportedArchive,
   isTemplatesSiteNavPath,
   libraryFromRegistry,
+  libraryPrimaryAction,
   libraryTemplates,
   paidAdsFunnelsPath,
   resolveRegistryTemplates,
@@ -15,12 +17,21 @@ describe("paid ads funnel library navigation", () => {
   it("keeps templates inside Paid Ads / Funnels and never adds site Templates nav", () => {
     expect(SITE_NAV_INCLUDES_TEMPLATES).toBe(false);
     expect(isTemplatesSiteNavPath("/templates")).toBe(true);
+    expect(paidAdsFunnelsPath(9)).toBe("/workspace/9/funnels?tab=my-funnels");
     expect(paidAdsFunnelsPath(9, "templates")).toBe("/workspace/9/funnels?tab=templates");
     expect(paidAdsFunnelsPath(9, "my-funnels")).toBe("/workspace/9/funnels?tab=my-funnels");
     expect(paidAdsFunnelsPath(9, "builder", "generic-paid-funnel-9")).toContain("/workspace/9/funnels?builder=");
+    expect(parseFunnelWorkspaceView("")).toEqual({ tab: "my-funnels", builderId: null });
     expect(parseFunnelWorkspaceView("tab=my-funnels")).toEqual({ tab: "my-funnels", builderId: null });
+    expect(parseFunnelWorkspaceView("tab=templates")).toEqual({ tab: "templates", builderId: null });
     expect(libraryTemplates()[0]?.kind).toBe("paid-funnel");
     expect(createDraftFromFixture(3).draft.kind).toBe("paid-funnel");
+    expect(libraryPrimaryAction()).toBe("Create blank funnel");
+    const blank = createBlankDraft(3, "Northland Spas");
+    expect(blank.draft.kind).toBe("paid-funnel");
+    expect(blank.graph.steps).toHaveLength(1);
+    expect(blank.graph.pages.landing.sections).toEqual([]);
+    expect(blank.graph.steps.map(step => step.key)).not.toContain("form");
   });
 
   it("treats ZIP import as intake only", () => {

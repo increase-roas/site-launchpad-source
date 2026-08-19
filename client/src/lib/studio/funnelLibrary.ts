@@ -1,5 +1,6 @@
-import { PAID_FUNNEL_KIND } from "@shared/paidFunnel/graph";
+import { createEmptyGraph, PAID_FUNNEL_KIND } from "@shared/paidFunnel/graph";
 import { GENERIC_PAID_FUNNEL_LIBRARY_CARD, createGenericPaidFunnelFixture } from "@shared/paidFunnel/fixture";
+import { blankFunnelName, CREATE_BLANK_FUNNEL_LABEL } from "@shared/paidFunnel/library";
 import {
   detectPaidFunnelPackage,
   validatePaidFunnelZipIntake,
@@ -8,24 +9,24 @@ import {
   type ZipIntakeResult,
 } from "@shared/paidFunnel/package";
 
-export const FUNNEL_LIBRARY_TABS = ["templates", "my-funnels"] as const;
+export const FUNNEL_LIBRARY_TABS = ["my-funnels", "templates"] as const;
 export type FunnelLibraryTab = (typeof FUNNEL_LIBRARY_TABS)[number];
 export type FunnelWorkspaceView = FunnelLibraryTab | "builder";
 
 export const SITE_NAV_INCLUDES_TEMPLATES = false;
 export const TEMPLATES_SITE_PATH = "/templates";
 
-export function paidAdsFunnelsPath(clientId: number, view: FunnelWorkspaceView = "templates", funnelId?: string): string {
+export function paidAdsFunnelsPath(clientId: number, view: FunnelWorkspaceView = "my-funnels", funnelId?: string): string {
   const base = `/workspace/${clientId}/funnels`;
   if (view === "builder" && funnelId) return `${base}?builder=${encodeURIComponent(funnelId)}`;
-  if (view === "my-funnels") return `${base}?tab=my-funnels`;
-  return `${base}?tab=templates`;
+  if (view === "templates") return `${base}?tab=templates`;
+  return `${base}?tab=my-funnels`;
 }
 
 export function parseFunnelWorkspaceView(search: string): { tab: FunnelLibraryTab; builderId: string | null } {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   const builderId = params.get("builder");
-  const tab = params.get("tab") === "my-funnels" ? "my-funnels" : "templates";
+  const tab = params.get("tab") === "templates" ? "templates" : "my-funnels";
   return { tab, builderId };
 }
 
@@ -94,6 +95,29 @@ export function createDraftFromFixture(clientId: number, now = new Date().toISOS
     },
     graph,
   };
+}
+
+export function createBlankDraft(clientId: number, businessName = "Untitled", now = new Date().toISOString()): {
+  draft: LocalPaidFunnelDraft;
+  graph: ReturnType<typeof createEmptyGraph>;
+} {
+  const name = blankFunnelName(businessName);
+  const graph = createEmptyGraph({ funnelKey: `blank-${clientId}`, name });
+  return {
+    draft: {
+      id: graph.funnelKey,
+      clientId,
+      name,
+      templateKey: "",
+      kind: PAID_FUNNEL_KIND,
+      createdAt: now,
+    },
+    graph,
+  };
+}
+
+export function libraryPrimaryAction() {
+  return CREATE_BLANK_FUNNEL_LABEL;
 }
 
 export function intakeImportedArchive(

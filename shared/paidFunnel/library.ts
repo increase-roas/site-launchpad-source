@@ -1,9 +1,59 @@
 import { SIMPLE_FORM_TEMPLATE_KEY } from "../simpleFormContract";
 
-export const PAID_ADS_FUNNEL_TABS = ["templates", "mine"] as const;
+export const PAID_ADS_FUNNEL_TABS = ["mine", "templates"] as const;
 export type PaidAdsFunnelTab = (typeof PAID_ADS_FUNNEL_TABS)[number];
+export const PAID_ADS_PRIMARY_TAB: PaidAdsFunnelTab = "mine";
+export const CREATE_BLANK_FUNNEL_LABEL = "Create blank funnel";
+export const PAID_ADS_LIBRARY_TAB_ITEMS: Array<[PaidAdsFunnelTab, string]> = [
+  ["mine", "My Funnels"],
+  ["templates", "Templates"],
+];
 
 export type PaidAdsFunnelView = "templates" | "mine" | "builder" | "simple-form" | "legacy";
+
+export function uniquePaidFunnelLabel(base: string, used: string[]): string {
+  if (!used.includes(base)) return base;
+  let index = 2;
+  while (used.includes(`${base} ${index}`)) index += 1;
+  return `${base} ${index}`;
+}
+
+function slugifySegment(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "") || "client";
+}
+
+export function uniquePaidFunnelSlug(base: string, used: string[]): string {
+  if (!used.includes(base)) return base;
+  let index = 2;
+  while (used.includes(`${base}-${index}`)) index += 1;
+  return `${base}-${index}`;
+}
+
+export function blankFunnelName(businessName: string, used: string[] = []): string {
+  return uniquePaidFunnelLabel(`${businessName.trim() || "Untitled"} Funnel`, used);
+}
+
+export function blankFunnelSlug(shortName: string, used: string[]): string {
+  return uniquePaidFunnelSlug(`${slugifySegment(shortName)}-funnel`, used);
+}
+
+export function isBlankPaidFunnel(funnel: {
+  source: string;
+  templateVersionId?: number | null;
+}): boolean {
+  return funnel.source === "template" && funnel.templateVersionId == null;
+}
+
+export function paidFunnelLibrarySourceLabel(funnel: {
+  source: string;
+  templateVersionId?: number | null;
+}): string {
+  return isBlankPaidFunnel(funnel) ? "blank" : funnel.source;
+}
 
 export function paidAdsFunnelsPath(clientId: number): string {
   return `/workspace/${clientId}/funnels`;
@@ -28,7 +78,7 @@ export function parsePaidAdsFunnelSearch(search: string): {
   view: PaidAdsFunnelView;
 } {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-  const tab = params.get("tab") === "mine" ? "mine" : "templates";
+  const tab = params.get("tab") === "templates" ? "templates" : "mine";
   const studioKey = params.get("studio");
   const funnelRaw = Number(params.get("funnel"));
   const funnelId = Number.isInteger(funnelRaw) && funnelRaw > 0 ? funnelRaw : null;
@@ -117,5 +167,8 @@ export function libraryItems() {
     simpleFormKey: SIMPLE_FORM_TEMPLATE_KEY,
     paidFunnelFixtureKey: "generic-paid-funnel",
     zipDropzone: "inside-paid-ads-funnels",
+    primaryAction: CREATE_BLANK_FUNNEL_LABEL,
+    primaryTab: PAID_ADS_PRIMARY_TAB,
+    templatesOptional: true,
   };
 }

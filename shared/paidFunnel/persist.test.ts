@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createGenericPaidFunnelFixture } from "./fixture";
-import { createIdFactory } from "./graph";
+import { createEmptyGraph, createIdFactory } from "./graph";
 import {
   assembleStudioGraph,
   persistGraphInput,
@@ -124,5 +124,29 @@ describe("paid funnel graph persist adapter", () => {
     const persisted = persistGraphInput(studio);
     expect(persisted.pages.length).toBeGreaterThan(1);
     expect(migratePaidFunnelGraph(persisted).pages[0]?.kind).toBe("page");
+  });
+
+  it("round-trips an empty blank canvas through storage", () => {
+    const studio = createEmptyGraph({ funnelKey: "blank-rt", name: "Blank", nextId: createIdFactory("blank") });
+    const storage = studioToStorageGraph(studio);
+    expect(storage.pages).toHaveLength(1);
+    expect(storage.pages[0]?.sections).toEqual([]);
+    const restored = storageToStudioGraph(storage, {
+      funnel: { id: 1, name: studio.name, slug: studio.funnelKey },
+      steps: studio.steps.map((step, position) => ({
+        id: position + 1,
+        key: step.key,
+        stepType: step.type,
+        slug: step.slug,
+        title: step.title,
+        seo: step.seo,
+        nextStep: null,
+        previewState: step.previewState,
+        publishState: step.publishState,
+        position,
+      })),
+    });
+    expect(restored.pages.landing.sections).toEqual([]);
+    expect(restored.steps).toHaveLength(1);
   });
 });
