@@ -1,0 +1,66 @@
+import type { PuckData } from "./puckData";
+
+export const SAMPLE_PUCK_DATA: PuckData = {
+  content: [
+    {
+      type: "Section",
+      props: {
+        id: "Section-1",
+        background: "#f8fafc",
+        padding: "32px",
+        content: [
+          {
+            type: "Columns",
+            props: {
+              id: "Columns-1",
+              count: "2",
+              columns: [
+                {
+                  type: "Heading",
+                  props: {
+                    id: "Heading-1",
+                    text: "Welcome",
+                    level: "h1",
+                  },
+                },
+                {
+                  type: "Text",
+                  props: {
+                    id: "Text-1",
+                    body: "Hello from Puck.",
+                  },
+                },
+                {
+                  type: "Image",
+                  props: {
+                    id: "Image-1",
+                    src: "https://placehold.co/600x320/e2e8f0/0f172a?text=Puck",
+                    alt: "Placeholder",
+                  },
+                },
+                {
+                  type: "Button",
+                  props: {
+                    id: "Button-1",
+                    label: "Get started",
+                    href: "#cta",
+                  },
+                },
+                {
+                  type: "Form",
+                  props: {
+                    id: "Form-1",
+                    title: "Request a callback",
+                    submitLabel: "Submit",
+                    showPhone: true,
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+  root: { props: { title: "Puck PoC" } },
+};

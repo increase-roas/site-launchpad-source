@@ -1,0 +1,76 @@
+.puck-poc-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: Manrope, ui-sans-serif, system-ui, sans-serif;
+}
+
+.puck-poc-shell__banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: baseline;
+  padding: 10px 16px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+}
+
+.puck-poc-shell__banner strong {
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.puck-poc-shell__banner span {
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.puck-poc-shell__editor {
+  flex: 1;
+  min-height: 0;
+}
+
+.puck-poc-disabled {
+  margin: 48px auto;
+  max-width: 40rem;
+  padding: 24px;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  background: #1e293b;
+}
+
+.puck-poc-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.puck-poc-header-actions button,
+.puck-poc-header-actions label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.puck-poc-header-actions input[type="file"] {
+  display: none;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
