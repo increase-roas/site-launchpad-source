@@ -280,10 +280,10 @@ describe("paid funnel Astro compiler", () => {
     expect(stageEndpoint).toContain('show: "Showed"');
     expect(stageEndpoint).toContain('sale: "Purchase"');
     expect(stageEndpoint).toContain('stage === "sale"');
-    expect(stageEndpoint).toContain("META_VALUE_QUALIFIED");
-    expect(stageEndpoint).toContain("META_VALUE_SCHEDULE");
-    expect(stageEndpoint).toContain("META_VALUE_SHOWED");
-    expect(stageEndpoint).toContain("Number.isFinite(configuredValue)");
+    expect(stageEndpoint).not.toContain("META_VALUE_QUALIFIED");
+    expect(stageEndpoint).not.toContain("META_VALUE_SCHEDULE");
+    expect(stageEndpoint).not.toContain("META_VALUE_SHOWED");
+    expect(stageEndpoint).not.toContain("configuredValues");
     expect(stageEndpoint).toContain('conversion?.status === "sent"');
     expect(stageEndpoint).toContain("lead.fbc");
     expect(stageEndpoint).toContain("lead.fbp");

@@ -530,11 +530,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (lead.last_name_hash) user_data.ln = [lead.last_name_hash];
   const version = /^v\\d+\\.\\d+$/.test(text(env.META_GRAPH_API_VERSION)) ? text(env.META_GRAPH_API_VERSION) : "v26.0";
   const custom_data: Record<string, unknown> = { stage, first_url: lead.first_url, original_query_string: lead.original_query_string };
-  const configuredValues: Record<string, unknown> = { qualified: env.META_VALUE_QUALIFIED, appointment: env.META_VALUE_SCHEDULE, show: env.META_VALUE_SHOWED };
-  const configuredValue = Number(configuredValues[stage]);
-  if (stage === "sale") custom_data.value = value;
-  else if (Number.isFinite(configuredValue) && configuredValue >= 0) custom_data.value = configuredValue;
-  if (custom_data.value !== undefined) custom_data.currency = text(payload?.currency) || "USD";
+  if (stage === "sale") {
+    custom_data.value = value;
+    custom_data.currency = text(payload?.currency) || "USD";
+  }
   const response = await fetch(\`https://graph.facebook.com/\${version}/\${env.META_PIXEL_ID}/events\`, { method: "POST", headers: { authorization: \`Bearer \${env.META_CAPI_ACCESS_TOKEN}\`, "content-type": "application/json" }, body: JSON.stringify({ data: [{ event_name: eventName, event_time: Math.floor(Date.now() / 1000), event_id: conversion?.event_id || eventId, action_source: "website", event_source_url: lead.first_url, user_data, custom_data }] }) });
   if (!response.ok) return new Response(null, { status: 502 });
   await env.FUNNEL_DB.prepare("UPDATE downstream_conversions SET status = 'sent', sent_at = ? WHERE external_id = ?").bind(new Date().toISOString(), externalId).run();

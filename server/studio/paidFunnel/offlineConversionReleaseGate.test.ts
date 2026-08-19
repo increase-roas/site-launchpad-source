@@ -119,6 +119,10 @@ describe("offline conversion contract v1 release gate", () => {
     expect(endpoint).toContain(
       'stage === "sale" && (!Number.isFinite(value) || value <= 0)'
     );
+    expect(endpoint).not.toContain("META_VALUE_QUALIFIED");
+    expect(endpoint).not.toContain("META_VALUE_SCHEDULE");
+    expect(endpoint).not.toContain("META_VALUE_SHOWED");
+    expect(endpoint).not.toContain("configuredValues");
     expect(endpoint).toContain("first_url: lead.first_url");
     expect(endpoint).toContain(
       "original_query_string: lead.original_query_string"
