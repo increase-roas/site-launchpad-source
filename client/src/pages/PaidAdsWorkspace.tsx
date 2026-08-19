@@ -210,6 +210,13 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
   const [studioFunnelId, setStudioFunnelId] = useState<number | null>(initialStudioId);
   const [libraryTab, setLibraryTab] = useState<PaidAdsFunnelTab>(parsedSearch.tab);
   const [studio, setStudio] = useState<StudioState | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("studio") || params.get("funnel") || params.get("tab")) return;
+    window.history.replaceState(null, "", `${window.location.pathname}?tab=mine`);
+  }, []);
   const integrationProfileQuery = trpc.clients.getIntegrationProfile.useQuery(
     { clientId },
     { enabled: studioFunnelId != null, retry: 1 },
@@ -301,6 +308,14 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
       await utils.paidFunnel.listTemplates.invalidate({ clientId });
       openStudioFunnel(result.funnelId);
       toast.success(result.alreadyExists ? "Opened existing paid funnel." : "Paid funnel created.");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const createBlankMutation = trpc.paidFunnel.createBlank.useMutation({
+    onSuccess: async result => {
+      await utils.paidFunnel.listFunnels.invalidate({ clientId });
+      openStudioFunnel(result.funnelId);
+      toast.success("Blank funnel created.");
     },
     onError: error => toast.error(error.message),
   });
@@ -605,6 +620,7 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
         <div className="space-y-8">
           <PaidAdsFunnelLibrary
             tab={libraryTab}
+            creatingBlank={createBlankMutation.isPending}
             creating={createFromTemplateMutation.isPending}
             templates={resolvedTemplates.templates}
             templatesLoading={resolvedTemplates.templatesLoading}
@@ -615,6 +631,7 @@ export default function PaidAdsWorkspace({ clientId }: { clientId: number }) {
               setLibraryTab(tab);
               window.history.replaceState(null, "", `${window.location.pathname}?tab=${tab}`);
             }}
+            onCreateBlank={() => createBlankMutation.mutate({ clientId })}
             onCreateFromTemplate={templateKey => createFromTemplateMutation.mutate({ clientId, templateKey })}
             onOpenFunnel={openStudioFunnel}
           />
