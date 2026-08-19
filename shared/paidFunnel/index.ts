@@ -13,3 +13,5 @@ export * from "./autosave";
 export * from "./dropRouting";
 export * from "./templates";
 export * from "./astroCompiler";
+export * from "./puckAdapter";
+export * from "./pageManager";

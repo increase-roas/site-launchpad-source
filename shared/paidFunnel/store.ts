@@ -30,6 +30,7 @@ import {
 } from "./ops";
 import type { BoxSpacing, ButtonAction, DeviceVisibility, FunnelColumn, FunnelElement, FunnelRow, FunnelSection, GlobalFunnelStyles, PaidFunnelStep } from "./graph";
 import { createEmptyGraph, createIdFactory } from "./graph";
+import type { FunnelStepNext } from "./graph";
 import { createSectionPreset } from "./presets";
 import { createGenericPaidFunnelFixture } from "./fixture";
 import {
@@ -38,6 +39,16 @@ import {
   reorderFunnelSteps,
   type OptInTemplate,
 } from "./templates";
+import {
+  addBlankPage,
+  deletePageSafely,
+  duplicatePage,
+  renamePage,
+  setPageNext,
+  setPageSlug,
+  uniquePageSlug,
+} from "./pageManager";
+import { applyPuckDataToGraph, type PuckAdapterData } from "./puckAdapter";
 
 export type SaveStatus = "saved" | "saving" | "error";
 
@@ -114,6 +125,61 @@ export function applyGraph(state: StudioState, graph: PaidFunnelGraph): StudioSt
     history: pushHistory(state.history, graph),
     document: { ...state.document, graph, saveStatus: "saving", editSeq: state.document.editSeq + 1 },
   };
+}
+
+export function replacePresentGraph(state: StudioState, graph: PaidFunnelGraph): StudioState {
+  if (JSON.stringify(state.document.graph) === JSON.stringify(graph)) return state;
+  return {
+    ...state,
+    history: { ...state.history, present: graph },
+    document: { ...state.document, graph, saveStatus: "saving", editSeq: state.document.editSeq + 1 },
+  };
+}
+
+export function applyPuckPageData(state: StudioState, data: PuckAdapterData): StudioState {
+  return replacePresentGraph(state, applyPuckDataToGraph(state.document.graph, state.stepKey, data));
+}
+
+export function addStudioBlankPage(
+  state: StudioState,
+  input?: { title?: string; type?: PaidFunnelStep["type"] },
+): StudioState {
+  const result = addBlankPage(state.document.graph, input);
+  return {
+    ...applyGraph(state, result.graph),
+    stepKey: result.stepKey,
+    selectedId: result.graph.pages[result.stepKey]?.id ?? null,
+  };
+}
+
+export function duplicateStudioPage(state: StudioState, stepKey = state.stepKey): StudioState {
+  const result = duplicatePage(state.document.graph, stepKey);
+  return {
+    ...applyGraph(state, result.graph),
+    stepKey: result.stepKey,
+    selectedId: result.graph.pages[result.stepKey]?.id ?? null,
+  };
+}
+
+export function deleteStudioPage(state: StudioState, stepKey = state.stepKey): StudioState {
+  const result = deletePageSafely(state.document.graph, stepKey);
+  return {
+    ...applyGraph(state, result.graph),
+    stepKey: result.stepKey,
+    selectedId: result.graph.pages[result.stepKey]?.id ?? null,
+  };
+}
+
+export function renameStudioPage(state: StudioState, title: string, stepKey = state.stepKey): StudioState {
+  return applyGraph(state, renamePage(state.document.graph, stepKey, title));
+}
+
+export function setStudioPageSlug(state: StudioState, slug: string, stepKey = state.stepKey): StudioState {
+  return applyGraph(state, setPageSlug(state.document.graph, stepKey, slug));
+}
+
+export function setStudioPageNext(state: StudioState, nextStep: FunnelStepNext, stepKey = state.stepKey): StudioState {
+  return applyGraph(state, setPageNext(state.document.graph, stepKey, nextStep));
 }
 
 export function commitAutosave(
@@ -334,7 +400,10 @@ export function updateStudioStep(
   state: StudioState,
   patch: Partial<Omit<PaidFunnelStep, "key">>,
 ): StudioState {
-  return applyGraph(state, updateStep(state.document.graph, state.stepKey, patch));
+  const nextPatch = patch.slug
+    ? { ...patch, slug: uniquePageSlug(state.document.graph, patch.slug, state.stepKey) }
+    : patch;
+  return applyGraph(state, updateStep(state.document.graph, state.stepKey, nextPatch));
 }
 
 export function setStudioDevice(state: StudioState, device: PaidFunnelBreakpoint): StudioState {
