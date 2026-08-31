@@ -86,8 +86,6 @@ export const REQUIRED_ASSET_SLOTS = ["navLogo", "footerLogo", "favicon", "ogImag
 
 /** Fields that are real but rarely touched, demoted behind an Advanced drawer. */
 export const ADVANCED_FIELD_PATHS = new Set([
-  "address.latitude",
-  "address.longitude",
   "address.googlePlaceId",
   "contact.phoneDisplayOverride",
   "brand.fonts.mono",
@@ -390,4 +388,40 @@ export function fieldStateFor(
 
 export function fieldMessageFor(readiness: ConfigReadiness, path: string): string | undefined {
   return readiness.fields.get(path)?.message;
+}
+
+export function isBasicTabComplete(readiness: ConfigReadiness): boolean {
+  return readiness.tabs.basic.state === "complete";
+}
+
+/**
+ * Short line for a wizard tile: which sections on that tab are still open.
+ */
+export function describeTabGap(
+  readiness: ConfigReadiness,
+  tab: ConfigTabId,
+): string | undefined {
+  if (readiness.tabs[tab].state === "complete") return undefined;
+  const unfinished = CONFIG_TAB_SECTIONS[tab]
+    .map(id => readiness.sections[id])
+    .filter(section => section.state !== "complete");
+  if (unfinished.length === 0) return `${CONFIG_TAB_LABELS[tab]} is incomplete`;
+  if (unfinished.length === 1) {
+    const [section] = unfinished;
+    return section.state === "invalid"
+      ? `${section.label} has invalid values`
+      : `${section.label} is incomplete`;
+  }
+  if (unfinished.length === 2) {
+    return `${unfinished[0].label} and ${unfinished[1].label} need attention`;
+  }
+  return `${unfinished[0].label}, ${unfinished[1].label}, and ${unfinished.length - 2} more need attention`;
+}
+
+/**
+ * Short line for the Client setup tile: which Basic-info sections are still
+ * open. Social links are optional, so they only appear when a value is invalid.
+ */
+export function describeBasicTabGap(readiness: ConfigReadiness): string | undefined {
+  return describeTabGap(readiness, "basic");
 }

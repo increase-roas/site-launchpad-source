@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { summarizeHomepageSections } from "@shared/astroConfig";
+import { clientDeployGaps, summarizeHomepageSections } from "@shared/astroConfig";
 import { ExternalLink, Loader2, Rocket, UsersRound } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { Link } from "wouter";
@@ -86,6 +86,9 @@ export default function LaunchPage({ clientId }: { clientId: number }) {
     summary,
     homepageSections: config
       ? summarizeHomepageSections(config.homepageSections)
+      : undefined,
+    clientDeploy: config
+      ? { gaps: clientDeployGaps(config, astroConfigQuery.data?.assets ?? []) }
       : undefined,
   });
   const readiness = launchReadiness(checks);

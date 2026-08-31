@@ -105,6 +105,51 @@ export function websiteIntegrationEnablementFrom(
   );
 }
 
+export function astroConfigInputFromClient(
+  client: {
+    businessName: string;
+    shortName: string;
+    foundedYear: number | null;
+    tagline: string | null;
+    websiteUrl: string | null;
+    schemaType?: AstroClientConfigInput["identity"]["schemaType"];
+    phone: string | null;
+    smsPhone?: string | null;
+    phoneDisplayOverride?: string | null;
+    email: string | null;
+    streetAddress: string | null;
+    street2?: string | null;
+    city: string | null;
+    state: string | null;
+    postalCode: string | null;
+    country: string;
+    latitude?: string | null;
+    longitude?: string | null;
+    googlePlaceId?: string | null;
+    businessHours: AstroClientConfigInput["hours"];
+    facebookUrl: string | null;
+    theme: AstroClientConfigInput["brand"]["theme"];
+  },
+  row?: typeof astroClientConfigs.$inferSelect,
+): AstroClientConfigInput {
+  return mergeStoredAstroConfig(
+    createDefaultAstroConfig({
+      ...client,
+      foundedYear: client.foundedYear ?? 0,
+      tagline: client.tagline ?? "",
+      websiteUrl: client.websiteUrl ?? "",
+      phone: client.phone ?? "",
+      email: client.email ?? "",
+      streetAddress: client.streetAddress ?? "",
+      city: client.city ?? "",
+      state: client.state ?? "",
+      postalCode: client.postalCode ?? "",
+      facebookUrl: client.facebookUrl ?? "",
+    }),
+    row,
+  );
+}
+
 export function mergeStoredAstroConfig(
   defaults: AstroClientConfigInput,
   row: typeof astroClientConfigs.$inferSelect | undefined,
@@ -116,22 +161,23 @@ export function mergeStoredAstroConfig(
       ...defaults.brand,
       fonts: { ...defaults.brand.fonts, ...row.fonts },
     },
-    navigationItems: row.navigationItems as AstroClientConfigInput["navigationItems"],
+    navigationItems: (row.navigationItems ?? defaults.navigationItems) as AstroClientConfigInput["navigationItems"],
     categories: Object.fromEntries(
       ASTRO_CATEGORY_VALUES.map(category => [
         category,
-        { ...defaults.categories[category], ...(row.categories[category] ?? {}) },
+        { ...defaults.categories[category], ...(row.categories?.[category] ?? {}) },
       ]),
     ) as AstroClientConfigInput["categories"],
     financing: { ...defaults.financing, ...row.financing } as AstroClientConfigInput["financing"],
-    homepageSections: row.homepageSections as AstroClientConfigInput["homepageSections"],
+    homepageSections: (row.homepageSections ??
+      defaults.homepageSections) as AstroClientConfigInput["homepageSections"],
     integrations: Object.fromEntries(
       Object.entries(defaults.integrations).map(([name, value]) => [
         name,
         {
           ...value,
-          ...(row.integrations[name] ?? {}),
-          config: { ...value.config, ...(row.integrations[name]?.config as Record<string, string> | undefined) },
+          ...(row.integrations?.[name] ?? {}),
+          config: { ...value.config, ...(row.integrations?.[name]?.config as Record<string, string> | undefined) },
         },
       ]),
     ) as AstroClientConfigInput["integrations"],
@@ -174,23 +220,13 @@ export async function getAstroConfigView(clientId: number) {
   ]);
   if (!client) throw new Error("Client not found.");
 
-  const defaults = createDefaultAstroConfig({
-    ...client,
-    foundedYear: client.foundedYear ?? 0,
-    tagline: client.tagline ?? "",
-    websiteUrl: client.websiteUrl ?? "",
-    phone: client.phone ?? "",
-    email: client.email ?? "",
-    streetAddress: client.streetAddress ?? "",
-    city: client.city ?? "",
-    state: client.state ?? "",
-    postalCode: client.postalCode ?? "",
-    facebookUrl: client.facebookUrl ?? "",
-  });
   const assetUrls = Object.fromEntries(
     assets.filter(asset => isAstroAssetSlot(asset.slot)).map(asset => [asset.slot, asset.storageUrl]),
   );
-  const input = applyAstroAssetUrls(mergeStoredAstroConfig(defaults, configRows[0]), assetUrls);
+  const input = applyAstroAssetUrls(
+    astroConfigInputFromClient(client, configRows[0]),
+    assetUrls,
+  );
   const secretStatus = wranglerSecretStatusFromProfile(integrationProfile.dto);
 
   const generatedConfig = configRows[0]?.generatedConfigEncrypted

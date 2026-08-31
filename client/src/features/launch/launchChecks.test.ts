@@ -33,9 +33,47 @@ describe("pre-launch checks", () => {
 
     expect(checks.find(check => check.key === "businessInformation")).toMatchObject({
       state: "pass",
-      fixHref: "/workspace/5/configuration",
+      fixHref: "/workspace/5/configuration?tab=basic",
     });
-    expect(checks.find(check => check.key === "websiteSetup")?.state).toBe("fail");
+    expect(checks.find(check => check.key === "websiteSetup")).toMatchObject({
+      state: "fail",
+      fixHref: "/workspace/5/configuration?tab=media",
+    });
+  });
+
+  it("names the publish-profile gaps that keep deployMode off client", () => {
+    const checks = buildLaunchChecks({
+      clientId: 5,
+      summary: summary({
+        items: [{ key: "businessInformation", label: "Business", complete: true }],
+      }),
+      homepageSections: { enabled: 1, total: 2 },
+      clientDeploy: {
+        gaps: ["Map coordinates", "At least one product category"],
+      },
+    });
+    const deploy = checks.find(check => check.key === "clientDeploy");
+
+    expect(deploy).toMatchObject({
+      state: "fail",
+      detail: "Map coordinates; At least one product category",
+      fixHref: "/workspace/5/configuration?tab=basic",
+    });
+  });
+
+  it("sends a category-only publish gap to the Content tab", () => {
+    const checks = buildLaunchChecks({
+      clientId: 5,
+      summary: summary({
+        items: [{ key: "businessInformation", label: "Business", complete: true }],
+      }),
+      homepageSections: { enabled: 1, total: 2 },
+      clientDeploy: { gaps: ["At least one product category"] },
+    });
+
+    expect(checks.find(check => check.key === "clientDeploy")?.fixHref).toBe(
+      "/workspace/5/configuration?tab=content",
+    );
   });
 
   it("names the missing secrets and sends them to Integrations", () => {
@@ -72,6 +110,7 @@ describe("pre-launch checks", () => {
         ],
       }),
       homepageSections: { enabled: 6, total: 8 },
+      clientDeploy: { gaps: [] },
     });
 
     expect(checks.map(check => check.key)).not.toContain("funnelIntegrations");
@@ -80,7 +119,11 @@ describe("pre-launch checks", () => {
   });
 
   it("holds the homepage check as pending until the configuration arrives", () => {
-    const loading = buildLaunchChecks({ clientId: 5, summary: summary() });
+    const loading = buildLaunchChecks({
+      clientId: 5,
+      summary: summary(),
+      clientDeploy: { gaps: [] },
+    });
     expect(loading.find(check => check.key === "homepageSections")?.state).toBe(
       "pending",
     );
@@ -129,6 +172,7 @@ describe("launch readiness", () => {
         items: [{ key: "businessInformation", label: "Business", complete: true }],
       }),
       homepageSections: { enabled: 6, total: 8 },
+      clientDeploy: { gaps: [] },
     });
 
     expect(launchReadiness(allPassing)).toMatchObject({ ready: true, failing: 0 });
@@ -140,6 +184,7 @@ describe("launch readiness", () => {
       summary: summary({
         items: [{ key: "businessInformation", label: "Business", complete: true }],
       }),
+      clientDeploy: { gaps: [] },
     });
 
     expect(launchReadiness(pending)).toMatchObject({ ready: false, pending: 1 });
@@ -151,10 +196,11 @@ describe("launch readiness", () => {
         clientId: 5,
         summary: summary(),
         homepageSections: { enabled: 3, total: 8 },
+        clientDeploy: { gaps: [] },
       }),
     );
 
-    expect(readiness).toMatchObject({ passed: 3, failing: 1, total: 4 });
+    expect(readiness).toMatchObject({ passed: 4, failing: 1, total: 5 });
   });
 });
 
@@ -165,6 +211,7 @@ describe("launch blockers", () => {
         clientId: 5,
         summary: summary(),
         homepageSections: { enabled: 3, total: 8 },
+        clientDeploy: { gaps: [] },
       }),
     );
 
@@ -179,6 +226,7 @@ describe("launch blockers", () => {
           items: [{ key: "businessInformation", label: "Business", complete: true }],
         }),
         homepageSections: { enabled: 6, total: 8 },
+        clientDeploy: { gaps: [] },
       }),
     );
 
@@ -192,6 +240,7 @@ describe("launch blockers", () => {
         summary: summary({
           items: [{ key: "businessInformation", label: "Business", complete: true }],
         }),
+        clientDeploy: { gaps: [] },
       }),
     );
 

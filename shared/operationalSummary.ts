@@ -1,8 +1,9 @@
+import type { AstroClientConfigInput } from "./astroConfig";
+import { isBasicTabComplete, summarizeAstroConfigReadiness } from "./astroConfigReadiness";
 import {
   ASSET_SLOT_VALUES,
   THEME_VALUES,
   businessInformationSchema,
-  type AssetSlot,
   type ClientInput,
   type ThemeValue,
 } from "./client";
@@ -127,7 +128,7 @@ export function summarizeRuntimeConfiguration(
   };
 }
 
-function hasRequiredWebsitePhotos(presentAssetSlots: Iterable<AssetSlot>): boolean {
+function hasRequiredWebsitePhotos(presentAssetSlots: Iterable<string>): boolean {
   const present = new Set(presentAssetSlots);
   return ASSET_SLOT_VALUES.every(slot => present.has(slot));
 }
@@ -141,18 +142,30 @@ function firstLiveUrl(jobs: Array<PublishJobSnapshot | null | undefined>): strin
 
 export function buildOperationalSummary(input: {
   client: Partial<ClientInput>;
-  presentAssetSlots: Iterable<AssetSlot>;
+  presentAssetSlots: Iterable<string>;
   websiteIntegrationsReady: boolean;
   funnelIntegrationsReady: boolean;
   websitePublish: PublishJobSnapshot | null;
   funnelPublishes: PublishJobSnapshot[];
   secretStatus?: Partial<Record<WranglerSecretName, boolean>>;
   enabledIntegrations?: WebsiteIntegrationEnablement;
+  /** When present, business information means Configuration → Basic is ready. */
+  astroConfig?: AstroClientConfigInput;
 }): OperationalSummary {
-  const businessInformation = businessInformationSchema.safeParse(input.client).success;
-  const websiteSetup =
-    THEME_VALUES.includes(input.client.theme as ThemeValue) &&
-    hasRequiredWebsitePhotos(input.presentAssetSlots);
+  const astroReadiness = input.astroConfig
+    ? summarizeAstroConfigReadiness(
+        input.astroConfig,
+        [...input.presentAssetSlots].map(slot => ({ slot })),
+      )
+    : undefined;
+  const businessInformation = astroReadiness
+    ? isBasicTabComplete(astroReadiness)
+    : businessInformationSchema.safeParse(input.client).success;
+  const websiteSetup = astroReadiness
+    ? astroReadiness.tabs.branding.state === "complete" &&
+      astroReadiness.tabs.media.state === "complete"
+    : THEME_VALUES.includes(input.client.theme as ThemeValue) &&
+      hasRequiredWebsitePhotos(input.presentAssetSlots);
   const websiteLive = isCompletedPublishJob(input.websitePublish);
   const funnelsLive =
     input.funnelPublishes.length > 0 &&

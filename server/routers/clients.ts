@@ -48,6 +48,7 @@ import { observeRuntimeOperation } from "../_core/operationTelemetry";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { UpdateConflictError, isDuplicateKeyError, mapRouterError } from "../trpcErrors";
 import {
+  astroConfigInputFromClient,
   websiteIntegrationEnablementFrom,
   wranglerSecretStatusFromProfile,
 } from "../astroConfigDb";
@@ -200,7 +201,7 @@ function clientViewFrom(
   ].map(job => ({ status: job.status, liveUrl: job.liveUrl }));
   const operationalSummary = buildOperationalSummary({
     client: client as unknown as ClientInput,
-    presentAssetSlots: assets.map(asset => asset.slot).filter(isAssetSlot),
+    presentAssetSlots: assets.map(asset => asset.slot),
     websiteIntegrationsReady: websiteReadiness.websiteReady,
     funnelIntegrationsReady: profileDto.readiness.funnelReady,
     websitePublish: launch.websitePublish
@@ -209,6 +210,7 @@ function clientViewFrom(
     funnelPublishes,
     secretStatus: wranglerSecretStatusFromProfile(profileDto),
     enabledIntegrations,
+    astroConfig: astroConfigInputFromClient(client, launch.astroConfig),
   });
   return { client, assets, secretStatus, readiness, operationalSummary };
 }

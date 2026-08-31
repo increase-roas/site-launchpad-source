@@ -7,6 +7,7 @@ import {
   createAstroHomepageSection,
   createDefaultAstroConfig,
   generateAstroClientConfig,
+  clientDeployGaps,
   toCanonicalAstroClientConfig,
 } from "./astroConfig";
 import { BUSINESS_DAY_VALUES } from "./client";
@@ -236,5 +237,38 @@ describe("Astro client config schema", () => {
     const config = createDefaultAstroConfig(client);
     config.hours[1] = { ...config.hours[0] };
     expect(astroClientConfigInputSchema.safeParse(config).success).toBe(false);
+  });
+
+  it("lists the same gaps that keep deployMode off client", () => {
+    const config = createDefaultAstroConfig(client);
+    const assets = {
+      navLogo: "https://assets.example.com/nav.webp",
+      footerLogo: "https://assets.example.com/footer.webp",
+      favicon: "https://assets.example.com/favicon.webp",
+      ogImage: "https://assets.example.com/og.webp",
+    };
+
+    expect(clientDeployGaps(config, assets)).toEqual([
+      "At least one product category",
+    ]);
+    expect(toCanonicalAstroClientConfig(config, assets).deployMode).toBe("template");
+
+    config.categories["hot-tubs"] = {
+      enabled: true,
+      label: "Spas",
+      slug: "hot-tubs",
+      description: "Shop spas.",
+      heroImage: "https://assets.example.com/hot-tubs.webp",
+    };
+    expect(clientDeployGaps(config, assets)).toEqual([]);
+    expect(toCanonicalAstroClientConfig(config, assets).deployMode).toBe("client");
+
+    config.identity.siteUrl = "http://insecure.example.com";
+    config.address.latitude = "";
+    expect(clientDeployGaps(config, { navLogo: "/logo.svg" })).toEqual([
+      "HTTPS website address",
+      "Map coordinates",
+      "Site images: footerLogo, favicon, ogImage",
+    ]);
   });
 });

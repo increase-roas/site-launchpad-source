@@ -96,6 +96,37 @@ describe("wizard step state from readiness", () => {
     expect(stateOf(steps, "mediaGallery")).toBe("complete");
   });
 
+  it("completes client setup from the Basic tab even when leftover client-row fields fail", () => {
+    const steps = buildWizard({
+      operationalSummary: summary({ businessInformation: false }),
+      basicSetup: { complete: true },
+    });
+    expect(stateOf(steps, "clientSetup")).toBe("complete");
+  });
+
+  it("names the Basic tab section that is still open", () => {
+    const steps = buildWizard({
+      operationalSummary: summary({}),
+      basicSetup: { complete: false, blockedBy: "Identity has invalid values" },
+    });
+    const setup = steps.find(step => step.step === "clientSetup");
+    expect(setup?.state).toBe("current");
+    expect(setup?.blockedBy).toBe("Identity has invalid values");
+  });
+
+  it("splits brand and media so one finished tab cannot mark the other complete", () => {
+    const steps = buildWizard({
+      operationalSummary: summary({ websiteSetup: true }),
+      brandSetup: { complete: true },
+      mediaSetup: { complete: false, blockedBy: "Media is incomplete" },
+    });
+    expect(stateOf(steps, "brandContent")).toBe("complete");
+    expect(stateOf(steps, "mediaGallery")).toBe("todo");
+    expect(steps.find(step => step.step === "mediaGallery")?.blockedBy).toBe(
+      "Media is incomplete",
+    );
+  });
+
   it("completes the integrations step on website integrations alone while campaigns are deferred", () => {
     const steps = buildWizard({
       operationalSummary: summary({ websiteIntegrations: true }),

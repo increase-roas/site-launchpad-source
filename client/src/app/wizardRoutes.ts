@@ -9,9 +9,9 @@ import type { WizardStep } from "./wizard";
 export function wizardStepHref(step: WizardStep, clientId: number): string {
   switch (step) {
     case "clientSetup":
-      return workspaceRoute("overview", clientId);
+      return configurationRoute(clientId, "basic");
     case "brandContent":
-      return configurationRoute(clientId, "content");
+      return configurationRoute(clientId, "branding");
     case "mediaGallery":
       return configurationRoute(clientId, "media");
     case "pages":

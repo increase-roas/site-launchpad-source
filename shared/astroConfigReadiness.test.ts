@@ -9,7 +9,10 @@ import {
   CONFIG_SECTION_IDS,
   CONFIG_TAB_SECTIONS,
   REQUIRED_ASSET_SLOTS,
+  describeBasicTabGap,
+  describeTabGap,
   fieldStateFor,
+  isBasicTabComplete,
   meterFromCounts,
   sectionForPath,
   staticRequiredPaths,
@@ -255,5 +258,34 @@ describe("technical tab readiness counts client credentials", () => {
     const readiness = summarizeAstroConfigReadiness(baseConfig(), allAssets);
     expect(readiness.sections.clientIntegrations.requiredTotal).toBe(0);
     expect(readiness.ready).toBe(true);
+  });
+});
+
+describe("Basic tab gap for the client-setup step", () => {
+  it("is complete when identity, contact, address, and hours are filled", () => {
+    const readiness = summarizeAstroConfigReadiness(baseConfig());
+    expect(isBasicTabComplete(readiness)).toBe(true);
+    expect(describeBasicTabGap(readiness)).toBeUndefined();
+  });
+
+  it("names the unfinished Basic section", () => {
+    const config = baseConfig();
+    config.contact.phone = "";
+    const readiness = summarizeAstroConfigReadiness(config);
+    expect(isBasicTabComplete(readiness)).toBe(false);
+    expect(describeBasicTabGap(readiness)).toBe("Contact is incomplete");
+  });
+
+  it("names invalid identity values instead of leftover client-row fields", () => {
+    const config = baseConfig();
+    config.identity.siteUrl = "fargohottubs";
+    const readiness = summarizeAstroConfigReadiness(config);
+    expect(describeBasicTabGap(readiness)).toBe("Identity has invalid values");
+  });
+
+  it("names unfinished branding and media the same way", () => {
+    const none = summarizeAstroConfigReadiness(baseConfig(), []);
+    expect(describeTabGap(none, "media")).toBe("Media is incomplete");
+    expect(describeTabGap(none, "branding")).toBeUndefined();
   });
 });

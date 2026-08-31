@@ -22,6 +22,12 @@ import { clientDestinationRoute } from "@/lib/workspaceNavigation";
 import { cn } from "@/lib/utils";
 import { summarizeHomepageSections } from "@shared/astroConfig";
 import {
+  describeBasicTabGap,
+  describeTabGap,
+  isBasicTabComplete,
+  summarizeAstroConfigReadiness,
+} from "@shared/astroConfigReadiness";
+import {
   AlertCircle,
   ArrowRight,
   CheckCircle2,
@@ -100,12 +106,33 @@ export default function ClientOverviewPage({ clientId }: { clientId: number }) {
   const { client } = selectedClient;
   const summary = selectedClient.operationalSummary;
   const config = astroConfigQuery.data?.input;
+  const configReadiness = config
+    ? summarizeAstroConfigReadiness(config, astroConfigQuery.data?.assets)
+    : undefined;
   const wizard = buildWizard({
     operationalSummary: summary,
     enabledSectionCount: config
       ? summarizeHomepageSections(config.homepageSections).enabled
       : undefined,
     funnelCount: workspaceQuery.data?.funnels.length,
+    basicSetup: configReadiness
+      ? {
+          complete: isBasicTabComplete(configReadiness),
+          blockedBy: describeBasicTabGap(configReadiness),
+        }
+      : undefined,
+    brandSetup: configReadiness
+      ? {
+          complete: configReadiness.tabs.branding.state === "complete",
+          blockedBy: describeTabGap(configReadiness, "branding"),
+        }
+      : undefined,
+    mediaSetup: configReadiness
+      ? {
+          complete: configReadiness.tabs.media.state === "complete",
+          blockedBy: describeTabGap(configReadiness, "media"),
+        }
+      : undefined,
   });
   const progress = wizardProgress(wizard);
   const action = nextClientAction(summary);
@@ -260,7 +287,7 @@ function StepTile({
       >
         {step.index}
       </span>
-      <span className="min-w-0 flex-1">
+      <span className="block min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold leading-tight">
           {step.label}
         </span>

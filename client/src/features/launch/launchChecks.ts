@@ -24,10 +24,30 @@ export type LaunchChecksInput = {
   summary: OperationalSummary;
   /** Absent until workspace data loads, which keeps the check `pending`. */
   homepageSections?: { enabled: number; total: number };
+  /** Absent until the Astro config loads. Empty `gaps` means deployMode can be client. */
+  clientDeploy?: { gaps: string[] };
 };
 
+function operationalFixHref(clientId: number, key: string): string {
+  switch (key) {
+    case "businessInformation":
+      return configurationRoute(clientId, "basic");
+    case "websiteSetup":
+      return configurationRoute(clientId, "media");
+    default:
+      return configurationRoute(clientId);
+  }
+}
+
+function clientDeployFixHref(clientId: number, gaps: string[]): string {
+  const first = gaps[0] ?? "";
+  if (first.startsWith("Site images")) return configurationRoute(clientId, "media");
+  if (first.includes("category")) return configurationRoute(clientId, "content");
+  return configurationRoute(clientId, "basic");
+}
+
 export function buildLaunchChecks(input: LaunchChecksInput): LaunchCheck[] {
-  const { clientId, summary, homepageSections } = input;
+  const { clientId, summary, homepageSections, clientDeploy } = input;
   const runtime = summary.runtimeConfiguration;
 
   return [
@@ -36,7 +56,7 @@ export function buildLaunchChecks(input: LaunchChecksInput): LaunchCheck[] {
       label: item.label,
       detail: item.complete ? "Complete" : "Outstanding",
       state: item.complete ? ("pass" as const) : ("fail" as const),
-      fixHref: configurationRoute(clientId),
+      fixHref: operationalFixHref(clientId, item.key),
     })),
     {
       key: "runtimeSecrets",
@@ -59,6 +79,21 @@ export function buildLaunchChecks(input: LaunchChecksInput): LaunchCheck[] {
           ? "pass"
           : "fail",
       fixHref: configurationRoute(clientId, "content"),
+    },
+    {
+      key: "clientDeploy",
+      label: "Publish profile is client-ready",
+      detail: !clientDeploy
+        ? "Checking…"
+        : clientDeploy.gaps.length
+          ? clientDeploy.gaps.join("; ")
+          : "HTTPS URL, category, hours, coordinates, and site images are set",
+      state: !clientDeploy
+        ? "pending"
+        : clientDeploy.gaps.length
+          ? "fail"
+          : "pass",
+      fixHref: clientDeployFixHref(clientId, clientDeploy?.gaps ?? []),
     },
   ];
 }

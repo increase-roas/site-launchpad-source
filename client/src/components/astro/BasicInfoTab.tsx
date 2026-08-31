@@ -85,9 +85,7 @@ export function BasicInfoTab({
       ),
     );
 
-  const emptyAdvancedAddress = ["latitude", "longitude", "googlePlaceId"].filter(
-    key => !value.address[key as "latitude"],
-  ).length;
+  const emptyPlaceId = !value.address.googlePlaceId.trim();
 
   return (
     <div className="space-y-3">
@@ -241,30 +239,10 @@ export function BasicInfoTab({
         title="Address"
         description="Used by maps, local search, and business schema."
         readiness={readiness.sections.address}
-        advancedLabel="Advanced — coordinates and Google Place ID"
-        advancedSummary={emptyAdvancedAddress ? `${emptyAdvancedAddress} empty` : "all set"}
+        advancedLabel="Advanced — Google Place ID"
+        advancedSummary={emptyPlaceId ? "empty" : "set"}
         advanced={
-          <FieldGrid columns={3}>
-            <FieldCell label="Latitude" {...cell("address.latitude", true)}>
-              <Input
-                inputMode="decimal"
-                value={value.address.latitude}
-                onChange={event =>
-                  update("address", { ...value.address, latitude: event.target.value })
-                }
-                className="tabular-nums"
-              />
-            </FieldCell>
-            <FieldCell label="Longitude" {...cell("address.longitude", true)}>
-              <Input
-                inputMode="decimal"
-                value={value.address.longitude}
-                onChange={event =>
-                  update("address", { ...value.address, longitude: event.target.value })
-                }
-                className="tabular-nums"
-              />
-            </FieldCell>
+          <FieldGrid columns={1}>
             <FieldCell label="Google Place ID" {...cell("address.googlePlaceId", true)}>
               <Input
                 value={value.address.googlePlaceId}
@@ -349,6 +327,31 @@ export function BasicInfoTab({
             </JoinedFields>
           </FieldCell>
         </div>
+
+        <FieldGrid columns={2}>
+          <FieldCell label="Latitude" {...cell("address.latitude", true)} hint="Required to publish maps">
+            <Input
+              inputMode="decimal"
+              value={value.address.latitude}
+              onChange={event =>
+                update("address", { ...value.address, latitude: event.target.value })
+              }
+              placeholder="48.2325"
+              className="tabular-nums"
+            />
+          </FieldCell>
+          <FieldCell label="Longitude" {...cell("address.longitude", true)} hint="Required to publish maps">
+            <Input
+              inputMode="decimal"
+              value={value.address.longitude}
+              onChange={event =>
+                update("address", { ...value.address, longitude: event.target.value })
+              }
+              placeholder="-101.2963"
+              className="tabular-nums"
+            />
+          </FieldCell>
+        </FieldGrid>
       </ConfigSection>
 
       <ConfigSection

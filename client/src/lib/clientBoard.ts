@@ -318,7 +318,7 @@ export function nextClientAction(summary: OperationalSummary): ClientNextAction 
     case "websiteSetup":
       return {
         label: "Finish website setup",
-        detail: "Theme and required photos still need work.",
+        detail: "Theme, fonts, or required site images still need work.",
         destination: "configuration",
       };
     case "websiteIntegrations":

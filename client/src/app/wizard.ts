@@ -102,6 +102,12 @@ export type WizardSignals = {
   operationalSummary: OperationalSummary;
   enabledSectionCount?: number;
   funnelCount?: number;
+  /** Configuration → Basic. When omitted, client setup falls back to the list summary. */
+  basicSetup?: { complete: boolean; blockedBy?: string };
+  /** Configuration → Branding. When omitted, both brand and media fall back to website setup. */
+  brandSetup?: { complete: boolean; blockedBy?: string };
+  /** Configuration → Media. When omitted, both brand and media fall back to website setup. */
+  mediaSetup?: { complete: boolean; blockedBy?: string };
 };
 
 function itemComplete(
@@ -126,8 +132,11 @@ export type WizardStepStatus = WizardStepDefinition & {
 export function buildWizard(signals: WizardSignals): WizardStepStatus[] {
   const summary = signals.operationalSummary;
 
-  const businessInformation = itemComplete(summary, "businessInformation");
+  const businessInformation =
+    signals.basicSetup?.complete ?? itemComplete(summary, "businessInformation");
   const websiteSetup = itemComplete(summary, "websiteSetup");
+  const brandContent = signals.brandSetup?.complete ?? websiteSetup;
+  const mediaGallery = signals.mediaSetup?.complete ?? websiteSetup;
   const websiteIntegrations = itemComplete(summary, "websiteIntegrations");
   const funnelIntegrations = itemComplete(summary, "funnelIntegrations");
   const websiteLive = itemComplete(summary, "websiteLive");
@@ -162,9 +171,8 @@ export function buildWizard(signals: WizardSignals): WizardStepStatus[] {
 
   const states: Record<WizardStep, WizardStepState> = {
     clientSetup: toState(businessInformation),
-    // Theme and required photos are reported together, so both steps read it.
-    brandContent: toState(websiteSetup),
-    mediaGallery: toState(websiteSetup),
+    brandContent: toState(brandContent),
+    mediaGallery: toState(mediaGallery),
     pages: pagesState,
     funnels: funnelsState,
     integrations: toState(integrationsComplete),
@@ -172,9 +180,9 @@ export function buildWizard(signals: WizardSignals): WizardStepStatus[] {
   };
 
   const blockers: Partial<Record<WizardStep, string>> = {
-    clientSetup: "Business details are incomplete",
-    brandContent: "Theme or required photos are missing",
-    mediaGallery: "Required photos are missing",
+    clientSetup: signals.basicSetup?.blockedBy ?? "Basic info is incomplete",
+    brandContent: signals.brandSetup?.blockedBy ?? "Theme or fonts still need work",
+    mediaGallery: signals.mediaSetup?.blockedBy ?? "Required site images are missing",
     pages: "No homepage sections are visible",
     funnels: "No funnel has been created",
     integrations: summary.runtimeConfiguration.requiredMissing.length

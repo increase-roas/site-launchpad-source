@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { WRANGLER_SECRET_VALUES, emptyWranglerSecretStatus } from "./astroConfig";
+import {
+  WRANGLER_SECRET_VALUES,
+  createDefaultAstroConfig,
+  emptyWranglerSecretStatus,
+} from "./astroConfig";
+import { REQUIRED_ASSET_SLOTS } from "./astroConfigReadiness";
 import { ASSET_SLOT_VALUES } from "./client";
 import { validClientInput } from "./client.test";
 import {
@@ -104,6 +109,100 @@ describe("operational launch summary", () => {
       funnelPublishes: [],
     });
     expect(issue.statusLabel).toBe("Issue");
+  });
+
+  it("treats business information as the Astro Basic tab when a config is supplied", () => {
+    const leftoverGaps = {
+      ...validClientInput,
+      googleMapsUrl: undefined,
+      primaryOffer: undefined,
+      financingPromise: undefined,
+      deliveryPromise: undefined,
+    };
+    const astroConfig = createDefaultAstroConfig({
+      businessName: leftoverGaps.businessName,
+      shortName: leftoverGaps.shortName,
+      foundedYear: leftoverGaps.foundedYear,
+      tagline: leftoverGaps.tagline,
+      websiteUrl: leftoverGaps.websiteUrl,
+      phone: leftoverGaps.phone,
+      email: leftoverGaps.email,
+      streetAddress: leftoverGaps.streetAddress,
+      city: leftoverGaps.city,
+      state: leftoverGaps.state,
+      postalCode: leftoverGaps.postalCode,
+      country: leftoverGaps.country,
+      businessHours: leftoverGaps.businessHours,
+      facebookUrl: leftoverGaps.facebookUrl,
+      theme: leftoverGaps.theme,
+    });
+
+    expect(
+      buildOperationalSummary({
+        client: leftoverGaps,
+        presentAssetSlots: ASSET_SLOT_VALUES,
+        websiteIntegrationsReady: true,
+        funnelIntegrationsReady: true,
+        websitePublish: null,
+        funnelPublishes: [],
+      }).items.find(item => item.key === "businessInformation")?.complete,
+    ).toBe(false);
+
+    expect(
+      buildOperationalSummary({
+        client: leftoverGaps,
+        astroConfig,
+        presentAssetSlots: ASSET_SLOT_VALUES,
+        websiteIntegrationsReady: true,
+        funnelIntegrationsReady: true,
+        websitePublish: null,
+        funnelPublishes: [],
+      }).items.find(item => item.key === "businessInformation")?.complete,
+    ).toBe(true);
+  });
+
+  it("treats website setup as Astro branding and media when a config is supplied", () => {
+    const astroConfig = createDefaultAstroConfig({
+      businessName: validClientInput.businessName,
+      shortName: validClientInput.shortName,
+      foundedYear: validClientInput.foundedYear,
+      tagline: validClientInput.tagline,
+      websiteUrl: validClientInput.websiteUrl,
+      phone: validClientInput.phone,
+      email: validClientInput.email,
+      streetAddress: validClientInput.streetAddress,
+      city: validClientInput.city,
+      state: validClientInput.state,
+      postalCode: validClientInput.postalCode,
+      country: validClientInput.country,
+      businessHours: validClientInput.businessHours,
+      facebookUrl: validClientInput.facebookUrl,
+      theme: validClientInput.theme,
+    });
+
+    expect(
+      buildOperationalSummary({
+        client: validClientInput,
+        astroConfig,
+        presentAssetSlots: ASSET_SLOT_VALUES,
+        websiteIntegrationsReady: true,
+        funnelIntegrationsReady: true,
+        websitePublish: null,
+        funnelPublishes: [],
+      }).items.find(item => item.key === "websiteSetup")?.complete,
+    ).toBe(false);
+
+    expect(
+      buildOperationalSummary({
+        client: validClientInput,
+        astroConfig,
+        presentAssetSlots: REQUIRED_ASSET_SLOTS,
+        websiteIntegrationsReady: true,
+        funnelIntegrationsReady: true,
+        websitePublish: null,
+        funnelPublishes: [],
+      }).items.find(item => item.key === "websiteSetup")?.complete,
+    ).toBe(true);
   });
 });
 

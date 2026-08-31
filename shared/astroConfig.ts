@@ -557,6 +557,56 @@ function isAbsoluteAsset(value: string | undefined): value is string {
   return Boolean(value && (value.startsWith("/") || value.startsWith("https://")));
 }
 
+export const CLIENT_DEPLOY_REQUIRED_ASSETS = [
+  "navLogo",
+  "footerLogo",
+  "favicon",
+  "ogImage",
+] as const;
+
+export type ClientDeployAssetInput =
+  | Record<string, string>
+  | Array<{ slot: string; storageUrl?: string | null }>;
+
+function assetUrlsFrom(assets: ClientDeployAssetInput): Record<string, string> {
+  if (Array.isArray(assets)) {
+    return Object.fromEntries(assets.map(asset => [asset.slot, asset.storageUrl ?? ""]));
+  }
+  return assets;
+}
+
+function hasMapCoordinates(input: AstroClientConfigInput): boolean {
+  const latitude = Number(input.address.latitude);
+  const longitude = Number(input.address.longitude);
+  return (
+    input.address.latitude.trim() !== "" &&
+    input.address.longitude.trim() !== "" &&
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude)
+  );
+}
+
+/**
+ * Gaps that keep `deployMode` on `template` and therefore block publish.
+ * Launch and the canonical writer share this list so they cannot drift.
+ */
+export function clientDeployGaps(
+  input: AstroClientConfigInput,
+  assets: ClientDeployAssetInput,
+): string[] {
+  const urls = assetUrlsFrom(assets);
+  const gaps: string[] = [];
+  if (!isHttpsUrl(input.identity.siteUrl)) gaps.push("HTTPS website address");
+  if (!input.hours.some(hour => hour.isOpen)) gaps.push("At least one open day");
+  if (!hasMapCoordinates(input)) gaps.push("Map coordinates");
+  if (!ASTRO_CATEGORY_VALUES.some(category => input.categories[category].enabled)) {
+    gaps.push("At least one product category");
+  }
+  const missingAssets = CLIENT_DEPLOY_REQUIRED_ASSETS.filter(slot => !isAbsoluteAsset(urls[slot]));
+  if (missingAssets.length) gaps.push(`Site images: ${missingAssets.join(", ")}`);
+  return gaps;
+}
+
 function splitConfiguredLines(value: string, expectedParts: number): string[][] {
   return value
     .split(/\r?\n/)
@@ -669,27 +719,14 @@ export function toCanonicalAstroClientConfig(
     latitude: Number(input.address.latitude),
     longitude: Number(input.address.longitude),
   };
-  const hasCoordinates =
-    input.address.latitude.trim() !== "" &&
-    input.address.longitude.trim() !== "" &&
-    Number.isFinite(coordinates.latitude) &&
-    Number.isFinite(coordinates.longitude);
-  const hasRequiredAssets = ["navLogo", "footerLogo", "favicon", "ogImage"]
-    .every(slot => isAbsoluteAsset(assets[slot]));
+  const hasCoordinates = hasMapCoordinates(input);
   const siteUrl = isHttpsUrl(input.identity.siteUrl)
     ? input.identity.siteUrl
     : "https://example.com";
   const country = /^[A-Za-z]{2}$/.test(input.address.country)
     ? input.address.country.toUpperCase()
     : "US";
-  const deployMode =
-    enabledCategories.length > 0 &&
-    openHours.length > 0 &&
-    hasCoordinates &&
-    hasRequiredAssets &&
-    isHttpsUrl(input.identity.siteUrl)
-      ? "client"
-      : "template";
+  const deployMode = clientDeployGaps(input, assets).length === 0 ? "client" : "template";
 
   const categories = Object.fromEntries(enabledCategories.map((category, index) => {
     const configured = input.categories[category];
