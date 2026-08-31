@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   applyAstroAssetUrls,
-  applyAstroHomepageSectionOrder,
   mergeStoredAstroConfig,
   protectWranglerSecretValues,
   resolveProductCategories,
+  websiteIntegrationEnablementFrom,
 } from "./astroConfigDb";
 import { decryptSetupValue } from "./clientSecurity";
 import { createDefaultAstroConfig } from "../shared/astroConfig";
@@ -76,7 +76,6 @@ describe("Astro config persistence helpers", () => {
       clientId: 1,
       socialLinks: defaults.socialLinks,
       fonts: defaults.brand.fonts,
-      borderRadii: defaults.brand.borderRadii,
       navigationItems,
       categories: defaults.categories,
       financing: defaults.financing,
@@ -102,40 +101,6 @@ describe("Astro config persistence helpers", () => {
     expect(JSON.stringify(reloaded)).not.toContain("secret-webhook");
   });
 
-  it("reorders Astro homepage sections without losing their configured fields", () => {
-    const existing = defaultConfig().homepageSections.map((section, index) => ({
-      ...section,
-      fields: { ...section.fields, marker: `configured-${index}` },
-    }));
-    const requested = [...existing].reverse().map((section, index) => ({
-      id: section.id,
-      type: section.type,
-      enabled: index % 2 === 0,
-    }));
-
-    const reordered = applyAstroHomepageSectionOrder(existing, requested);
-
-    expect(reordered.map(section => section.id)).toEqual(requested.map(section => section.id));
-    expect(reordered.map(section => section.enabled)).toEqual(requested.map(section => section.enabled));
-    expect(reordered.map(section => section.fields.marker)).toEqual(
-      [...existing].reverse().map(section => section.fields.marker),
-    );
-  });
-
-  it("rejects stale homepage order instead of overwriting the current Astro config", () => {
-    const existing = defaultConfig().homepageSections;
-    expect(() => applyAstroHomepageSectionOrder(existing, existing.slice(1).map(section => ({
-      id: section.id,
-      type: section.type,
-      enabled: section.enabled,
-    })))).toThrow("does not match");
-    expect(() => applyAstroHomepageSectionOrder(existing, existing.map((section, index) => ({
-      id: index === 0 ? "stale-section" : section.id,
-      type: section.type,
-      enabled: section.enabled,
-    })))).toThrow("does not match");
-  });
-
   it("keeps existing launch categories when the first Settings save has none enabled", () => {
     const config = defaultConfig();
     for (const category of Object.keys(config.categories) as Array<keyof typeof config.categories>) {
@@ -144,5 +109,47 @@ describe("Astro config persistence helpers", () => {
     expect(resolveProductCategories(config, ["hotTubs", "saunas"])).toEqual(["hotTubs", "saunas"]);
     config.categories["hot-tubs"].enabled = true;
     expect(resolveProductCategories(config, ["saunas"])).toEqual(["hotTubs"]);
+  });
+});
+
+describe("website integration enablement from the stored Astro config", () => {
+  const storedRow = (integrations: Record<string, { enabled: boolean; config: object }>) => {
+    const defaults = defaultConfig();
+    return {
+      id: 1,
+      clientId: 1,
+      socialLinks: defaults.socialLinks,
+      fonts: defaults.brand.fonts,
+      navigationItems: defaults.navigationItems,
+      categories: defaults.categories,
+      financing: defaults.financing,
+      homepageSections: defaults.homepageSections,
+      integrations: { ...defaults.integrations, ...integrations },
+      generatedConfigEncrypted: null,
+      generatedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+  };
+
+  it("reports nothing enabled for a client that never saved a configuration", () => {
+    expect(websiteIntegrationEnablementFrom(undefined)).toEqual({ ghl: false, meta: false });
+  });
+
+  it("reports exactly the conditional integrations the client switched on", () => {
+    expect(
+      websiteIntegrationEnablementFrom(storedRow({ ghl: { enabled: true, config: {} } })),
+    ).toEqual({ ghl: true, meta: false });
+  });
+
+  it("ignores enabled integrations that need no runtime credentials", () => {
+    expect(
+      websiteIntegrationEnablementFrom(
+        storedRow({
+          sentry: { enabled: true, config: { dsn: "https://sentry.example/1" } },
+          r2: { enabled: true, config: { binding: "ASSETS" } },
+        }),
+      ),
+    ).toEqual({ ghl: false, meta: false });
   });
 });

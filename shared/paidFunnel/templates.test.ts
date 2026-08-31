@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { addFunnelStep } from "./ops";
 import { createEmptyGraph } from "./graph";
-import { applyOptInTemplate, createSurveyQuestionStep, reorderFunnelSteps } from "./templates";
+import {
+  addFunnelStep,
+  applyOptInTemplate,
+  createSurveyQuestionStep,
+  reorderFunnelSteps,
+} from "./templates";
 
 describe("Perspective-style Astro funnel templates", () => {
   it("supports an embedded form on the opt-in page", () => {

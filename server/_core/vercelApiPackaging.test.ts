@@ -9,6 +9,7 @@ import {
 } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { build } from "esbuild";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -63,7 +64,8 @@ const tempDirectories: string[] = [];
 afterEach(async () => {
   await Promise.all(
     tempDirectories.splice(0).map(directory =>
-      rm(directory, { recursive: true, force: true }),
+      // Windows keeps handles open briefly after the probed child exits, so retry past EBUSY.
+      rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }),
     ),
   );
 });
@@ -81,7 +83,7 @@ function sanitizedNodeEnv(
 }
 
 async function createTempDirectory(prefix: string): Promise<string> {
-  const directory = await mkdtemp(path.join(process.env.TMPDIR ?? "/tmp", prefix));
+  const directory = await mkdtemp(path.join(process.env.TMPDIR ?? tmpdir(), prefix));
   tempDirectories.push(directory);
   return directory;
 }
@@ -298,5 +300,7 @@ describe("emitted Vercel API function packaging", () => {
     expect(exactApi.status).toBe(404);
     expect(exactApi.contentType).toMatch(/json/i);
     expect(JSON.parse(exactApi.body)).toEqual({ error: "Not Found" });
-  }, 15_000);
+    // Bundles with esbuild and probes three spawned handlers, so it needs room
+    // to spare when the suite runs in parallel.
+  }, 60_000);
 });

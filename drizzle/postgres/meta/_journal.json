@@ -92,6 +92,20 @@
       "when": 1787086800000,
       "tag": "0012_generic_paid_funnel_material_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787090400000,
+      "tag": "0013_drop_astro_border_radii",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787094000000,
+      "tag": "0014_drop_workspace_page_tables",
+      "breakpoints": true
     }
   ]
 }

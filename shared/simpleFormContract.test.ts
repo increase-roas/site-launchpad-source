@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   SIMPLE_FORM_MANIFEST,
@@ -131,25 +132,55 @@ describe("Simple Form template contract", () => {
     ).toThrow();
   });
 
-  it("keeps the lifecycle callback secret presence-only", () => {
+  it("reveals a stored secret only through the audited endpoint", () => {
     const crmGuide = SIMPLE_FORM_SECRET_GUIDES.find(
       guide => guide.runtimeKey === "STAGE_WEBHOOK_SECRET",
     );
     expect(crmGuide?.whereToFind).toContain("generates");
-    expect(crmGuide?.whereToFind).not.toContain("Reveal secret");
 
-    const simpleFormEditor = readFileSync(
-      "client/src/components/funnels/SimpleFormFunnelEditor.tsx",
+    // Scan the whole integrations feature, not one file, so splitting it up
+    // cannot quietly drop rotation or start sourcing plaintext from the profile
+    // payload instead of the one endpoint that records who read what.
+    const integrationsDir = "client/src/features/integrations";
+    const integrationSources = readdirSync(integrationsDir, {
+      recursive: true,
+      encoding: "utf8",
+    })
+      .filter(entry => entry.endsWith(".ts") || entry.endsWith(".tsx"))
+      .map(entry => readFileSync(path.join(integrationsDir, entry), "utf8"));
+    expect(integrationSources.length).toBeGreaterThan(0);
+    const integrationsFeature = integrationSources.join("\n");
+    expect(integrationsFeature).toContain("rotateStageWebhookSecret");
+    expect(integrationsFeature).toContain("Generate one for me");
+    expect(integrationsFeature).toContain("revealIntegrationSecret");
+    expect(integrationsFeature).toContain("Replaces the stored value when you save.");
+
+    // The profile query stays presence-plus-tail, so the editor has no stored
+    // value to read without going through the reveal mutation.
+    const serverIntegrations = readFileSync("server/clientIntegrations.ts", "utf8");
+    expect(serverIntegrations).toContain("[SecretReveal]");
+    const clientsRouterSource = readFileSync("server/routers/clients.ts", "utf8");
+    expect(clientsRouterSource).toContain("revealIntegrationSecret: adminProcedure");
+    expect(clientsRouterSource).toContain("getIntegrationProfile: protectedProcedure");
+
+    // A campaign never reads or writes an inherited secret. It reports what
+    // readiness says is missing and sends the operator to the one editor that
+    // owns those values, so there is nothing here to read a stored value with.
+    const campaignDir = "client/src/features/campaigns";
+    const campaignSources = readdirSync(campaignDir, { recursive: true, encoding: "utf8" })
+      .filter(entry => entry.endsWith(".ts") || entry.endsWith(".tsx"))
+      .map(entry => readFileSync(path.join(campaignDir, entry), "utf8"));
+    expect(campaignSources.length).toBeGreaterThan(0);
+    for (const campaignSource of campaignSources) {
+      expect(campaignSource).not.toContain("Reveal secret");
+      expect(campaignSource).not.toContain("revealIntegrationSecret");
+      expect(campaignSource).not.toContain("saveIntegrationProfile");
+      expect(campaignSource).not.toContain("GHL_WEBHOOK_URL");
+    }
+    const publishTab = readFileSync(
+      "client/src/features/campaigns/tabs/CampaignPublishTab.tsx",
       "utf8",
     );
-    const clientIntegrationEditor = readFileSync(
-      "client/src/pages/ClientIntegrationsPage.tsx",
-      "utf8",
-    );
-    expect(clientIntegrationEditor).toContain("Generate / rotate");
-    expect(clientIntegrationEditor).toContain("Stored values are never returned");
-    expect(simpleFormEditor).not.toContain("Reveal secret");
-    expect(simpleFormEditor).not.toContain("GHL_API_KEY");
-    expect(simpleFormEditor).not.toContain("GHL_WEBHOOK_URL");
+    expect(publishTab).toContain('workspaceRoute("integrations"');
   });
 });

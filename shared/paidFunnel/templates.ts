@@ -5,6 +5,7 @@ import {
   createIdFactory,
   createRow,
   createSection,
+  type FunnelPage,
   type PaidFunnelGraph,
   type PaidFunnelStep,
 } from "./graph";
@@ -179,6 +180,21 @@ export function createSurveyQuestionStep(input: {
       publishState: "draft",
     },
     page,
+  };
+}
+
+export function addFunnelStep(
+  graph: PaidFunnelGraph,
+  step: PaidFunnelStep,
+  page: FunnelPage,
+): PaidFunnelGraph {
+  if (graph.pages[step.key] || graph.steps.some(existing => existing.key === step.key)) {
+    throw new Error("That funnel step already exists.");
+  }
+  return {
+    ...graph,
+    steps: [...graph.steps, step],
+    pages: { ...graph.pages, [step.key]: page },
   };
 }
 

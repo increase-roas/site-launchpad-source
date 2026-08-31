@@ -125,4 +125,33 @@ describe("runtime configuration counter", () => {
     expect(integrationPresenceTone("ALERT_WEBHOOK_URL", "NOT SET")).toBe("optional");
     expect(integrationPresenceTone("GHL_API_KEY", "NOT SET")).toBe("missing");
   });
+
+  it("does not hold launch open for integrations the client switched off", () => {
+    const status = emptyWranglerSecretStatus();
+    status.ADMIN_PASSWORD = true;
+    status.ADMIN_SESSION_SECRET = true;
+    const summary = summarizeRuntimeConfiguration(status, {});
+    expect(summary.requiredMissing).toEqual([]);
+    expect(summary.blocksLaunch).toBe(false);
+  });
+
+  it("holds launch open for the credentials of an integration that is switched on", () => {
+    const status = emptyWranglerSecretStatus();
+    status.ADMIN_PASSWORD = true;
+    status.ADMIN_SESSION_SECRET = true;
+    const summary = summarizeRuntimeConfiguration(status, { ghl: true });
+    expect(summary.requiredMissing).toEqual(["GHL_API_KEY", "GHL_LOCATION_ID"]);
+    expect(summary.blocksLaunch).toBe(true);
+  });
+
+  it("still counts the whole shared vault, which funnels draw from too", () => {
+    const status = emptyWranglerSecretStatus();
+    status.ADMIN_PASSWORD = true;
+    status.ADMIN_SESSION_SECRET = true;
+    expect(summarizeRuntimeConfiguration(status, {})).toMatchObject({
+      set: 2,
+      total: 11,
+      label: "Runtime configuration — 2 of 11 set",
+    });
+  });
 });

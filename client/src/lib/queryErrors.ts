@@ -65,13 +65,3 @@ export function clientSwitcherLabel(input: {
   if (input.isError) return "Couldn't load clients";
   return input.clientCount > 0 ? "Choose client" : "No clients yet";
 }
-
-export function paidAdsWorkspaceErrorCopy(): {
-  title: string;
-  detail: string;
-} {
-  return {
-    title: "Paid Ads funnels could not be loaded.",
-    detail: "Try again. If this keeps happening, ask Alex for help.",
-  };
-}

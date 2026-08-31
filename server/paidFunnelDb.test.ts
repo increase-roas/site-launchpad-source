@@ -20,28 +20,16 @@ vi.mock("./db", () => dbMocks);
 
 import {
   createPaidFunnelFromTemplate,
-  createBlankPaidFunnel,
   getPaidFunnelDetail,
   importPaidFunnelZip,
   isPaidFunnelRegistryUnavailable,
   listPaidFunnelTemplates,
-  savePaidFunnelGraph,
 } from "./paidFunnelDb";
-import { createGenericPaidFunnelFixture } from "../shared/paidFunnel/fixture";
-import { studioToPersistSteps, studioToStorageGraph } from "../shared/paidFunnel/persist";
-import {
-  addStudioSurveyQuestion,
-  createDocumentFromPersist,
-  createStudioState,
-  deleteStudioSurveyQuestion,
-  insertPaletteOnCanvas,
-} from "../shared/paidFunnel/store";
 
 type Row = Record<string, unknown> & { id?: number };
 
 function thenable<T>(result: T) {
   const builder = {
-    for: async () => result,
     limit: async () => result,
     orderBy: () => builder,
     then: (
@@ -63,13 +51,10 @@ function createMemoryDb() {
     [paidFunnelGraphRevisions, []],
   ]);
   let nextId = 1;
-  let lockedGraphRows = 0;
   const inserted: Array<{ table: unknown; values: Row }> = [];
-  const deleted: Array<{ table: unknown; values: Row }> = [];
 
   const api = {
     inserted,
-    deleted,
     tables,
     select: (_shape?: unknown) => ({
       from: (table: unknown) => ({
@@ -99,18 +84,7 @@ function createMemoryDb() {
             }),
           }),
         }),
-        where: () => {
-          const result = tables.get(table) ?? [];
-          const builder = thenable(result);
-          if (table !== paidFunnelGraphs) return builder;
-          return {
-            ...builder,
-            for: async () => {
-              lockedGraphRows += 1;
-              return result;
-            },
-          };
-        },
+        where: () => thenable(tables.get(table) ?? []),
         orderBy: () => thenable(tables.get(table) ?? []),
       }),
     }),
@@ -139,23 +113,8 @@ function createMemoryDb() {
         }),
       }),
     }),
-    delete: (table: unknown) => ({
-      where: async () => {
-        const rows = tables.get(table) ?? [];
-        const index = table === paidFunnelSteps
-          ? rows.findIndex(row => typeof row.key === "string" && /^survey-question-\d+$/.test(row.key))
-          : -1;
-        if (index < 0) return [];
-        const [removed] = rows.splice(index, 1);
-        if (removed) deleted.push({ table, values: removed });
-        return removed ? [removed] : [];
-      },
-    }),
     transaction: async (callback: (tx: typeof api) => Promise<unknown>) =>
       callback(api),
-    get lockedGraphRows() {
-      return lockedGraphRows;
-    },
   };
   return api;
 }
@@ -290,127 +249,13 @@ describe("paid funnel registry persistence", () => {
     expect(JSON.stringify(result)).not.toMatch(/EAAB|sk_live/);
   });
 
-  it("assembles a studio graph and saves builder graphs through saveGraph", async () => {
+  it("assembles a readable studio graph from the stored template instantiation", async () => {
     const created = await createPaidFunnelFromTemplate(5, "generic-paid-funnel");
     const detail = await getPaidFunnelDetail(5, created.funnelId);
     expect(detail.studio).toBeTruthy();
     expect(detail.studio?.graph.kind).toBe("paid-funnel");
     expect(detail.studio?.graph.pages.landing.kind).toBe("page");
     expect(detail.graphs[0]?.graph.pages[0]?.kind).toBe("page");
-
-    const builder = createGenericPaidFunnelFixture("db-save");
-    const saved = await savePaidFunnelGraph({
-      clientId: 5,
-      funnelId: created.funnelId,
-      stepId: detail.studio!.stepId,
-      expectedUpdatedAt: detail.studio!.expectedUpdatedAt,
-      graph: builder,
-    });
-    expect(saved.studio?.graph.pages.landing.kind).toBe("page");
-    expect(saved.graphs[0]?.graph.version).toBe(1);
-    expect(db.lockedGraphRows).toBe(1);
-    expect(saved.studio!.expectedUpdatedAt.getTime()).toBeGreaterThan(
-      detail.studio!.expectedUpdatedAt.getTime()
-    );
   });
 
-  it("persists deletion of an added survey while protecting structural steps", async () => {
-    const created = await createPaidFunnelFromTemplate(5, "generic-paid-funnel");
-    const detail = await getPaidFunnelDetail(5, created.funnelId);
-    let state = createStudioState(createDocumentFromPersist({
-      clientId: 5,
-      funnelId: created.funnelId,
-      stepId: detail.studio!.stepId,
-      expectedUpdatedAt: detail.studio!.expectedUpdatedAt,
-      graph: detail.studio!.graph,
-    }));
-    state = addStudioSurveyQuestion(state);
-    const addedKey = state.stepKey;
-    const withAdded = await savePaidFunnelGraph({
-      clientId: 5,
-      funnelId: created.funnelId,
-      stepId: detail.studio!.stepId,
-      expectedUpdatedAt: detail.studio!.expectedUpdatedAt,
-      graph: studioToStorageGraph(state.document.graph),
-      steps: studioToPersistSteps(state.document.graph),
-    });
-    expect(withAdded.steps.some(step => step.key === addedKey)).toBe(true);
-
-    state = createStudioState(createDocumentFromPersist({
-      clientId: 5,
-      funnelId: created.funnelId,
-      stepId: withAdded.studio!.stepId,
-      expectedUpdatedAt: withAdded.studio!.expectedUpdatedAt,
-      graph: withAdded.studio!.graph,
-    }));
-    state = { ...state, stepKey: addedKey };
-    state = deleteStudioSurveyQuestion(state);
-    const withoutAdded = await savePaidFunnelGraph({
-      clientId: 5,
-      funnelId: created.funnelId,
-      stepId: withAdded.studio!.stepId,
-      expectedUpdatedAt: withAdded.studio!.expectedUpdatedAt,
-      graph: studioToStorageGraph(state.document.graph),
-      steps: studioToPersistSteps(state.document.graph),
-    });
-    expect(withoutAdded.steps.some(step => step.key === addedKey)).toBe(false);
-    expect(db.deleted).toEqual(expect.arrayContaining([
-      expect.objectContaining({ table: paidFunnelSteps, values: expect.objectContaining({ key: addedKey }) }),
-    ]));
-
-    const protectedGraph = {
-      ...state.document.graph,
-      steps: state.document.graph.steps.filter(step => step.key !== "form"),
-    };
-    await expect(savePaidFunnelGraph({
-      clientId: 5,
-      funnelId: created.funnelId,
-      stepId: withoutAdded.studio!.stepId,
-      expectedUpdatedAt: withoutAdded.studio!.expectedUpdatedAt,
-      graph: studioToStorageGraph(protectedGraph),
-      steps: studioToPersistSteps(protectedGraph),
-    })).rejects.toThrow("Only custom survey questions can be removed");
-  });
-
-  it("creates a blank funnel with an empty canvas, then saves and reloads an edit", async () => {
-    const created = await createBlankPaidFunnel(5);
-    expect(created.alreadyExists).toBe(false);
-    expect(created.funnelId).toBeGreaterThan(0);
-    const steps = db.inserted.filter(row => row.table === paidFunnelSteps);
-    expect(steps.map(row => row.values.key)).toEqual(["landing"]);
-    const funnel = (db.tables.get(paidFunnels) ?? [])[0];
-    expect(funnel?.source).toBe("template");
-    expect(funnel?.templateVersionId).toBeNull();
-    expect(funnel?.name).toBe("Northland Spas Funnel");
-
-    const detail = await getPaidFunnelDetail(5, created.funnelId);
-    expect(detail.studio?.graph.steps).toHaveLength(1);
-    expect(detail.studio?.graph.pages.landing.sections).toEqual([]);
-    expect(detail.studio?.graph.steps.map(step => step.key)).not.toContain("form");
-
-    let state = createStudioState(createDocumentFromPersist({
-      clientId: 5,
-      funnelId: created.funnelId,
-      stepId: detail.studio!.stepId,
-      expectedUpdatedAt: detail.studio!.expectedUpdatedAt,
-      graph: detail.studio!.graph,
-    }));
-    state = insertPaletteOnCanvas(state, { source: "section", preset: "cta" });
-    expect(state.document.graph.pages.landing.sections).toHaveLength(1);
-
-    const saved = await savePaidFunnelGraph({
-      clientId: 5,
-      funnelId: created.funnelId,
-      stepId: detail.studio!.stepId,
-      expectedUpdatedAt: detail.studio!.expectedUpdatedAt,
-      graph: studioToStorageGraph(state.document.graph),
-      steps: studioToPersistSteps(state.document.graph),
-    });
-    expect(saved.studio?.graph.pages.landing.sections).toHaveLength(1);
-
-    const reloaded = await getPaidFunnelDetail(5, created.funnelId);
-    expect(reloaded.studio?.graph.pages.landing.sections).toHaveLength(1);
-    expect(reloaded.studio?.graph.pages.landing.sections[0]?.preset).toBe("cta");
-    expect(reloaded.steps.map(step => step.key)).toEqual(["landing"]);
-  });
 });

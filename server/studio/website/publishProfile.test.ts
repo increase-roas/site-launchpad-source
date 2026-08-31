@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getAstroSiteRuntimeSecrets } from "../../../shared/astroSiteContract";
 import {
-  WEBSITE_REQUIRED_PROFILE_KEYS,
+  WEBSITE_POSSIBLE_PROFILE_KEYS,
   emptySecretPresence,
 } from "../../../shared/clientIntegrationProfile";
 import {
@@ -47,7 +47,7 @@ describe("website publish ClientIntegrationProfile planner", () => {
         STAGE_WEBHOOK_SECRET: secrets.STAGE_WEBHOOK_SECRET,
       },
     });
-    expect(WEBSITE_REQUIRED_PROFILE_KEYS.length).toBeGreaterThan(REQUIRED_RUNTIME.length);
+    expect(WEBSITE_POSSIBLE_PROFILE_KEYS).toEqual(REQUIRED_RUNTIME);
     expect(assertAstroSitePublishProfileReady({
       clientId: 5,
       resolver,
@@ -209,5 +209,59 @@ describe("website publish ClientIntegrationProfile planner", () => {
     expect(planned.runtimeSecrets).toBeNull();
     expect(planned.ok ? "" : planned.error).toContain("NOT SET");
     expect(JSON.stringify(planned)).not.toContain("legacy-only-admin-password");
+  });
+
+  function adminOnlyResolver(clientId = 5) {
+    const dto = buildReadyPaidFunnelProfileDto(clientId);
+    dto.secretPresence = emptySecretPresence();
+    dto.secretPresence.ADMIN_PASSWORD = "SET";
+    dto.secretPresence.ADMIN_SESSION_SECRET = "SET";
+    dto.identifiers.GHL_LOCATION_ID = null;
+    dto.identifiers.GOOGLE_SHEETS_ID = null;
+    dto.identifiers.META_PIXEL_ID = null;
+    const secrets = {
+      ADMIN_PASSWORD: "admin-password-XYZ",
+      ADMIN_SESSION_SECRET: "admin-session-secret-XYZ",
+    };
+    return { dto, secrets, resolver: memoryProfileResolver([{ clientId, dto, secrets }]) };
+  }
+
+  it("publishes on the admin secrets alone when every integration is switched off", () => {
+    const { resolver, secrets } = adminOnlyResolver(5);
+    const planned = planAstroSitePublishFromProfile({
+      clientId: 5,
+      resolver,
+      requiredSecretNames: getAstroSiteRuntimeSecrets({}),
+    });
+    expect(planned).toEqual({
+      ok: true,
+      clientId: 5,
+      runtimeSecrets: {
+        ADMIN_PASSWORD: secrets.ADMIN_PASSWORD,
+        ADMIN_SESSION_SECRET: secrets.ADMIN_SESSION_SECRET,
+      },
+    });
+  });
+
+  it("blocks the same profile once an integration needing credentials is switched on", () => {
+    const { resolver } = adminOnlyResolver(5);
+    const planned = planAstroSitePublishFromProfile({
+      clientId: 5,
+      resolver,
+      requiredSecretNames: getAstroSiteRuntimeSecrets({ ghl: true }),
+    });
+    expect(planned.ok).toBe(false);
+    expect(planned.ok ? "" : planned.error).toContain("GHL_API_KEY");
+    expect(planned.ok ? "" : planned.error).toContain("GHL_LOCATION_ID");
+  });
+
+  it("does not block a website on Google Sheets credentials, which it never reads", () => {
+    const { resolver } = adminOnlyResolver(5);
+    const planned = planAstroSitePublishFromProfile({
+      clientId: 5,
+      resolver,
+      requiredSecretNames: getAstroSiteRuntimeSecrets({}),
+    });
+    expect(planned.ok ? "" : planned.error).not.toContain("GOOGLE_SHEETS_ID");
   });
 });

@@ -1,48 +1,93 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
+import {
+  campaignsRedirectFromLegacyPath,
+  configurationRoute,
+  launchRoute,
+  workspaceRoute,
+} from "@/lib/workspaceNavigation";
 import { Redirect, Route, Switch } from "wouter";
-import DashboardLayout from "./components/DashboardLayout";
+import AppShell from "./app/AppShell";
 import ErrorBoundary from "./components/ErrorBoundary";
-import { ThemeProvider } from "./contexts/ThemeContext";
+import ActivityPage from "./features/activity/ActivityPage";
+import DeferredCampaignsPage from "./features/campaigns/DeferredCampaignsPage";
+import ClientOverviewPage from "./features/clients/ClientOverviewPage";
+import ClientsPage from "./features/clients/ClientsPage";
+import ClientIntegrationsPage from "./features/integrations/ClientIntegrationsPage";
+import LaunchPage from "./features/launch/LaunchPage";
+import DeferredSettingsPage from "./features/settings/DeferredSettingsPage";
+import PagesManagerPage from "./features/website/PagesManagerPage";
 import AstroClientEditor from "./pages/AstroClientEditor";
 import DraftClientCreate from "./pages/DraftClientCreate";
-import Home from "./pages/Home";
-import MediaWorkspace from "./pages/MediaWorkspace";
-import ClientIntegrationsPage from "./pages/ClientIntegrationsPage";
-import PaidAdsWorkspace from "./pages/PaidAdsWorkspace";
-import WebsiteWorkspace from "./pages/WebsiteWorkspace";
 
 function Router() {
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
+      <Route path="/">
+        <Redirect to="/clients" />
+      </Route>
+
+      <Route path="/clients" component={ClientsPage} />
       <Route path="/clients/new">
         <DraftClientCreate />
       </Route>
       <Route path="/clients/:clientId">
-        {params => <Redirect to={`/workspace/${Number(params.clientId)}/settings`} />}
+        {params => <Redirect to={`/workspace/${Number(params.clientId)}`} />}
       </Route>
+
+      <Route path="/templates">
+        <DeferredSettingsPage section="templates" />
+      </Route>
+      <Route path="/activity" component={ActivityPage} />
+
+      <Route path="/system-settings">
+        <DeferredSettingsPage section="systemSettings" />
+      </Route>
+
       <Route path="/workspace/:clientId/pages">
         {params => (
-          <WebsiteWorkspace key={Number(params.clientId)} clientId={Number(params.clientId)} />
+          <PagesManagerPage
+            key={Number(params.clientId)}
+            clientId={Number(params.clientId)}
+          />
+        )}
+      </Route>
+      <Route path="/workspace/:clientId/campaigns">
+        {params => (
+          <DeferredCampaignsPage
+            key={Number(params.clientId)}
+            clientId={Number(params.clientId)}
+          />
         )}
       </Route>
       <Route path="/workspace/:clientId/funnels">
         {params => (
-          <PaidAdsWorkspace key={Number(params.clientId)} clientId={Number(params.clientId)} />
+          <Redirect
+            to={
+              campaignsRedirectFromLegacyPath(
+                `/workspace/${Number(params.clientId)}/funnels`,
+                window.location.search,
+              ) ?? workspaceRoute("campaigns", Number(params.clientId))
+            }
+          />
         )}
       </Route>
-      <Route path="/workspace/:clientId/media">
-        {params => <MediaWorkspace clientId={Number(params.clientId)} />}
-      </Route>
-      <Route path="/workspace/:clientId/settings">
+      <Route path="/workspace/:clientId/configuration">
         {params => (
           <AstroClientEditor
             key={Number(params.clientId)}
             clientId={Number(params.clientId)}
           />
         )}
+      </Route>
+      <Route path="/workspace/:clientId/media">
+        {params => (
+          <Redirect to={configurationRoute(Number(params.clientId), "media")} />
+        )}
+      </Route>
+      <Route path="/workspace/:clientId/settings">
+        {params => <Redirect to={configurationRoute(Number(params.clientId))} />}
       </Route>
       <Route path="/workspace/:clientId/integrations">
         {params => (
@@ -52,7 +97,27 @@ function Router() {
           />
         )}
       </Route>
-      <Route path={"/404"} component={NotFound} />
+      <Route path="/workspace/:clientId/preview-qa">
+        {params => <Redirect to={launchRoute(Number(params.clientId))} />}
+      </Route>
+      <Route path="/workspace/:clientId/launch">
+        {params => (
+          <LaunchPage
+            key={Number(params.clientId)}
+            clientId={Number(params.clientId)}
+          />
+        )}
+      </Route>
+      <Route path="/workspace/:clientId">
+        {params => (
+          <ClientOverviewPage
+            key={Number(params.clientId)}
+            clientId={Number(params.clientId)}
+          />
+        )}
+      </Route>
+
+      <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -61,14 +126,12 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="light" switchable>
-        <TooltipProvider>
-          <Toaster />
-          <DashboardLayout>
-            <Router />
-          </DashboardLayout>
-        </TooltipProvider>
-      </ThemeProvider>
+      <TooltipProvider>
+        <Toaster />
+        <AppShell>
+          <Router />
+        </AppShell>
+      </TooltipProvider>
     </ErrorBoundary>
   );
 }

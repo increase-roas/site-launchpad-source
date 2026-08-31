@@ -24,6 +24,12 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -44,86 +50,62 @@
 
 :root {
   color-scheme: light;
-  --primary: oklch(0.55 0.22 260);
-  --primary-foreground: oklch(0.99 0.003 220);
-  --sidebar-primary: oklch(0.55 0.22 260);
-  --sidebar-primary-foreground: oklch(0.99 0.003 220);
-  --chart-1: oklch(0.55 0.22 260);
-  --chart-2: oklch(0.58 0.15 160);
-  --chart-3: oklch(0.62 0.16 70);
-  --chart-4: oklch(0.58 0.2 25);
-  --chart-5: oklch(0.56 0.18 285);
-  --radius: 0.4rem;
-  --background: oklch(0.965 0.006 250);
-  --foreground: oklch(0.23 0.025 255);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.025 245);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.025 245);
-  --secondary: oklch(0.955 0.008 250);
-  --secondary-foreground: oklch(0.28 0.025 245);
-  --muted: oklch(0.95 0.008 250);
-  --muted-foreground: oklch(0.47 0.025 250);
-  --accent: oklch(0.94 0.025 255);
-  --accent-foreground: oklch(0.25 0.03 245);
-  --destructive: oklch(0.58 0.22 25);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.72 0.025 250 / 42%);
-  --input: oklch(0.7 0.025 250 / 52%);
-  --ring: oklch(0.55 0.22 260);
-  --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.24 0.025 245);
-  --sidebar-accent: oklch(0.94 0.025 255);
-  --sidebar-accent-foreground: oklch(0.24 0.025 245);
-  --sidebar-border: oklch(0.72 0.025 250 / 42%);
-  --sidebar-ring: oklch(0.55 0.22 260);
-  --feature-surface: oklch(1 0 0);
-  --feature-shadow: none;
-  --protected-surface: oklch(0.985 0.012 85);
-}
+  --radius: 0.5rem;
 
-.dark {
-  color-scheme: dark;
-  --primary: oklch(0.79 0.14 200);
-  --primary-foreground: oklch(0.16 0.025 245);
-  --sidebar-primary: oklch(0.79 0.14 200);
-  --sidebar-primary-foreground: oklch(0.16 0.025 245);
-  --chart-1: oklch(0.79 0.14 200);
-  --chart-2: oklch(0.77 0.16 160);
-  --chart-3: oklch(0.72 0.17 70);
-  --chart-4: oklch(0.67 0.2 25);
-  --chart-5: oklch(0.64 0.18 285);
-  --background: oklch(0.15 0.018 245);
-  --foreground: oklch(0.96 0.01 220);
-  --card: oklch(0.2 0.02 245);
-  --card-foreground: oklch(0.96 0.01 220);
-  --popover: oklch(0.2 0.02 245);
-  --popover-foreground: oklch(0.96 0.01 220);
-  --secondary: oklch(0.24 0.022 245);
-  --secondary-foreground: oklch(0.91 0.012 220);
-  --muted: oklch(0.24 0.018 245);
-  --muted-foreground: oklch(0.72 0.025 230);
-  --accent: oklch(0.26 0.035 220);
-  --accent-foreground: oklch(0.96 0.01 220);
-  --destructive: oklch(0.66 0.22 25);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.79 0.14 200);
-  --sidebar: oklch(0.175 0.02 245);
-  --sidebar-foreground: oklch(0.93 0.012 220);
-  --sidebar-accent: oklch(0.25 0.03 225);
-  --sidebar-accent-foreground: oklch(0.97 0.008 220);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.79 0.14 200);
-  --feature-surface: radial-gradient(circle at 84% -15%, oklch(0.7 0.12 200 / 18%), transparent 36rem), linear-gradient(135deg, oklch(0.2 0.02 245 / 98%), oklch(0.14 0.018 245 / 98%));
-  --feature-shadow: 0 24px 70px oklch(0 0 0 / 28%);
-  --protected-surface: linear-gradient(145deg, rgba(120,83,22,0.10), rgba(23,29,38,0.92));
+  /* Light neutral ramp: tinted page, white panels */
+  --background: oklch(0.984 0.003 248);
+  --foreground: oklch(0.21 0.03 264);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.03 264);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.03 264);
+  --secondary: oklch(0.968 0.004 250);
+  --secondary-foreground: oklch(0.32 0.028 262);
+  --muted: oklch(0.968 0.004 250);
+  --muted-foreground: oklch(0.551 0.022 264);
+  --border: oklch(0.922 0.005 258);
+  --input: oklch(0.895 0.008 258);
+
+  /* Blue is the single accent */
+  --primary: oklch(0.546 0.219 262);
+  --primary-foreground: oklch(1 0 0);
+  --accent: oklch(0.97 0.014 254);
+  --accent-foreground: oklch(0.45 0.2 262);
+  --ring: oklch(0.546 0.219 262);
+
+  /* Status palette, tuned to read on light surfaces */
+  --success: oklch(0.56 0.13 158);
+  --success-foreground: oklch(1 0 0);
+  --warning: oklch(0.58 0.13 62);
+  --warning-foreground: oklch(1 0 0);
+  --info: oklch(0.546 0.219 262);
+  --info-foreground: oklch(1 0 0);
+  --destructive: oklch(0.55 0.21 25);
+  --destructive-foreground: oklch(1 0 0);
+
+  --chart-1: oklch(0.546 0.219 262);
+  --chart-2: oklch(0.56 0.13 158);
+  --chart-3: oklch(0.58 0.13 62);
+  --chart-4: oklch(0.55 0.21 25);
+  --chart-5: oklch(0.55 0.18 300);
+
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.21 0.03 264);
+  --sidebar-primary: oklch(0.546 0.219 262);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.97 0.014 254);
+  --sidebar-accent-foreground: oklch(0.45 0.2 262);
+  --sidebar-border: oklch(0.922 0.005 258);
+  --sidebar-ring: oklch(0.546 0.219 262);
+
+  --feature-surface: oklch(1 0 0);
+  --feature-shadow: 0 1px 2px oklch(0.21 0.03 264 / 6%);
+  --protected-surface: oklch(0.97 0.014 254);
 }
 
 .launchpad-sidebar {
   border-color: var(--sidebar-border);
-  background: linear-gradient(180deg, var(--sidebar), color-mix(in oklch, var(--sidebar) 92%, var(--background)));
+  background: var(--sidebar);
   color: var(--sidebar-foreground);
 }
 
@@ -142,82 +124,11 @@
   background: var(--protected-surface);
 }
 
-:root:not(.dark) [class~="border-white/6"],
-:root:not(.dark) [class~="border-white/7"],
-:root:not(.dark) [class~="border-white/8"],
-:root:not(.dark) [class~="border-white/9"],
-:root:not(.dark) [class~="border-white/10"],
-:root:not(.dark) [class~="border-white/12"],
-:root:not(.dark) [class~="border-white/14"],
-:root:not(.dark) [class~="border-white/25"] {
-  border-color: var(--border);
-}
-
-:root:not(.dark) [class~="bg-white/[0.018]"],
-:root:not(.dark) [class~="bg-white/[0.02]"],
-:root:not(.dark) [class~="bg-white/[0.025]"],
-:root:not(.dark) [class~="bg-white/[0.03]"],
-:root:not(.dark) [class~="bg-white/[0.035]"],
-:root:not(.dark) [class~="bg-white/[0.04]"],
-:root:not(.dark) [class~="bg-white/[0.045]"],
-:root:not(.dark) [class~="bg-white/[0.055]"],
-:root:not(.dark) [class~="bg-white/[0.06]"],
-:root:not(.dark) [class~="bg-white/[0.07]"],
-:root:not(.dark) [class~="bg-white/[0.08]"] {
-  background-color: oklch(0.52 0.04 225 / 6%);
-}
-
-:root:not(.dark) [class~="bg-black/15"],
-:root:not(.dark) [class~="bg-black/20"],
-:root:not(.dark) [class~="bg-black/25"],
-:root:not(.dark) [class~="bg-black/35"] {
-  background-color: oklch(0.45 0.04 240 / 7%);
-}
-
-:root:not(.dark) .text-cyan-300,
-:root:not(.dark) .text-cyan-200,
-:root:not(.dark) .text-cyan-100 {
-  color: var(--primary);
-}
-
-:root:not(.dark) .bg-cyan-400 {
-  background-color: var(--primary);
-}
-
-:root:not(.dark) .bg-cyan-400.text-slate-950 {
-  color: var(--primary-foreground);
-}
-
-:root:not(.dark) .hover\:bg-cyan-300:hover {
-  background-color: color-mix(in oklch, var(--primary) 90%, black);
-}
-
-:root:not(.dark) .launchpad-workspace .rounded-3xl {
-  border-radius: var(--radius);
-}
-
-:root:not(.dark) .launchpad-workspace .rounded-2xl {
-  border-radius: calc(var(--radius) + 2px);
-}
-
-:root:not(.dark) .launchpad-workspace [class*="shadow-["] {
-  box-shadow: none;
-}
-
-:root:not(.dark) .text-emerald-300,
-:root:not(.dark) .text-emerald-200 {
-  color: oklch(0.43 0.13 160);
-}
-
-:root:not(.dark) .text-amber-300,
-:root:not(.dark) .text-amber-200 {
-  color: oklch(0.48 0.13 75);
-}
-
-:root:not(.dark) .text-red-300,
-:root:not(.dark) .text-red-200,
-:root:not(.dark) .text-red-100 {
-  color: oklch(0.5 0.18 25);
+/* Soft card elevation used across panels and tables. */
+.launchpad-panel {
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: 0 1px 2px oklch(0.21 0.03 264 / 5%);
 }
 
 @layer base {
@@ -227,8 +138,8 @@
   body {
     @apply bg-background text-foreground antialiased;
     min-height: 100vh;
-    background-image: none;
-    font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: "cv11", "ss01";
   }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
@@ -244,14 +155,10 @@
   button,
   [role="button"] {
     transition:
-      transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
-      background-color 180ms cubic-bezier(0.23, 1, 0.32, 1),
-      border-color 180ms cubic-bezier(0.23, 1, 0.32, 1),
-      color 180ms cubic-bezier(0.23, 1, 0.32, 1);
-  }
-  button:not(:disabled):active,
-  [role="button"]:not([aria-disabled="true"]):active {
-    transform: scale(0.97);
+      background-color 150ms cubic-bezier(0.23, 1, 0.32, 1),
+      border-color 150ms cubic-bezier(0.23, 1, 0.32, 1),
+      color 150ms cubic-bezier(0.23, 1, 0.32, 1),
+      box-shadow 150ms cubic-bezier(0.23, 1, 0.32, 1);
   }
   button:disabled {
     cursor: not-allowed;
@@ -259,24 +166,11 @@
 }
 
 @layer components {
-  /**
-   * Custom container utility that centers content and adds responsive padding.
-   *
-   * This overrides Tailwind's default container behavior to:
-   * - Auto-center content (mx-auto)
-   * - Add responsive horizontal padding
-   * - Set max-width for large screens
-   *
-   * Usage: <div className="container">...</div>
-   *
-   * For custom widths, use max-w-* utilities directly:
-   * <div className="max-w-6xl mx-auto px-4">...</div>
-   */
   .container {
     width: 100%;
     margin-left: auto;
     margin-right: auto;
-    padding-left: 1rem; /* 16px - mobile padding */
+    padding-left: 1rem;
     padding-right: 1rem;
   }
 
@@ -287,16 +181,16 @@
 
   @media (min-width: 640px) {
     .container {
-      padding-left: 1.5rem; /* 24px - tablet padding */
+      padding-left: 1.5rem;
       padding-right: 1.5rem;
     }
   }
 
   @media (min-width: 1024px) {
     .container {
-      padding-left: 2rem; /* 32px - desktop padding */
+      padding-left: 2rem;
       padding-right: 2rem;
-      max-width: 1280px; /* Standard content width */
+      max-width: 1280px;
     }
   }
 }

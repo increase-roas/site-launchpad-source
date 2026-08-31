@@ -1,7 +1,7 @@
 import {
-  computeClientIntegrationReadiness,
   isIdentifierKey,
   isSecretKey,
+  presentProfileKeys,
   type ClientIntegrationIdentifierKey,
   type ClientIntegrationIdentifiers,
   type ClientIntegrationSecretKey,
@@ -86,21 +86,17 @@ export function planAstroSitePublishFromProfile(
     };
   }
 
-  const readiness = computeClientIntegrationReadiness({
-    identifiers: profile.dto.identifiers,
-    secretPresence: profile.dto.secretPresence,
-    reconciliationStatus: profile.dto.reconciliationStatus,
-  });
-  if (!readiness.websiteReady) {
-    const missing = readiness.missingWebsiteKeys;
+  // Gate on exactly the secrets this deploy was asked for. The caller derives
+  // them from the template manifest and the client's enabled integrations, so a
+  // service the client switched off must not hold the publish closed.
+  const present = presentProfileKeys(profile.dto);
+  const missing = input.requiredSecretNames.filter(name => !present.has(name));
+  if (missing.length > 0) {
     return {
       ok: false,
       clientId: input.clientId,
       runtimeSecrets: null,
-      error:
-        missing.length > 0
-          ? `Website integration keys are NOT SET: ${missing.join(", ")}.`
-          : "Website integration profile is not SET.",
+      error: `Website integration keys are NOT SET: ${missing.join(", ")}.`,
     };
   }
 

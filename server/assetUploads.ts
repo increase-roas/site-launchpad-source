@@ -33,10 +33,13 @@ import {
   type ProcessedImage,
 } from "./imageProcessing";
 import { assetUploadPersistence } from "./assetUploadDb";
+import { deriveRuntimeMode, readAssetStorageDriver } from "./_core/env";
+import { getDevelopmentAssetStore } from "./developmentAssetStore";
 import {
   MAX_PRESIGN_EXPIRY_SECONDS,
   createR2ObjectStore,
   readR2Configuration,
+  type R2ObjectStore,
 } from "./r2";
 
 export { MAX_RAW_UPLOAD_BYTES };
@@ -394,16 +397,27 @@ export function createAssetUploadService(dependencies: AssetUploadServiceDepende
 
 let defaultService: ReturnType<typeof createAssetUploadService> | undefined;
 
+function resolveObjectStorage(): { store: R2ObjectStore; publicAssetBaseUrl: string } {
+  if (readAssetStorageDriver(deriveRuntimeMode()) === "local") {
+    const local = getDevelopmentAssetStore();
+    return { store: local.store, publicAssetBaseUrl: local.publicAssetBaseUrl };
+  }
+  const config = readR2Configuration();
+  return {
+    store: createR2ObjectStore(config),
+    publicAssetBaseUrl: config.publicAssetBaseUrl,
+  };
+}
+
 export function getDefaultAssetUploadService(): ReturnType<typeof createAssetUploadService> {
   if (defaultService) return defaultService;
-  const config = readR2Configuration();
-  const objectStore = createR2ObjectStore(config);
+  const { store, publicAssetBaseUrl } = resolveObjectStorage();
   defaultService = createAssetUploadService({
     now: () => new Date(),
     randomUUID,
-    publicAssetBaseUrl: config.publicAssetBaseUrl,
+    publicAssetBaseUrl,
     ...assetUploadPersistence,
-    ...objectStore,
+    ...store,
     inspectImageMimeType: inspectSupportedImageMimeType,
     processClientImage: processUploadedImage,
     processAstroImage: processAstroUploadedImage,

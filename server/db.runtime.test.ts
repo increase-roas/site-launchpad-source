@@ -182,6 +182,9 @@ describe("database operation resilience", () => {
           if (currentTableIndex === 7) {
             return trackRead("genericFunnelPublishes", []);
           }
+          if (currentTableIndex === 8) {
+            return trackRead("astroConfigs", []);
+          }
           throw new Error("Unexpected table.");
         }),
       })),
@@ -201,6 +204,7 @@ describe("database operation resilience", () => {
       funnels: [],
       simpleFormPublishes: [],
       genericFunnelPublishes: [],
+      astroConfigs: [],
     });
 
     expect(database.POSTGRES_RUNTIME_OPTIONS.max).toBe(1);
@@ -214,6 +218,7 @@ describe("database operation resilience", () => {
       "funnels",
       "simpleFormPublishes",
       "genericFunnelPublishes",
+      "astroConfigs",
     ]);
     expect(client.end).not.toHaveBeenCalled();
   });

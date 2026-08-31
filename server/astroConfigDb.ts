@@ -15,8 +15,6 @@ import {
   generateAstroClientConfig,
   type AstroAssetSlot,
   type AstroClientConfigInput,
-  type AstroHomepageSection,
-  type AstroHomepageSectionOrder,
   type WranglerSecretName,
 } from "../shared/astroConfig";
 import { decryptSetupValue, encryptSetupValue } from "./clientSecurity";
@@ -37,8 +35,10 @@ import {
 import { assertAstroSitePublishProfileReady } from "./studio/website/publishProfile";
 import {
   isIdentifierKey,
+  websiteIntegrationEnablement,
   type ClientIntegrationProfileDto,
   type ClientIntegrationSecretKey,
+  type WebsiteIntegrationEnablement,
 } from "../shared/clientIntegrationProfile";
 
 async function requireDb() {
@@ -91,6 +91,20 @@ function isAstroAssetSlot(value: string): value is AstroAssetSlot {
   return (ASTRO_ASSET_SLOT_VALUES as readonly string[]).includes(value);
 }
 
+/**
+ * What the client switched on in the Configuration tab, reduced to the
+ * integrations that carry runtime credentials. A client who never saved a
+ * configuration has everything off, matching `createDefaultAstroConfig`; they
+ * are blocked from publishing by the missing generated config, not by secrets.
+ */
+export function websiteIntegrationEnablementFrom(
+  row: typeof astroClientConfigs.$inferSelect | undefined,
+): WebsiteIntegrationEnablement {
+  return websiteIntegrationEnablement(
+    row?.integrations as Record<string, { enabled?: boolean } | undefined> | undefined,
+  );
+}
+
 export function mergeStoredAstroConfig(
   defaults: AstroClientConfigInput,
   row: typeof astroClientConfigs.$inferSelect | undefined,
@@ -101,7 +115,6 @@ export function mergeStoredAstroConfig(
     brand: {
       ...defaults.brand,
       fonts: { ...defaults.brand.fonts, ...row.fonts },
-      borderRadii: { ...defaults.brand.borderRadii, ...row.borderRadii },
     },
     navigationItems: row.navigationItems as AstroClientConfigInput["navigationItems"],
     categories: Object.fromEntries(
@@ -131,26 +144,6 @@ export function mergeStoredAstroConfig(
       meta: { ...merged.integrations.meta, config: {} },
     },
   };
-}
-
-export function applyAstroHomepageSectionOrder(
-  existing: AstroHomepageSection[],
-  requested: AstroHomepageSectionOrder,
-): AstroHomepageSection[] {
-  if (requested.length !== existing.length) {
-    throw new Error("Homepage section order does not match the saved website configuration.");
-  }
-  const existingById = new Map(existing.map(section => [section.id, section]));
-  if (existingById.size !== existing.length) {
-    throw new Error("Saved homepage sections contain duplicate IDs.");
-  }
-  return requested.map(item => {
-    const section = existingById.get(item.id);
-    if (!section || section.type !== item.type) {
-      throw new Error("Homepage section order does not match the saved website configuration.");
-    }
-    return { ...section, enabled: item.enabled };
-  });
 }
 
 export function applyAstroAssetUrls(
@@ -300,7 +293,6 @@ export async function saveAstroConfig(clientId: number, input: AstroClientConfig
         clientId,
         socialLinks: normalized.socialLinks,
         fonts: normalized.brand.fonts,
-        borderRadii: normalized.brand.borderRadii,
         navigationItems: normalized.navigationItems,
         categories: normalized.categories,
         financing: normalized.financing,
@@ -314,7 +306,6 @@ export async function saveAstroConfig(clientId: number, input: AstroClientConfig
         set: withUpdatedAt({
           socialLinks: normalized.socialLinks,
           fonts: normalized.brand.fonts,
-          borderRadii: normalized.brand.borderRadii,
           navigationItems: normalized.navigationItems,
           categories: normalized.categories,
           financing: normalized.financing,
@@ -327,21 +318,6 @@ export async function saveAstroConfig(clientId: number, input: AstroClientConfig
   });
 
   return getAstroConfigView(clientId);
-}
-
-export async function saveAstroHomepageSectionOrder(
-  clientId: number,
-  requested: AstroHomepageSectionOrder,
-) {
-  const current = await getAstroConfigView(clientId);
-  const input = astroClientConfigInputSchema.parse({
-    ...current.input,
-    homepageSections: applyAstroHomepageSectionOrder(
-      current.input.homepageSections,
-      requested,
-    ),
-  });
-  return saveAstroConfig(clientId, input);
 }
 
 export async function saveWranglerSecrets(

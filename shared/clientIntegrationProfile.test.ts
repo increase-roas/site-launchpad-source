@@ -16,7 +16,8 @@ import {
   FORBIDDEN_PROFILE_KEYS,
   FUNNEL_REQUIRED_PROFILE_KEYS,
   LEGACY_SECRET_KEY_ALIASES,
-  WEBSITE_REQUIRED_PROFILE_KEYS,
+  SECRET_HINT_VISIBLE_CHARS,
+  WEBSITE_POSSIBLE_PROFILE_KEYS,
   assertDtoOmitsSecretValues,
   buildClientIntegrationProfileDto,
   canonicalizeLegacyKey,
@@ -24,7 +25,10 @@ import {
   cloneProfileReference,
   computeClientIntegrationReadiness,
   emptyIdentifiers,
+  emptySecretHints,
   emptySecretPresence,
+  secretHintFromValue,
+  websiteRequiredProfileKeys,
 } from "./clientIntegrationProfile";
 
 describe("ClientIntegrationProfile contract", () => {
@@ -44,7 +48,7 @@ describe("ClientIntegrationProfile contract", () => {
     expect(FUNNEL_REQUIRED_PROFILE_KEYS).toEqual(
       SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT.requiredRuntimeSecrets,
     );
-    expect(WEBSITE_REQUIRED_PROFILE_KEYS).toEqual(
+    expect(WEBSITE_POSSIBLE_PROFILE_KEYS).toEqual(
       expect.arrayContaining([...CLIENT_INTEGRATION_WEBSITE_ONLY_KEYS]),
     );
   });
@@ -101,6 +105,37 @@ describe("ClientIntegrationProfile contract", () => {
       expect.arrayContaining([...CLIENT_INTEGRATION_SECRET_KEYS]),
     );
     assertDtoOmitsSecretValues(dto, secretValues);
+  });
+
+  it("hints at a stored secret with its tail only, and never for a short one", () => {
+    const apiKey = "ghl-live-api-key-AAA";
+    expect(secretHintFromValue(apiKey)).toBe("-AAA");
+    expect(secretHintFromValue(apiKey)).toHaveLength(SECRET_HINT_VISIBLE_CHARS);
+    // A short value would be given away by its own tail, so it gets no hint.
+    expect(secretHintFromValue("short12")).toBeNull();
+    expect(secretHintFromValue("")).toBeNull();
+    expect(secretHintFromValue(null)).toBeNull();
+
+    const presence = emptySecretPresence();
+    presence.GHL_API_KEY = "SET";
+    const hints = emptySecretHints();
+    hints.GHL_API_KEY = secretHintFromValue(apiKey);
+    const dto = buildClientIntegrationProfileDto({
+      clientId: 11,
+      identifiers: emptyIdentifiers(),
+      secretPresence: presence,
+      secretHints: hints,
+      lastUpdated: null,
+      reconciliationStatus: "ready",
+      conflictedKeys: [],
+    });
+    expect(dto.secretHints.GHL_API_KEY).toBe("-AAA");
+    expect(dto.secretHints.ADMIN_PASSWORD).toBeNull();
+    expect(JSON.stringify(dto)).not.toContain(apiKey);
+    assertDtoOmitsSecretValues(dto, [apiKey]);
+
+    const oversized = { ...dto, secretHints: { ...dto.secretHints, GHL_API_KEY: apiKey } };
+    expect(() => assertDtoOmitsSecretValues(oversized, [apiKey])).toThrow();
   });
 
   it("marks website and two funnels ready from one entered profile", () => {
@@ -171,7 +206,7 @@ describe("ClientIntegrationProfile contract", () => {
     expect(WRANGLER_SECRET_VALUES).not.toEqual(expect.arrayContaining(removed));
     expect(CLIENT_INTEGRATION_PROFILE_KEYS).not.toEqual(expect.arrayContaining(removed));
     expect(CLIENT_INTEGRATION_SECRET_KEYS).not.toEqual(expect.arrayContaining(removed));
-    expect(WEBSITE_REQUIRED_PROFILE_KEYS).not.toEqual(expect.arrayContaining(removed));
+    expect(WEBSITE_POSSIBLE_PROFILE_KEYS).not.toEqual(expect.arrayContaining(removed));
     expect(FUNNEL_REQUIRED_PROFILE_KEYS).toEqual(
       SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT.requiredRuntimeSecrets,
     );
@@ -190,5 +225,84 @@ describe("ClientIntegrationProfile contract", () => {
     expect(JSON.stringify(dto)).not.toMatch(/META_VALUE_/);
     expect(Object.keys(dto.secretPresence)).not.toEqual(expect.arrayContaining(removed));
     assertDtoOmitsSecretValues(dto, ["legacy-qualified-value-unused"]);
+  });
+});
+
+describe("website required keys follow integration enablement", () => {
+  function adminOnlyPresence() {
+    const presence = emptySecretPresence();
+    presence.ADMIN_PASSWORD = "SET";
+    presence.ADMIN_SESSION_SECRET = "SET";
+    return presence;
+  }
+
+  it("requires only the admin secrets when no conditional integration is enabled", () => {
+    expect(websiteRequiredProfileKeys({})).toEqual([
+      "ADMIN_PASSWORD",
+      "ADMIN_SESSION_SECRET",
+    ]);
+  });
+
+  it("adds a conditional integration's keys only once it is enabled", () => {
+    expect(websiteRequiredProfileKeys({ ghl: true })).toEqual([
+      "ADMIN_PASSWORD",
+      "ADMIN_SESSION_SECRET",
+      "GHL_API_KEY",
+      "GHL_LOCATION_ID",
+    ]);
+    expect(websiteRequiredProfileKeys({ meta: true })).toEqual([
+      "ADMIN_PASSWORD",
+      "ADMIN_SESSION_SECRET",
+      "META_PIXEL_ID",
+      "META_CAPI_ACCESS_TOKEN",
+      "STAGE_WEBHOOK_SECRET",
+    ]);
+  });
+
+  it("never requires Google Sheets credentials, which the website template does not read", () => {
+    expect(WEBSITE_POSSIBLE_PROFILE_KEYS).not.toEqual(
+      expect.arrayContaining([
+        "GOOGLE_SHEETS_ID",
+        "GOOGLE_SERVICE_ACCOUNT_EMAIL",
+        "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
+      ]),
+    );
+  });
+
+  it("is website ready on the admin secrets alone when every integration is off", () => {
+    const readiness = computeClientIntegrationReadiness({
+      identifiers: emptyIdentifiers(),
+      secretPresence: adminOnlyPresence(),
+      enabledIntegrations: {},
+    });
+    expect(readiness.missingWebsiteKeys).toEqual([]);
+    expect(readiness.websiteReady).toBe(true);
+  });
+
+  it("blocks the website on the credentials of an integration that was switched on", () => {
+    const readiness = computeClientIntegrationReadiness({
+      identifiers: emptyIdentifiers(),
+      secretPresence: adminOnlyPresence(),
+      enabledIntegrations: { meta: true },
+    });
+    expect(readiness.websiteReady).toBe(false);
+    expect(readiness.missingWebsiteKeys).toEqual([
+      "META_PIXEL_ID",
+      "META_CAPI_ACCESS_TOKEN",
+      "STAGE_WEBHOOK_SECRET",
+    ]);
+  });
+
+  it("assumes every conditional integration is on when enablement is not supplied", () => {
+    const readiness = computeClientIntegrationReadiness({
+      identifiers: emptyIdentifiers(),
+      secretPresence: adminOnlyPresence(),
+    });
+    expect(readiness.websiteReady).toBe(false);
+    expect(readiness.missingWebsiteKeys).toEqual(
+      websiteRequiredProfileKeys({ ghl: true, meta: true }).filter(
+        key => key !== "ADMIN_PASSWORD" && key !== "ADMIN_SESSION_SECRET",
+      ),
+    );
   });
 });

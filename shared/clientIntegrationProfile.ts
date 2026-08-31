@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { WRANGLER_SECRET_VALUES, type WranglerSecretName } from "./astroConfig";
 import {
+  ASTRO_SITE_CONDITIONAL_RUNTIME_SECRETS,
+  getAstroSiteRuntimeSecrets,
+  type AstroSiteConditionalIntegration,
+} from "./astroSiteContract";
+import {
   SIMPLE_FORM_CLIENT_INTEGRATION_FIELD_KEYS,
   SIMPLE_FORM_CLIENT_SECRET_KEYS,
   SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT,
@@ -99,9 +104,58 @@ export const OPTIONAL_CLIENT_INTEGRATION_SECRET_KEYS = ["ALERT_WEBHOOK_URL"] as 
 
 export const FUNNEL_REQUIRED_PROFILE_KEYS =
   SIMPLE_FORM_OFFLINE_CONVERSION_CONTRACT.requiredRuntimeSecrets;
-export const WEBSITE_REQUIRED_PROFILE_KEYS = WRANGLER_SECRET_VALUES.filter(
-  key => !(OPTIONAL_CLIENT_INTEGRATION_SECRET_KEYS as readonly string[]).includes(key),
+
+/** Which conditional website integrations a client has switched on. */
+export type WebsiteIntegrationEnablement = Partial<
+  Record<AstroSiteConditionalIntegration, boolean>
+>;
+
+/** Integrations whose credentials the website only needs when switched on. */
+export const WEBSITE_CONDITIONAL_INTEGRATIONS = Object.keys(
+  ASTRO_SITE_CONDITIONAL_RUNTIME_SECRETS,
+) as AstroSiteConditionalIntegration[];
+
+/**
+ * Assumed when a caller cannot see the client's Astro config. Requiring every
+ * conditional integration is the strict reading, so an un-threaded call site
+ * over-reports missing keys rather than waving a client through to publish.
+ */
+export const ALL_WEBSITE_INTEGRATIONS_ENABLED: WebsiteIntegrationEnablement =
+  Object.fromEntries(WEBSITE_CONDITIONAL_INTEGRATIONS.map(name => [name, true]));
+
+/**
+ * The website's required credentials, which depend on what the client turned on
+ * in the Configuration tab. Delegates to the pinned template manifest so this
+ * can never drift from the secrets the deployed site actually reads: anything
+ * outside that manifest (the Google Sheets credentials, for instance) belongs to
+ * funnels and must not hold a website launch open.
+ */
+export function websiteRequiredProfileKeys(
+  enabled: WebsiteIntegrationEnablement,
+): ClientIntegrationProfileKey[] {
+  return getAstroSiteRuntimeSecrets(enabled).filter(isProfileKey);
+}
+
+/** The widest the website's requirements can get, for scope labelling. */
+export const WEBSITE_POSSIBLE_PROFILE_KEYS = websiteRequiredProfileKeys(
+  ALL_WEBSITE_INTEGRATIONS_ENABLED,
 );
+
+/**
+ * Reads enablement off an Astro config's `integrations` map. Absent means the
+ * client never saved a configuration, which `createDefaultAstroConfig` treats as
+ * everything off.
+ */
+export function websiteIntegrationEnablement(
+  integrations: Record<string, { enabled?: boolean } | undefined> | undefined,
+): WebsiteIntegrationEnablement {
+  return Object.fromEntries(
+    WEBSITE_CONDITIONAL_INTEGRATIONS.map(name => [
+      name,
+      integrations?.[name]?.enabled === true,
+    ]),
+  ) as WebsiteIntegrationEnablement;
+}
 
 export const CLIENT_INTEGRATION_RECONCILIATION_STATUS_VALUES = [
   "pending",
@@ -172,6 +226,46 @@ export const secretPresenceSchema = z.strictObject({
 });
 export type ClientIntegrationSecretPresence = z.infer<typeof secretPresenceSchema>;
 
+/**
+ * Trailing characters of a stored secret, so an operator can check the value
+ * here against the one in GoHighLevel or Meta without the secret ever leaving
+ * the server. Kept far shorter than the shortest accepted secret, which is what
+ * lets assertDtoOmitsSecretValues stay a meaningful guard.
+ */
+export const SECRET_HINT_VISIBLE_CHARS = 4;
+const MIN_HINTABLE_SECRET_LENGTH = 8;
+
+export function secretHintFromValue(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? "";
+  if (trimmed.length < MIN_HINTABLE_SECRET_LENGTH) return null;
+  return trimmed.slice(-SECRET_HINT_VISIBLE_CHARS);
+}
+
+export const secretHintsSchema = z.strictObject({
+  GHL_API_KEY: z.string().nullable(),
+  META_CAPI_ACCESS_TOKEN: z.string().nullable(),
+  STAGE_WEBHOOK_SECRET: z.string().nullable(),
+  GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().nullable(),
+  GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: z.string().nullable(),
+  ALERT_WEBHOOK_URL: z.string().nullable(),
+  ADMIN_PASSWORD: z.string().nullable(),
+  ADMIN_SESSION_SECRET: z.string().nullable(),
+});
+export type ClientIntegrationSecretHints = z.infer<typeof secretHintsSchema>;
+
+export function emptySecretHints(): ClientIntegrationSecretHints {
+  return {
+    GHL_API_KEY: null,
+    META_CAPI_ACCESS_TOKEN: null,
+    STAGE_WEBHOOK_SECRET: null,
+    GOOGLE_SERVICE_ACCOUNT_EMAIL: null,
+    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: null,
+    ALERT_WEBHOOK_URL: null,
+    ADMIN_PASSWORD: null,
+    ADMIN_SESSION_SECRET: null,
+  };
+}
+
 export const clientIntegrationReadinessSchema = z.strictObject({
   websiteReady: z.boolean(),
   funnelReady: z.boolean(),
@@ -184,6 +278,7 @@ export const clientIntegrationProfileDtoSchema = z.strictObject({
   clientId: z.number().int().positive(),
   identifiers: identifierPresenceSchema,
   secretPresence: secretPresenceSchema,
+  secretHints: secretHintsSchema,
   groups: z.array(
     z.strictObject({
       id: z.string(),
@@ -292,11 +387,15 @@ export function clientIntegrationFieldError(
   return null;
 }
 
-export function computeClientIntegrationReadiness(input: {
+/**
+ * Profile keys that hold a value, folding identifiers and secret presence into
+ * one set so callers can ask "is this key filled in" without caring which of the
+ * two stores it lives in.
+ */
+export function presentProfileKeys(input: {
   identifiers: ClientIntegrationIdentifiers;
   secretPresence: ClientIntegrationSecretPresence;
-  reconciliationStatus?: ClientIntegrationReconciliationStatus;
-}): ClientIntegrationReadiness {
+}): Set<string> {
   const set = new Set<string>();
   for (const key of CLIENT_INTEGRATION_IDENTIFIER_KEYS) {
     if (input.identifiers[key]?.trim()) set.add(key);
@@ -304,8 +403,21 @@ export function computeClientIntegrationReadiness(input: {
   for (const key of Object.keys(input.secretPresence) as Array<keyof ClientIntegrationSecretPresence>) {
     if (input.secretPresence[key] === "SET") set.add(key);
   }
+  return set;
+}
+
+export function computeClientIntegrationReadiness(input: {
+  identifiers: ClientIntegrationIdentifiers;
+  secretPresence: ClientIntegrationSecretPresence;
+  reconciliationStatus?: ClientIntegrationReconciliationStatus;
+  /** Omitted means "assume all of them", which fails closed. */
+  enabledIntegrations?: WebsiteIntegrationEnablement;
+}): ClientIntegrationReadiness {
+  const set = presentProfileKeys(input);
   const blocked = input.reconciliationStatus === "conflict";
-  const missingWebsiteKeys = WEBSITE_REQUIRED_PROFILE_KEYS.filter(key => !set.has(key));
+  const missingWebsiteKeys = websiteRequiredProfileKeys(
+    input.enabledIntegrations ?? ALL_WEBSITE_INTEGRATIONS_ENABLED,
+  ).filter(key => !set.has(key));
   const missingFunnelKeys = FUNNEL_REQUIRED_PROFILE_KEYS.filter(key => !set.has(key));
   return {
     websiteReady: !blocked && missingWebsiteKeys.length === 0,
@@ -319,6 +431,7 @@ export function buildClientIntegrationProfileDto(input: {
   clientId: number;
   identifiers: ClientIntegrationIdentifiers;
   secretPresence: ClientIntegrationSecretPresence;
+  secretHints?: ClientIntegrationSecretHints;
   lastUpdated: Date | null;
   reconciliationStatus: ClientIntegrationReconciliationStatus;
   conflictedKeys: string[];
@@ -328,6 +441,7 @@ export function buildClientIntegrationProfileDto(input: {
     clientId: input.clientId,
     identifiers: input.identifiers,
     secretPresence: input.secretPresence,
+    secretHints: input.secretHints ?? emptySecretHints(),
     groups: CLIENT_INTEGRATION_UI_GROUPS.map(group => ({
       id: group.id,
       label: group.label,
@@ -358,6 +472,11 @@ export function assertDtoOmitsSecretValues(
   for (const forbidden of FORBIDDEN_PROFILE_KEYS) {
     if (serialized.includes(forbidden)) {
       throw new Error(`ClientIntegrationProfile DTO exposed legacy key ${forbidden}.`);
+    }
+  }
+  for (const hint of Object.values(dto.secretHints)) {
+    if (hint && hint.length > SECRET_HINT_VISIBLE_CHARS) {
+      throw new Error("ClientIntegrationProfile DTO exposed an oversized secret hint.");
     }
   }
 }

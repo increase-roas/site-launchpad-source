@@ -2,18 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrpcContext } from "./_core/context";
 import { UNAUTHED_ERR_MSG } from "../shared/const";
 import { GENERIC_PAID_FUNNEL_PACKAGE } from "../shared/paidFunnelFixture";
-import { createGenericPaidFunnelFixture } from "../shared/paidFunnel/fixture";
 
 const mocks = vi.hoisted(() => ({
   listPaidFunnelTemplates: vi.fn(),
   importPaidFunnelZip: vi.fn(),
   createPaidFunnelFromTemplate: vi.fn(),
-  createBlankPaidFunnel: vi.fn(),
   listPaidFunnels: vi.fn(),
   getPaidFunnelDetail: vi.fn(),
-  savePaidFunnelGraph: vi.fn(),
-  listReusableSections: vi.fn(),
-  saveReusableSection: vi.fn(),
   startPublish: vi.fn(),
   advancePublish: vi.fn(),
   publishStatus: vi.fn(),
@@ -64,10 +59,6 @@ describe("paid funnel registry procedures", () => {
       alreadyExists: false,
       funnelId: 21,
     });
-    mocks.createBlankPaidFunnel.mockResolvedValue({
-      alreadyExists: false,
-      funnelId: 44,
-    });
     mocks.importPaidFunnelZip.mockResolvedValue({
       status: "draft",
       unsupportedRegions: [
@@ -86,17 +77,6 @@ describe("paid funnel registry procedures", () => {
       funnel: { id: 21, clientId: 5, name: "Northland Paid Funnel" },
       steps: GENERIC_PAID_FUNNEL_PACKAGE.steps,
       graphs: [],
-    });
-    mocks.savePaidFunnelGraph.mockResolvedValue({
-      funnel: { id: 21 },
-      steps: [],
-      graphs: [],
-    });
-    mocks.listReusableSections.mockResolvedValue([]);
-    mocks.saveReusableSection.mockResolvedValue({
-      id: 9,
-      name: "Hero",
-      section: { id: "section-hero", preset: "hero", rows: [] },
     });
     const publish = {
       id: "11111111-1111-4111-8111-111111111111",
@@ -125,32 +105,6 @@ describe("paid funnel registry procedures", () => {
       templateKey: "generic-paid-funnel",
     });
     expect(created).toEqual({ alreadyExists: false, funnelId: 21 });
-  });
-
-  it("creates a blank funnel without a template key", async () => {
-    const caller = paidFunnelRouter.createCaller(context());
-    const created = await caller.createBlank({ clientId: 5 });
-    expect(created).toEqual({ alreadyExists: false, funnelId: 44 });
-    expect(mocks.createBlankPaidFunnel).toHaveBeenCalledWith(5, undefined);
-    expect(mocks.createPaidFunnelFromTemplate).not.toHaveBeenCalled();
-  });
-
-  it("maps createBlank connection failures to a public 500 without SQL", async () => {
-    mocks.createBlankPaidFunnel.mockRejectedValueOnce(
-      Object.assign(
-        new Error('Failed query: insert into paid_funnels ("slug") values ($1)'),
-        {
-          cause: Object.assign(new Error("CONNECTION_CLOSED"), {
-            code: "CONNECTION_CLOSED",
-          }),
-        },
-      ),
-    );
-    const caller = paidFunnelRouter.createCaller(context());
-    await expect(caller.createBlank({ clientId: 5 })).rejects.toMatchObject({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "The database is temporarily unavailable. Please try again.",
-    });
   });
 
   it("maps createFromTemplate connection failures to a public 500 without SQL", async () => {
@@ -189,32 +143,12 @@ describe("paid funnel registry procedures", () => {
     ]);
   });
 
-  it("accepts a builder graph on saveGraph", async () => {
-    const caller = paidFunnelRouter.createCaller(context());
-    const graph = createGenericPaidFunnelFixture("router-save");
-    await caller.saveGraph({
-      clientId: 5,
-      funnelId: 21,
-      stepId: 3,
-      expectedUpdatedAt: new Date("2026-08-18T12:00:00.000Z"),
-      graph,
-      steps: graph.steps.map((step, position) => ({
-        key: step.key,
-        stepType: step.type,
-        slug: step.slug,
-        title: step.title,
-        seo: step.seo,
-        nextStep: step.nextStep.type === "step" ? step.nextStep.stepKey : null,
-        previewState: step.previewState,
-        publishState: step.publishState,
-        position,
-      })),
-    });
-    expect(mocks.savePaidFunnelGraph).toHaveBeenCalledOnce();
-    const payload = mocks.savePaidFunnelGraph.mock.calls[0][0];
-    expect(payload.graph.version).toBe(1);
-    expect(payload.graph.pages[0].kind).toBe("page");
-    expect(payload.graph.pages[0].sections[0].kind).toBe("section");
+  it("exposes no builder editing procedures", () => {
+    const procedures = Object.keys(paidFunnelRouter._def.procedures);
+    expect(procedures).not.toContain("saveGraph");
+    expect(procedures).not.toContain("createBlank");
+    expect(procedures).not.toContain("listReusableSections");
+    expect(procedures).not.toContain("saveReusableSection");
   });
 
   it("owns start, advance, Retry, and status by client plus funnel", async () => {

@@ -24,7 +24,6 @@ const workspaceMocks = vi.hoisted(() => ({
   ensureWorkspaceDefaults: vi.fn(),
   getWorkspace: vi.fn(),
   replaceFunnelShape: vi.fn(),
-  saveHomepageSectionOrder: vi.fn(),
   updateFunnelStep: vi.fn(),
 }));
 
@@ -149,12 +148,53 @@ describe("client launch gating", () => {
         funnels: [],
         simpleFormPublishes: [],
         genericFunnelPublishes: [],
+        astroConfigs: [],
       };
     });
     mocks.createClientWithSecrets.mockResolvedValue(7);
     mocks.createDraftClient.mockResolvedValue(7);
     mocks.saveClientSecretSetup.mockResolvedValue(undefined);
     workspaceMocks.ensureWorkspaceDefaults.mockResolvedValue(undefined);
+  });
+
+  function viewWithIntegrations(enabled: { ghl: boolean; meta: boolean }) {
+    mocks.getClientViewData.mockImplementation(async clientId => ({
+      client: await mocks.getClientById(clientId),
+      assets: [],
+      secretSetup: undefined,
+      astroConfig: {
+        integrations: {
+          ghl: { enabled: enabled.ghl, config: {} },
+          meta: { enabled: enabled.meta, config: {} },
+        },
+      },
+    }));
+  }
+
+  it("scopes the missing runtime secrets to integrations the client switched on", async () => {
+    viewWithIntegrations({ ghl: false, meta: false });
+    const caller = appRouter.createCaller(createContext());
+
+    const detail = await caller.clients.get({ clientId: 7 });
+
+    expect(detail.operationalSummary.runtimeConfiguration.requiredMissing).toEqual([
+      "ADMIN_PASSWORD",
+      "ADMIN_SESSION_SECRET",
+    ]);
+  });
+
+  it("adds an enabled integration's credentials to what is missing", async () => {
+    viewWithIntegrations({ ghl: true, meta: false });
+    const caller = appRouter.createCaller(createContext());
+
+    const detail = await caller.clients.get({ clientId: 7 });
+
+    expect(detail.operationalSummary.runtimeConfiguration.requiredMissing).toEqual([
+      "ADMIN_PASSWORD",
+      "ADMIN_SESSION_SECRET",
+      "GHL_API_KEY",
+      "GHL_LOCATION_ID",
+    ]);
   });
 
   it("lists and retrieves persisted clients with readiness details", async () => {

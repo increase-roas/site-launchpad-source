@@ -1,18 +1,11 @@
 import { z } from "zod";
-import { paidFunnelGraphSchema } from "../../shared/paidFunnelGraph";
-import { paidFunnelSectionSchema } from "../../shared/paidFunnelGraph";
-import { paidFunnelPersistStepsSchema } from "../../shared/paidFunnel/persist";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
-  createBlankPaidFunnel,
   createPaidFunnelFromTemplate,
   getPaidFunnelDetail,
   importPaidFunnelZip,
   listPaidFunnelTemplates,
   listPaidFunnels,
-  listReusableSections,
-  savePaidFunnelGraph,
-  saveReusableSection,
 } from "../paidFunnelDb";
 import { mapRouterError } from "../trpcErrors";
 import {
@@ -75,21 +68,6 @@ export const paidFunnelRouter = router({
       }
     }),
 
-  createBlank: protectedProcedure
-    .input(
-      z.object({
-        clientId: z.number().int().positive(),
-        name: z.string().trim().min(1).max(160).optional(),
-      })
-    )
-    .mutation(async ({ input }) => {
-      try {
-        return await createBlankPaidFunnel(input.clientId, input.name);
-      } catch (error) {
-        throw mapRouterError(error, "Blank funnel could not be created.");
-      }
-    }),
-
   listFunnels: protectedProcedure
     .input(z.object({ clientId: z.number().int().positive() }))
     .query(async ({ input }) => {
@@ -107,49 +85,6 @@ export const paidFunnelRouter = router({
       throw mapRouterError(error, "Paid funnel could not be loaded.");
     }
   }),
-
-  saveGraph: protectedProcedure
-    .input(
-      ownedFunnelInput.extend({
-        stepId: z.number().int().positive(),
-        expectedUpdatedAt: z.coerce.date(),
-        graph: paidFunnelGraphSchema,
-        steps: paidFunnelPersistStepsSchema,
-      })
-    )
-    .mutation(async ({ input }) => {
-      try {
-        return await savePaidFunnelGraph(input);
-      } catch (error) {
-        throw mapRouterError(error, "Funnel graph could not be saved.");
-      }
-    }),
-
-  listReusableSections: protectedProcedure
-    .input(z.object({ clientId: z.number().int().positive() }))
-    .query(async ({ input }) => {
-      try {
-        return await listReusableSections(input.clientId);
-      } catch (error) {
-        throw mapRouterError(error, "Reusable sections could not be loaded.");
-      }
-    }),
-
-  saveReusableSection: protectedProcedure
-    .input(
-      z.object({
-        clientId: z.number().int().positive(),
-        name: z.string().trim().min(1).max(160),
-        section: paidFunnelSectionSchema,
-      })
-    )
-    .mutation(async ({ input }) => {
-      try {
-        return await saveReusableSection(input);
-      } catch (error) {
-        throw mapRouterError(error, "Reusable section could not be saved.");
-      }
-    }),
 
   startPublish: protectedProcedure
     .input(ownedFunnelInput)

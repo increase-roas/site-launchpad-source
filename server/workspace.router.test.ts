@@ -5,7 +5,6 @@ const workspaceMocks = vi.hoisted(() => ({
   getWorkspace: vi.fn(),
   replaceFunnelShape: vi.fn(),
   updateFunnelStep: vi.fn(),
-  saveHomepageSectionOrder: vi.fn(),
 }));
 
 const clientMocks = vi.hoisted(() => ({ getClientView: vi.fn() }));
@@ -41,9 +40,7 @@ const clientView = {
 };
 
 const workspaceView = {
-  pages: [{ id: 1, pageType: "homepage" }],
   funnels: [{ id: 3, shape: "B", steps: [{ id: 9, stepType: "zip" }] }],
-  sections: [{ id: 11, sectionType: "hero", position: 0, enabled: 1 }],
 };
 
 describe("complete selected-client workspace", () => {
@@ -53,10 +50,9 @@ describe("complete selected-client workspace", () => {
     workspaceMocks.getWorkspace.mockResolvedValue(workspaceView);
     workspaceMocks.replaceFunnelShape.mockResolvedValue(undefined);
     workspaceMocks.updateFunnelStep.mockResolvedValue(undefined);
-    workspaceMocks.saveHomepageSectionOrder.mockResolvedValue(undefined);
   });
 
-  it("returns client config, media, readiness, setup status, pages, funnels, and sections together", async () => {
+  it("returns client config, media, readiness, setup status, and funnels together", async () => {
     const caller = workspaceRouter.createCaller(context());
     const result = await caller.get({ clientId: 5 });
 
@@ -65,10 +61,12 @@ describe("complete selected-client workspace", () => {
       assets: [{ id: 1, slot: "logo" }],
       secretStatus: { metaPixelId: true },
       readiness: { percent: 60, isComplete: false },
-      pages: [{ id: 1, pageType: "homepage" }],
       funnels: [{ id: 3, shape: "B" }],
-      sections: [{ id: 11, sectionType: "hero" }],
     });
+  });
+
+  it("no longer exposes a second homepage section writer", () => {
+    expect("saveSections" in workspaceRouter._def.procedures).toBe(false);
   });
 
   it("changes a funnel shape and reloads the same selected client", async () => {
@@ -89,28 +87,6 @@ describe("complete selected-client workspace", () => {
     };
     await caller.updateStep({ clientId: 5, step });
     expect(workspaceMocks.updateFunnelStep).toHaveBeenCalledWith(5, step);
-  });
-
-  it("saves ordered and enabled homepage sections for the selected client", async () => {
-    const caller = workspaceRouter.createCaller(context());
-    const sectionTypes = [
-      "hero",
-      "categories",
-      "visitShowroom",
-      "deliveryInstall",
-      "testimonials",
-      "financing",
-      "faq",
-      "contact",
-      "map",
-    ] as const;
-    const sections = sectionTypes.map((sectionType, index) => ({
-      id: index + 1,
-      sectionType,
-      enabled: sectionType !== "testimonials",
-    }));
-    await caller.saveSections({ clientId: 5, sections });
-    expect(workspaceMocks.saveHomepageSectionOrder).toHaveBeenCalledWith(5, sections);
   });
 
   it("maps missing clients to NOT_FOUND instead of BAD_REQUEST", async () => {

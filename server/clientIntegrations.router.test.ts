@@ -8,6 +8,7 @@ const dbMocks = vi.hoisted(() => ({
 
 const integrationMocks = vi.hoisted(() => ({
   loadOrBackfillResolvedClientIntegrationProfile: vi.fn(),
+  revealClientIntegrationSecret: vi.fn(),
   saveClientIntegrationProfile: vi.fn(),
 }));
 
@@ -40,7 +41,7 @@ const dto = {
   conflictedKeys: [],
 };
 
-function createContext(): TrpcContext {
+function createContext(role: "admin" | "user" = "admin"): TrpcContext {
   return {
     user: {
       id: 1,
@@ -48,7 +49,7 @@ function createContext(): TrpcContext {
       name: "Operator",
       email: "operator@example.com",
       loginMethod: "manus",
-      role: "admin",
+      role,
       createdAt: updatedAt,
       updatedAt,
       lastSignedIn: updatedAt,
@@ -64,6 +65,36 @@ describe("client integration profile router", () => {
     dbMocks.getClientById.mockResolvedValue({ id: 7 });
     integrationMocks.loadOrBackfillResolvedClientIntegrationProfile.mockResolvedValue({ dto });
     integrationMocks.saveClientIntegrationProfile.mockResolvedValue(dto);
+    integrationMocks.revealClientIntegrationSecret.mockResolvedValue("stored-ghl-key");
+  });
+
+  it("reveals a stored secret to an admin and names the actor for the audit record", async () => {
+    const caller = clientsRouter.createCaller(createContext());
+    const result = await caller.revealIntegrationSecret({ clientId: 7, key: "GHL_API_KEY" });
+
+    expect(result).toEqual({ key: "GHL_API_KEY", value: "stored-ghl-key" });
+    expect(integrationMocks.revealClientIntegrationSecret).toHaveBeenCalledWith({
+      actorId: 1,
+      actorEmail: "operator@example.com",
+      clientId: 7,
+      key: "GHL_API_KEY",
+    });
+  });
+
+  it("refuses to reveal a stored secret to a non-admin", async () => {
+    const caller = clientsRouter.createCaller(createContext("user"));
+    await expect(
+      caller.revealIntegrationSecret({ clientId: 7, key: "GHL_API_KEY" }),
+    ).rejects.toThrow();
+    expect(integrationMocks.revealClientIntegrationSecret).not.toHaveBeenCalled();
+  });
+
+  it("keeps stored secret values out of the profile query", async () => {
+    const caller = clientsRouter.createCaller(createContext());
+    const profile = await caller.getIntegrationProfile({ clientId: 7 });
+
+    expect(JSON.stringify(profile)).not.toContain("stored-ghl-key");
+    expect(profile.secretPresence.GHL_API_KEY).toBe("SET");
   });
 
   it("loads the backfilled canonical profile", async () => {

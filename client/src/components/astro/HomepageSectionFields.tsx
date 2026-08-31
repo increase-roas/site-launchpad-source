@@ -68,7 +68,7 @@ export function HomepageSectionFields({
     <div className="mt-4 grid gap-4 md:grid-cols-2">
       {FIELDS[section.type].map(field => (
         <label key={field.key} className={field.multiline ? "block space-y-2 md:col-span-2" : "block space-y-2"}>
-          <span className="text-sm font-extrabold">{field.label}</span>
+          <span className="text-sm font-semibold">{field.label}</span>
           {field.multiline ? (
             <Textarea
               value={section.fields[field.key] ?? ""}

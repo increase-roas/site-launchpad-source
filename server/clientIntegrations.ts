@@ -11,19 +11,22 @@ import {
 import {
   CLIENT_INTEGRATION_SECRET_KEYS,
   FUNNEL_REQUIRED_PROFILE_KEYS,
-  WEBSITE_REQUIRED_PROFILE_KEYS,
+  WEBSITE_POSSIBLE_PROFILE_KEYS,
   buildClientIntegrationProfileDto,
   canonicalizeLegacyKey,
   cloneProfileReference,
   computeClientIntegrationReadiness,
   emptyIdentifiers,
+  emptySecretHints,
   emptySecretPresence,
   isIdentifierKey,
   isSecretKey,
+  secretHintFromValue,
   type ClientIntegrationIdentifierKey,
   type ClientIntegrationIdentifiers,
   type ClientIntegrationProfileKey,
   type ClientIntegrationProfileDto,
+  type ClientIntegrationSecretHints,
   type ClientIntegrationSecretKey,
   type ClientIntegrationSecretPresence,
   type ClientIntegrationSource,
@@ -98,6 +101,17 @@ export function secretPresenceFromBlob(
   return presence;
 }
 
+export function secretHintsFromBlob(
+  blob: string | null | undefined,
+): ClientIntegrationSecretHints {
+  const secrets = decryptSecretBlob(blob);
+  const hints = emptySecretHints();
+  for (const key of CLIENT_INTEGRATION_SECRET_KEYS) {
+    hints[key] = secretHintFromValue(secrets[key]);
+  }
+  return hints;
+}
+
 export function identifiersFromRow(
   row: Pick<ClientIntegrationProfile, "ghlLocationId" | "googleSheetsId" | "metaPixelId"> | undefined,
 ): ClientIntegrationIdentifiers {
@@ -113,6 +127,7 @@ export function toProfileDto(row: ClientIntegrationProfile | undefined, clientId
     clientId,
     identifiers: identifiersFromRow(row),
     secretPresence: secretPresenceFromBlob(row?.secretsEncrypted),
+    secretHints: secretHintsFromBlob(row?.secretsEncrypted),
     lastUpdated: row?.updatedAt ?? null,
     reconciliationStatus: row?.reconciliationStatus ?? "pending",
     conflictedKeys: row?.conflictedKeys ?? [],
@@ -283,22 +298,22 @@ export function contributionsFromLegacyRows(input: {
   return contributions;
 }
 
+/**
+ * Surface readiness for a caller that cannot see the client's Astro config, so
+ * `websiteReady` assumes every conditional integration is on. Screens that know
+ * what the client switched on should call the readiness helper directly.
+ */
 export function readinessForSurfaces(dto: ClientIntegrationProfileDto) {
-  const website = computeClientIntegrationReadiness({
-    identifiers: dto.identifiers,
-    secretPresence: dto.secretPresence,
-    reconciliationStatus: dto.reconciliationStatus,
-  });
-  const funnel = computeClientIntegrationReadiness({
+  const readiness = computeClientIntegrationReadiness({
     identifiers: dto.identifiers,
     secretPresence: dto.secretPresence,
     reconciliationStatus: dto.reconciliationStatus,
   });
   return {
-    websiteReady: website.websiteReady,
-    funnelAReady: funnel.funnelReady,
-    funnelBReady: funnel.funnelReady,
-    requiredWebsite: WEBSITE_REQUIRED_PROFILE_KEYS,
+    websiteReady: readiness.websiteReady,
+    funnelAReady: readiness.funnelReady,
+    funnelBReady: readiness.funnelReady,
+    requiredWebsite: WEBSITE_POSSIBLE_PROFILE_KEYS,
     requiredFunnel: FUNNEL_REQUIRED_PROFILE_KEYS,
   };
 }
@@ -339,6 +354,54 @@ export async function getClientIntegrationProfile(clientId: number): Promise<Cli
     }
     throw error;
   }
+}
+
+async function readStoredSecret(
+  clientId: number,
+  key: ClientIntegrationSecretKey,
+): Promise<string | null> {
+  try {
+    const db = await requireDb();
+    const rows = await db
+      .select()
+      .from(clientIntegrationProfiles)
+      .where(eq(clientIntegrationProfiles.clientId, clientId))
+      .limit(1);
+    const row = rows[0];
+    if (!row) return null;
+    return decryptSecretBlob(row.secretsEncrypted)[key] ?? null;
+  } catch (error) {
+    if (isUndefinedRelationError(error)) return null;
+    throw error;
+  }
+}
+
+export type SecretRevealAudit = {
+  actorId: number;
+  actorEmail: string | null;
+  clientId: number;
+  key: ClientIntegrationSecretKey;
+};
+
+/**
+ * The only path that returns a stored secret in plaintext. Everything else —
+ * the profile DTO, the campaign editor, the operational summary — stays
+ * presence-only. The audit record is written here rather than in the router so
+ * a value cannot be read without leaving a trace, including failed lookups.
+ */
+export async function revealClientIntegrationSecret(
+  audit: SecretRevealAudit,
+): Promise<string | null> {
+  const value = await readStoredSecret(audit.clientId, audit.key);
+  console.info("[SecretReveal]", {
+    actorId: audit.actorId,
+    actorEmail: audit.actorEmail,
+    clientId: audit.clientId,
+    key: audit.key,
+    found: value !== null,
+    at: new Date().toISOString(),
+  });
+  return value;
 }
 
 export async function saveClientIntegrationProfile(

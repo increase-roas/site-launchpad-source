@@ -67,6 +67,9 @@ describe("Simple Form operator defaults", () => {
     expect(
       config.inventory.products.every(product => product.ctaUrl === "")
     ).toBe(true);
+    // The five template cards are seeded but switched off, because nothing can
+    // guess where their buttons should send a visitor.
+    expect(config.inventory.enabled).toBe(false);
     expect(config.funnel.shape).toBe("A");
     expect(config.surveyQuestions).toEqual([]);
   });
@@ -81,7 +84,7 @@ describe("Simple Form operator defaults", () => {
 });
 
 describe("Simple Form readiness", () => {
-  it("lists missing client, meta, ghl, inventory, and production secrets on a new funnel", () => {
+  it("lists missing client, meta, ghl, and production secrets on a new funnel", () => {
     const record = buildSimpleFormStoredRecord({
       businessName: "Northland Spas",
       slug: "northland-spas-simple-form",
@@ -103,7 +106,50 @@ describe("Simple Form readiness", () => {
     expect(missing).toContain("Google service-account email");
     expect(missing).toContain("Google service-account private key");
     expect(missing).toContain("Lifecycle Callback Secret");
-    expect(missing.some(item => item.includes("CTA URL"))).toBe(true);
+    // A new campaign is held back only by what an operator has to supply, never
+    // by the template content it was seeded with.
+    expect(missing.some(item => item.includes("CTA URL"))).toBe(false);
+    expect(
+      readiness.sections.find(section => section.key === "inventory")?.ready
+    ).toBe(true);
+  });
+
+  it("asks for card destinations only once inventory is switched on", () => {
+    const off = buildReadyRecord();
+    off.config.inventory.products = off.config.inventory.products.map(product => ({
+      ...product,
+      ctaUrl: "",
+    }));
+    const on = structuredClone(off);
+    on.config.inventory.enabled = true;
+
+    expect(
+      buildSimpleFormReadiness(off, readySecrets, readyIntegration)
+        .configurationReady
+    ).toBe(true);
+
+    const blocked = buildSimpleFormReadiness(on, readySecrets, readyIntegration);
+    expect(blocked.configurationReady).toBe(false);
+    expect(
+      blocked.sections.find(section => section.key === "inventory")?.missing
+    ).toContain("Product 1 CTA URL");
+  });
+
+  it("accepts inventory once every active card has a destination", () => {
+    const record = buildReadyRecord();
+    record.config.inventory.enabled = true;
+    // The clearance card ships inactive, so its blank destination is irrelevant.
+    record.config.inventory.products = record.config.inventory.products.map(
+      product => (product.active ? product : { ...product, ctaUrl: "" })
+    );
+
+    const readiness = buildSimpleFormReadiness(
+      record,
+      readySecrets,
+      readyIntegration
+    );
+
+    expect(readiness.configurationReady).toBe(true);
   });
 
   it("marks a complete canonical Shape A candidate ready", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateRuntimeEnv } from "./env";
+import { readAssetStorageDriver, validateRuntimeEnv } from "./env";
 
 const validDevelopmentEnv: NodeJS.ProcessEnv = {
   VITE_SUPABASE_URL: "https://project-ref.supabase.co",
@@ -128,5 +128,46 @@ describe("R2 environment validation", () => {
     const message = caught instanceof Error ? caught.message : "";
     expect(message).toContain("R2_BUCKET");
     expect(message).not.toContain(invalidValue);
+  });
+});
+
+const localDriverEnv: NodeJS.ProcessEnv = {
+  VITE_SUPABASE_URL: "https://project-ref.supabase.co",
+  VITE_SUPABASE_PUBLISHABLE_KEY: "publishable-test-key",
+  AUTH_ALLOWED_EMAILS: "owner@example.com",
+  AUTH_ADMIN_EMAILS: "owner@example.com",
+  JWT_SECRET: "legacy-decryption-test-key",
+  DATABASE_URL: "postgresql://runtime.invalid/site-launchpad",
+  ASSET_STORAGE_DRIVER: "local",
+};
+
+describe("asset storage driver", () => {
+  it("defaults to R2 when unset", () => {
+    expect(readAssetStorageDriver("development", validDevelopmentEnv)).toBe("r2");
+  });
+
+  it("reads an explicit local driver in development", () => {
+    expect(readAssetStorageDriver("development", localDriverEnv)).toBe("local");
+  });
+
+  it("refuses the local driver in production", () => {
+    expect(() =>
+      readAssetStorageDriver("production", { ...localDriverEnv, SECRETS_ENCRYPTION_KEY: "k" }),
+    ).toThrow(/production/i);
+  });
+
+  it("rejects an unknown driver name", () => {
+    expect(() =>
+      readAssetStorageDriver("development", { ...validDevelopmentEnv, ASSET_STORAGE_DRIVER: "s3" }),
+    ).toThrow(/ASSET_STORAGE_DRIVER/);
+  });
+
+  it("stops requiring R2 credentials once the local driver is selected", () => {
+    expect(() => validateRuntimeEnv("development", localDriverEnv)).not.toThrow();
+  });
+
+  it("still requires R2 credentials under the default driver", () => {
+    const { R2_BUCKET: _omitted, ...withoutBucket } = validDevelopmentEnv;
+    expect(() => validateRuntimeEnv("development", withoutBucket)).toThrow(/R2_BUCKET/);
   });
 });

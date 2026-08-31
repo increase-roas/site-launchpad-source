@@ -32,19 +32,29 @@ describe("direct internal workspace access", () => {
     expect(editorSource).not.toContain(
       "await Promise.all([utils.clients.list.invalidate(), utils.astroConfig.get.invalidate(queryInput)])",
     );
-    expect(editorSource).toContain("return isPublishActive(publishState) ? 3_000 : false");
+    expect(editorSource).not.toContain("astroConfig.publishStatus");
+    expect(editorSource).not.toContain("startPublish");
+    expect(editorSource).not.toContain("advancePublish");
+    expect(editorSource).not.toContain("Website publishing");
+    expect(editorSource).not.toContain('"Saved"');
+    expect(editorSource).not.toContain("Changes waiting");
+    expect(editorSource).not.toContain("ConfigurationVerification");
     expect(editorSource).toContain("Website configuration could not be loaded");
   });
 
   it("bounds clients.list without automatic retries and preserves the visible retry state", () => {
-    const homeSource = source("pages/Home.tsx");
     const workspaceSource = source("contexts/WorkspaceContext.tsx");
+    const directorySource = source("app/ClientDirectory.tsx");
+    const clientsSource = source("features/clients/ClientsPage.tsx");
 
-    for (const clientsListSource of [homeSource, workspaceSource]) {
-      expect(clientsListSource).toContain("retry: false");
+    expect(workspaceSource).toContain("retry: false");
+    expect(workspaceSource).toContain("clientsQuery.refetch()");
+
+    // Both client-list surfaces must name the failure and offer a manual retry.
+    for (const listSource of [directorySource, clientsSource]) {
+      expect(listSource).toContain("Clients could not be loaded");
+      expect(listSource).toContain("refetchClients");
     }
-    expect(homeSource).toContain("Clients could not be loaded");
-    expect(homeSource).toContain("clientsQuery.refetch()");
   });
 
   it("has no OAuth callback route", () => {
@@ -55,7 +65,7 @@ describe("direct internal workspace access", () => {
   });
 
   it("renders the workspace directly without sign-in or sign-out controls", () => {
-    const layoutSource = source("components/DashboardLayout.tsx");
+    const layoutSource = source("app/AppShell.tsx");
 
     expect(layoutSource).not.toContain("useAuth");
     expect(layoutSource).not.toContain("Sign in with Google");
@@ -67,15 +77,18 @@ describe("direct internal workspace access", () => {
 
   it("loads public R2 previews directly without protected storage fetches", () => {
     const previewSources = [
-      source("components/ImageUploadCard.tsx"),
-      source("pages/MediaWorkspace.tsx"),
-      source("components/funnels/SimpleFormFunnelEditor.tsx"),
+      source("components/astro/media/MediaSlotRail.tsx"),
+      source("components/astro/media/MediaSlotDetail.tsx"),
+      source("components/astro/media/MediaSlotGrid.tsx"),
+      source("features/campaigns/campaignFields.tsx"),
     ];
 
     for (const previewSource of previewSources) {
       expect(previewSource).toContain("<img");
       expect(previewSource).not.toContain("AuthenticatedImage");
     }
+
+    expect(source("components/astro/MediaTab.tsx")).not.toContain("AuthenticatedImage");
   });
 
   it("keeps direct R2 upload requests credential-free", () => {

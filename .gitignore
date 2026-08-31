@@ -101,6 +101,9 @@ jspm_packages/
 tmp/
 temp/
 
+# Development asset storage (ASSET_STORAGE_DRIVER=local)
+.local-assets/
+
 # Database
 *.db
 *.sqlite
@@ -108,6 +111,9 @@ temp/
 
 # Webdev artifacts (checkpoint zips, migrations, etc.)
 .webdev/
+
+# Superpowers brainstorm sessions
+.superpowers/
 
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json

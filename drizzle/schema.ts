@@ -332,7 +332,6 @@ export const astroClientConfigs = pgTable(
       .references(() => clients.id, { onDelete: "cascade" }),
     socialLinks: jsonb("socialLinks").$type<Record<string, string>>().notNull(),
     fonts: jsonb("fonts").$type<Record<string, string>>().notNull(),
-    borderRadii: jsonb("borderRadii").$type<Record<string, number>>().notNull(),
     navigationItems: jsonb("navigationItems")
       .$type<Array<Record<string, unknown>>>()
       .notNull(),
@@ -404,15 +403,6 @@ export type WranglerSecretSetup = typeof wranglerSecretSetups.$inferSelect;
 export type InsertWranglerSecretSetup =
   typeof wranglerSecretSetups.$inferInsert;
 
-export const sitePageTypeValues = [
-  "homepage",
-  "inventory",
-  "categories",
-  "visitUs",
-  "financing",
-] as const;
-export type SitePageType = (typeof sitePageTypeValues)[number];
-
 export const workspaceStatusValues = [
   "draft",
   "ready",
@@ -421,43 +411,10 @@ export const workspaceStatusValues = [
 ] as const;
 export type WorkspaceStatus = (typeof workspaceStatusValues)[number];
 
-export const sitePageTypeEnum = pgEnum("site_page_type", sitePageTypeValues);
 export const workspaceStatusEnum = pgEnum(
   "workspace_status",
   workspaceStatusValues
 );
-
-export const sitePages = pgTable(
-  "sitePages",
-  {
-    id: serial("id").primaryKey(),
-    clientId: integer("clientId")
-      .notNull()
-      .references(() => clients.id, { onDelete: "cascade" }),
-    pageType: sitePageTypeEnum("pageType").notNull(),
-    title: varchar("title", { length: 160 }).notNull(),
-    slug: varchar("slug", { length: 240 }).notNull(),
-    description: varchar("description", { length: 500 }).notNull(),
-    status: workspaceStatusEnum("status").default("draft").notNull(),
-    enabled: integer("enabled").default(1).notNull(),
-    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
-      .defaultNow()
-      .notNull(),
-  },
-  table => [
-    uniqueIndex("site_pages_client_type_unique").on(
-      table.clientId,
-      table.pageType
-    ),
-    index("site_pages_client_idx").on(table.clientId),
-  ]
-).enableRLS();
-
-export type SitePage = typeof sitePages.$inferSelect;
-export type InsertSitePage = typeof sitePages.$inferInsert;
 
 export const funnelShapeValues = ["A", "B", "C"] as const;
 export type FunnelShape = (typeof funnelShapeValues)[number];
@@ -831,57 +788,6 @@ export const astroSitePublishes = pgTable(
 
 export type AstroSitePublish = typeof astroSitePublishes.$inferSelect;
 export type InsertAstroSitePublish = typeof astroSitePublishes.$inferInsert;
-
-export const homepageSectionTypeValues = [
-  "hero",
-  "categories",
-  "visitShowroom",
-  "deliveryInstall",
-  "testimonials",
-  "financing",
-  "faq",
-  "contact",
-  "map",
-] as const;
-export type HomepageSectionType = (typeof homepageSectionTypeValues)[number];
-
-export const homepageSectionTypeEnum = pgEnum(
-  "homepage_section_type",
-  homepageSectionTypeValues
-);
-
-export const homepageSections = pgTable(
-  "homepageSections",
-  {
-    id: serial("id").primaryKey(),
-    clientId: integer("clientId")
-      .notNull()
-      .references(() => clients.id, { onDelete: "cascade" }),
-    sectionType: homepageSectionTypeEnum("sectionType").notNull(),
-    position: integer("position").notNull(),
-    enabled: integer("enabled").default(1).notNull(),
-    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
-      .defaultNow()
-      .notNull(),
-  },
-  table => [
-    uniqueIndex("homepage_sections_client_type_unique").on(
-      table.clientId,
-      table.sectionType
-    ),
-    uniqueIndex("homepage_sections_client_position_unique").on(
-      table.clientId,
-      table.position
-    ),
-    index("homepage_sections_client_idx").on(table.clientId),
-  ]
-).enableRLS();
-
-export type HomepageSection = typeof homepageSections.$inferSelect;
-export type InsertHomepageSection = typeof homepageSections.$inferInsert;
 
 export const clientIntegrationReconciliationStatusValues = [
   "pending",

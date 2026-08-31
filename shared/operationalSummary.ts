@@ -7,8 +7,10 @@ import {
   type ThemeValue,
 } from "./client";
 import {
+  ALL_WEBSITE_INTEGRATIONS_ENABLED,
   OPTIONAL_CLIENT_INTEGRATION_SECRET_KEYS,
-  WEBSITE_REQUIRED_PROFILE_KEYS,
+  websiteRequiredProfileKeys,
+  type WebsiteIntegrationEnablement,
 } from "./clientIntegrationProfile";
 import {
   WRANGLER_SECRET_VALUES,
@@ -97,13 +99,19 @@ export function isFailedPublishJob(
   return job?.status === "failed";
 }
 
+/**
+ * The count covers the whole shared vault, because funnels draw from the same
+ * credentials. Only the blocking half narrows to what this client's website
+ * actually needs, so a service that is switched off cannot hold a launch open.
+ */
 export function summarizeRuntimeConfiguration(
-  secretStatus: Partial<Record<WranglerSecretName, boolean>>
+  secretStatus: Partial<Record<WranglerSecretName, boolean>>,
+  enabledIntegrations: WebsiteIntegrationEnablement = ALL_WEBSITE_INTEGRATIONS_ENABLED
 ): RuntimeConfigurationSummary {
   const total = WRANGLER_SECRET_VALUES.length;
   const set = WRANGLER_SECRET_VALUES.filter(name => secretStatus[name]).length;
   const optional = new Set<string>(OPTIONAL_CLIENT_INTEGRATION_SECRET_KEYS);
-  const requiredMissing = WEBSITE_REQUIRED_PROFILE_KEYS.filter(
+  const requiredMissing = websiteRequiredProfileKeys(enabledIntegrations).filter(
     name => !secretStatus[name as WranglerSecretName]
   );
   const optionalUnset = WRANGLER_SECRET_VALUES.filter(
@@ -139,6 +147,7 @@ export function buildOperationalSummary(input: {
   websitePublish: PublishJobSnapshot | null;
   funnelPublishes: PublishJobSnapshot[];
   secretStatus?: Partial<Record<WranglerSecretName, boolean>>;
+  enabledIntegrations?: WebsiteIntegrationEnablement;
 }): OperationalSummary {
   const businessInformation = businessInformationSchema.safeParse(input.client).success;
   const websiteSetup =
@@ -179,7 +188,10 @@ export function buildOperationalSummary(input: {
     status,
     statusLabel: OPERATIONAL_STATUS_LABELS[status],
     liveUrl,
-    runtimeConfiguration: summarizeRuntimeConfiguration(input.secretStatus ?? {}),
+    runtimeConfiguration: summarizeRuntimeConfiguration(
+      input.secretStatus ?? {},
+      input.enabledIntegrations ?? ALL_WEBSITE_INTEGRATIONS_ENABLED,
+    ),
   };
 }
 

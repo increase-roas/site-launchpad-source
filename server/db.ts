@@ -13,6 +13,7 @@ import {
   InsertClientSecretSetup,
   InsertUser,
   User,
+  astroClientConfigs,
   astroSitePublishes,
   clientAssets,
   clientIntegrationProfiles,
@@ -22,6 +23,7 @@ import {
   funnels,
   genericPaidFunnelPublishes,
   users,
+  type AstroClientConfig,
   type AstroSitePublish,
 } from "../drizzle/schema";
 import { CLOSED_BUSINESS_HOURS, sanitizeClientFolder } from "../shared/client";
@@ -236,6 +238,7 @@ export type ClientListViewData = {
   funnels: Funnel[];
   simpleFormPublishes: FunnelPublish[];
   genericFunnelPublishes: GenericPaidFunnelPublish[];
+  astroConfigs: AstroClientConfig[];
 };
 
 export async function listClientViewData(): Promise<ClientListViewData> {
@@ -251,6 +254,7 @@ export async function listClientViewData(): Promise<ClientListViewData> {
     const funnelRows = await database.select().from(funnels);
     const simpleFormPublishes = await database.select().from(funnelPublishes);
     const genericFunnelPublishes = await database.select().from(genericPaidFunnelPublishes);
+    const astroConfigs = await database.select().from(astroClientConfigs);
     return {
       clients: clientRows,
       assets,
@@ -260,6 +264,7 @@ export async function listClientViewData(): Promise<ClientListViewData> {
       funnels: funnelRows,
       simpleFormPublishes,
       genericFunnelPublishes,
+      astroConfigs,
     };
   });
 }
@@ -354,6 +359,7 @@ export type ClientViewData = {
   funnels: Funnel[];
   simpleFormPublishes: FunnelPublish[];
   genericFunnelPublishes: GenericPaidFunnelPublish[];
+  astroConfig: AstroClientConfig | undefined;
 };
 
 export async function getClientViewData(
@@ -396,6 +402,11 @@ export async function getClientViewData(
       .select()
       .from(genericPaidFunnelPublishes)
       .where(eq(genericPaidFunnelPublishes.clientId, clientId));
+    const astroConfigRows = await database
+      .select()
+      .from(astroClientConfigs)
+      .where(eq(astroClientConfigs.clientId, clientId))
+      .limit(1);
     return {
       client: clientRows[0],
       assets,
@@ -405,6 +416,7 @@ export async function getClientViewData(
       funnels: funnelRows,
       simpleFormPublishes,
       genericFunnelPublishes,
+      astroConfig: astroConfigRows[0],
     };
   });
 }

@@ -2,7 +2,6 @@ import { and, desc, eq } from "drizzle-orm";
 import {
   paidFunnelGraphRevisions,
   paidFunnelGraphs,
-  paidFunnelReusableSections,
   paidFunnelSteps,
   paidFunnelTemplateArtifacts,
   paidFunnelTemplateVersions,
@@ -21,27 +20,12 @@ import {
   genericPaidFunnelSlug,
 } from "../shared/paidFunnelFixture";
 import { instantiatePaidFunnel } from "../shared/paidFunnelInstantiate";
-import {
-  migratePaidFunnelGraph,
-  paidFunnelSectionSchema,
-} from "../shared/paidFunnelGraph";
-import {
-  assembleStudioGraph,
-  paidFunnelPersistStepsSchema,
-  persistGraphInput,
-  studioToPersistSteps,
-  studioToStorageGraph,
-} from "../shared/paidFunnel/persist";
-import { createEmptyGraph, createIdFactory } from "../shared/paidFunnel/graph";
-import {
-  blankFunnelName,
-  blankFunnelSlug,
-} from "../shared/paidFunnel/library";
+import { migratePaidFunnelGraph } from "../shared/paidFunnelGraph";
+import { assembleStudioGraph } from "../shared/paidFunnel/persist";
 import { ingestPaidFunnelZip } from "../shared/paidFunnelZip";
 import { getClientById, getDb } from "./db";
 import { isUndefinedRelationError } from "../shared/safePublicError";
 import { requireSinglePositiveId, withUpdatedAt } from "./postgresPersistence";
-import { UpdateConflictError, assertWritableVersion } from "./trpcErrors";
 
 async function requireDb() {
   const db = await getDb();
@@ -404,103 +388,6 @@ async function createPaidFunnelFromTemplateUnsafe(
   return { alreadyExists: false as const, funnelId };
 }
 
-export async function createBlankPaidFunnel(clientId: number, name?: string) {
-  try {
-    return await createBlankPaidFunnelUnsafe(clientId, name);
-  } catch (error) {
-    if (isPaidFunnelRegistryUnavailable(error)) {
-      throw new Error("Blank funnel could not be created.");
-    }
-    throw error;
-  }
-}
-
-async function createBlankPaidFunnelUnsafe(clientId: number, name?: string) {
-  const client = await getClientById(clientId);
-  if (!client) throw new Error("Client not found.");
-  const db = await requireDb();
-  const used = await db
-    .select({ slug: paidFunnels.slug, name: paidFunnels.name })
-    .from(paidFunnels)
-    .where(eq(paidFunnels.clientId, clientId));
-  const funnelName = uniqueFunnelName(
-    name?.trim() || blankFunnelName(client.businessName),
-    used.map(row => row.name)
-  );
-  const slug = blankFunnelSlug(
-    client.shortName,
-    used.map(row => row.slug)
-  );
-  const studioGraph = createEmptyGraph({
-    funnelKey: slug,
-    name: funnelName,
-    nextId: createIdFactory("blank"),
-  });
-  const storageGraph = persistGraphInput(studioToStorageGraph(studioGraph));
-  const persistSteps = studioToPersistSteps(studioGraph);
-
-  return db.transaction(async transaction => {
-    const insertedFunnel = await transaction
-      .insert(paidFunnels)
-      .values({
-        clientId,
-        templateVersionId: null,
-        name: funnelName,
-        slug,
-        source: "template",
-        status: "draft",
-      })
-      .returning({ id: paidFunnels.id });
-    const funnelId = requireSinglePositiveId(
-      insertedFunnel,
-      "Blank funnel could not be created."
-    );
-
-    const landing = persistSteps[0];
-    if (!landing) throw new Error("Blank funnel is missing its empty page.");
-    const insertedStep = await transaction
-      .insert(paidFunnelSteps)
-      .values({
-        funnelId,
-        position: landing.position,
-        key: landing.key,
-        stepType: landing.stepType,
-        slug: landing.slug,
-        title: landing.title,
-        seo: landing.seo,
-        nextStep: landing.nextStep,
-        previewState: landing.previewState,
-        publishState: landing.publishState,
-      })
-      .returning({ id: paidFunnelSteps.id });
-    const stepId = requireSinglePositiveId(
-      insertedStep,
-      "Funnel step could not be created."
-    );
-
-    const insertedGraph = await transaction
-      .insert(paidFunnelGraphs)
-      .values({
-        funnelId,
-        stepId,
-        graphVersion: storageGraph.version,
-        graphJson: storageGraph as Record<string, unknown>,
-      })
-      .returning({ id: paidFunnelGraphs.id });
-    const graphId = requireSinglePositiveId(
-      insertedGraph,
-      "Funnel graph could not be created."
-    );
-    await transaction.insert(paidFunnelGraphRevisions).values({
-      graphId,
-      revision: 1,
-      graphJson: storageGraph as Record<string, unknown>,
-    });
-
-    return { alreadyExists: false as const, funnelId };
-  });
-}
-
 export async function importPaidFunnelZip(input: {
   clientId: number;
   filename: string;
@@ -623,180 +510,5 @@ export async function getPaidFunnelDetail(clientId: number, funnelId: number) {
     steps: orderedSteps,
     graphs: graphRows,
     studio,
-  };
-}
-
-export async function savePaidFunnelGraph(input: {
-  clientId: number;
-  funnelId: number;
-  stepId: number;
-  expectedUpdatedAt: Date;
-  graph: unknown;
-  steps?: unknown;
-}) {
-  const db = await requireDb();
-  const funnelRows = await db
-    .select()
-    .from(paidFunnels)
-    .where(
-      and(
-        eq(paidFunnels.id, input.funnelId),
-        eq(paidFunnels.clientId, input.clientId)
-      )
-    )
-    .limit(1);
-  if (!funnelRows[0]) throw new Error("Funnel not found.");
-
-  const graph = persistGraphInput(input.graph);
-  const steps = input.steps
-    ? paidFunnelPersistStepsSchema.parse(input.steps)
-    : null;
-  await db.transaction(async transaction => {
-    // Lock before comparing the version. PostgreSQL default timestamps retain
-    // microseconds while JavaScript Date values only retain milliseconds, so a
-    // SQL equality predicate against a round-tripped Date can reject the first
-    // valid edit. The row lock preserves optimistic concurrency without relying
-    // on that lossy SQL timestamp comparison.
-    const graphRows = await transaction
-      .select()
-      .from(paidFunnelGraphs)
-      .where(
-        and(
-          eq(paidFunnelGraphs.funnelId, input.funnelId),
-          eq(paidFunnelGraphs.stepId, input.stepId)
-        )
-      )
-      .for("update");
-    const current = graphRows[0];
-    if (!current) throw new Error("Graph not found.");
-    assertWritableVersion(current.updatedAt, input.expectedUpdatedAt);
-
-    const revisionRows = await transaction
-      .select({ revision: paidFunnelGraphRevisions.revision })
-      .from(paidFunnelGraphRevisions)
-      .where(eq(paidFunnelGraphRevisions.graphId, current.id))
-      .orderBy(desc(paidFunnelGraphRevisions.revision))
-      .limit(1);
-    const nextRevision = (revisionRows[0]?.revision ?? 0) + 1;
-    // The version token must always advance, including API-level saves that
-    // arrive within the same millisecond.
-    const now = new Date(
-      Math.max(Date.now(), current.updatedAt.getTime() + 1)
-    );
-
-    if (steps) {
-      const existingSteps = await transaction
-        .select()
-        .from(paidFunnelSteps)
-        .where(eq(paidFunnelSteps.funnelId, input.funnelId))
-        .for("update");
-      const requestedKeys = new Set(steps.map(step => step.key));
-      const removed = existingSteps.filter(step => !requestedKeys.has(step.key));
-      if (removed.some(step => step.stepType !== "survey" || !/^survey-question-\d+$/.test(step.key))) {
-        throw new Error("Only custom survey questions can be removed from this editor.");
-      }
-      if (removed.some(step => step.id === current.stepId)) {
-        throw new Error("The graph storage step cannot be removed.");
-      }
-      const removedKeys = new Set(removed.map(step => step.key));
-      if (steps.some(step => step.nextStep && removedKeys.has(step.nextStep))) {
-        throw new Error("A funnel step still routes to a removed survey question.");
-      }
-      if (graph.pages.some(page => removedKeys.has(page.stepKey))) {
-        throw new Error("A removed survey question still has a page graph.");
-      }
-
-      // Vacate the unique (funnelId, position) slots before applying a reorder.
-      for (const step of existingSteps) {
-        await transaction
-          .update(paidFunnelSteps)
-          .set({ position: -(step.id + 1), updatedAt: now })
-          .where(eq(paidFunnelSteps.id, step.id));
-      }
-
-      for (const step of steps) {
-        const existing = existingSteps.find(row => row.key === step.key);
-        const values = {
-          position: step.position,
-          stepType: step.stepType,
-          slug: step.slug,
-          title: step.title,
-          seo: step.seo,
-          nextStep: step.nextStep,
-          previewState: step.previewState,
-          publishState: step.publishState,
-          updatedAt: now,
-        };
-        if (existing) {
-          await transaction
-            .update(paidFunnelSteps)
-            .set(values)
-            .where(eq(paidFunnelSteps.id, existing.id));
-        } else {
-          await transaction.insert(paidFunnelSteps).values({
-            funnelId: input.funnelId,
-            key: step.key,
-            ...values,
-          });
-        }
-      }
-
-      for (const step of removed) {
-        await transaction
-          .delete(paidFunnelSteps)
-          .where(eq(paidFunnelSteps.id, step.id));
-      }
-    }
-
-    const updated = await transaction
-      .update(paidFunnelGraphs)
-      .set({
-        graphJson: graph as Record<string, unknown>,
-        graphVersion: graph.version,
-        updatedAt: now,
-      })
-      .where(eq(paidFunnelGraphs.id, current.id))
-      .returning({ id: paidFunnelGraphs.id });
-    if (updated.length !== 1) throw new UpdateConflictError();
-    await transaction.insert(paidFunnelGraphRevisions).values({
-      graphId: current.id,
-      revision: nextRevision,
-      graphJson: graph as Record<string, unknown>,
-    });
-  });
-
-  return getPaidFunnelDetail(input.clientId, input.funnelId);
-}
-
-export async function listReusableSections(clientId: number) {
-  const db = await requireDb();
-  return db
-    .select()
-    .from(paidFunnelReusableSections)
-    .where(eq(paidFunnelReusableSections.clientId, clientId));
-}
-
-export async function saveReusableSection(input: {
-  clientId: number;
-  name: string;
-  section: unknown;
-}) {
-  const section = paidFunnelSectionSchema.parse(input.section);
-  const db = await requireDb();
-  const inserted = await db
-    .insert(paidFunnelReusableSections)
-    .values({
-      clientId: input.clientId,
-      name: input.name,
-      sectionJson: section as Record<string, unknown>,
-    })
-    .returning({ id: paidFunnelReusableSections.id });
-  return {
-    id: requireSinglePositiveId(
-      inserted,
-      "Reusable section could not be saved."
-    ),
-    name: input.name,
-    section,
   };
 }

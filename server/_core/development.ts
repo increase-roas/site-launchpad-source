@@ -1,3 +1,4 @@
+import "./nodeEnv.development";
 import "dotenv/config";
 import { startServer } from "./startServer";
 import { setupVite } from "./vite";

@@ -14,6 +14,8 @@ type WorkspaceContextValue = {
   selectClient: (clientId: number) => void;
   isLoading: boolean;
   isError: boolean;
+  /** Manual retry for the deliberately non-retrying clients.list query. */
+  refetchClients: () => void;
 };
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -58,8 +60,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       },
       isLoading: clientsQuery.isLoading && !isError,
       isError,
+      refetchClients: () => {
+        void clientsQuery.refetch();
+      },
     }),
-    [clients, clientsQuery.isLoading, isError, selectedClientId],
+    [clients, clientsQuery, isError, selectedClientId],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

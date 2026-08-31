@@ -14,6 +14,10 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Several suites cold-import the whole server graph, run esbuild, or spawn a
+    // child Node process; the 5s default is too tight for those on slower hosts.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
     include: [
       "server/**/*.test.ts",
       "server/**/*.spec.ts",

@@ -130,7 +130,9 @@ const simpleFormCanonicalProductSchema = z.object({
   imageUrl: z.string().trim().url(),
   priceLabel: z.string().trim().min(2).max(60).optional(),
   ctaLabel: z.string().trim().min(2).max(50),
-  ctaUrl: z.string().trim().url(),
+  /** Destinations are only reachable while inventory is on, so the parent
+   * refinement is what requires them. */
+  ctaUrl: z.string().trim(),
   active: z.boolean(),
 });
 
@@ -248,16 +250,24 @@ export const simpleFormCanonicalShapeAConfigSchema = z
       });
     }
 
-    if (
-      config.inventory.enabled &&
-      !config.inventory.products.some(product => product.active)
-    ) {
+    if (!config.inventory.enabled) return;
+
+    if (!config.inventory.products.some(product => product.active)) {
       context.addIssue({
         code: "custom",
         message: "Inventory requires at least one active product.",
         path: ["inventory", "products"],
       });
     }
+
+    config.inventory.products.forEach((product, index) => {
+      if (!product.active || isHttpUrl(product.ctaUrl.trim())) return;
+      context.addIssue({
+        code: "custom",
+        message: "Enter a complete destination for this card's button.",
+        path: ["inventory", "products", index, "ctaUrl"],
+      });
+    });
   });
 
 type SimpleFormCanonicalShapeAConfig = z.output<
@@ -428,7 +438,10 @@ export function buildSimpleFormOperatorDefaults(input: {
       duplicateWindowHours: 24,
     },
     inventory: {
-      enabled: true,
+      // Off until an operator supplies real destinations. The template cannot
+      // guess where five cards should link, and leaving it on would ship every
+      // new campaign with five blockers before any work has been done.
+      enabled: false,
       headline: "Active inventory near you",
       subheadline:
         "These models are in stock at the local showroom. Tap a product to view full details.",
@@ -562,33 +575,34 @@ export function buildSimpleFormReadiness(
     googleSheetsMissing.push("Google service-account private key");
   }
 
+  // Inventory is opt-in, so a campaign that leaves it off is never held back by
+  // card content that never reaches a visitor.
   const inventoryMissing: string[] = [];
   if (config.inventory.products.length !== 5)
     inventoryMissing.push("Exactly 5 inventory slots");
   const ids = config.inventory.products.map(product => product.id);
   if (new Set(ids).size !== ids.length)
     inventoryMissing.push("Unique product ids");
-  if (
-    config.inventory.enabled &&
-    !config.inventory.products.some(product => product.active)
-  ) {
-    inventoryMissing.push("At least one active product");
-  }
-  config.inventory.products.forEach((product, index) => {
-    const label = `Product ${index + 1}`;
-    if (!productId.test(product.id)) inventoryMissing.push(`${label} id`);
-    if (product.name.trim().length < 2) inventoryMissing.push(`${label} name`);
-    if (!product.imageUrl.trim()) inventoryMissing.push(`${label} image`);
-    if (product.ctaLabel.trim().length < 2)
-      inventoryMissing.push(`${label} CTA label`);
-    if (!isHttpUrl(product.ctaUrl.trim()))
-      inventoryMissing.push(`${label} CTA URL`);
-  });
-  if (
-    config.inventory.pageUrl?.trim() &&
-    !isHttpUrl(config.inventory.pageUrl.trim())
-  ) {
-    inventoryMissing.push("Inventory page URL");
+  if (config.inventory.enabled) {
+    if (!config.inventory.products.some(product => product.active)) {
+      inventoryMissing.push("At least one active product");
+    }
+    config.inventory.products.forEach((product, index) => {
+      const label = `Product ${index + 1}`;
+      if (!productId.test(product.id)) inventoryMissing.push(`${label} id`);
+      if (product.name.trim().length < 2) inventoryMissing.push(`${label} name`);
+      if (!product.imageUrl.trim()) inventoryMissing.push(`${label} image`);
+      if (product.ctaLabel.trim().length < 2)
+        inventoryMissing.push(`${label} CTA label`);
+      if (product.active && !isHttpUrl(product.ctaUrl.trim()))
+        inventoryMissing.push(`${label} CTA URL`);
+    });
+    if (
+      config.inventory.pageUrl?.trim() &&
+      !isHttpUrl(config.inventory.pageUrl.trim())
+    ) {
+      inventoryMissing.push("Inventory page URL");
+    }
   }
 
   const offlineConversionMissing = isSimpleFormOfflineConversionContractReady(

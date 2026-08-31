@@ -2,14 +2,10 @@ import { and, asc, eq } from "drizzle-orm";
 import {
   funnelSteps,
   funnels,
-  homepageSections,
-  sitePages,
   type Funnel,
   type FunnelShape,
-  type HomepageSection,
-  type SitePage,
 } from "../drizzle/schema";
-import { FUNNEL_SHAPES, type HomepageSectionType } from "../shared/workspace";
+import { FUNNEL_SHAPES } from "../shared/workspace";
 import { getClientById, getDb } from "./db";
 import { withUpdatedAt } from "./postgresPersistence";
 import { funnelStepRows, seedWorkspaceDefaults } from "./workspaceSeed";
@@ -27,28 +23,26 @@ export async function ensureWorkspaceDefaults(clientId: number): Promise<void> {
   await seedWorkspaceDefaults(db, clientId);
 }
 
+/**
+ * Funnels only. Website pages and homepage composition are derived from the
+ * Astro configuration that publishes, so there is no second copy to fall behind.
+ */
 export async function getWorkspace(clientId: number): Promise<{
-  pages: SitePage[];
   funnels: Array<Funnel & { steps: Awaited<ReturnType<typeof getFunnelSteps>> }>;
-  sections: HomepageSection[];
 }> {
   await ensureWorkspaceDefaults(clientId);
   const db = await requireDb();
-  const [pages, funnelRows, sections] = await Promise.all([
-    db.select().from(sitePages).where(eq(sitePages.clientId, clientId)).orderBy(asc(sitePages.id)),
-    db.select().from(funnels).where(eq(funnels.clientId, clientId)).orderBy(asc(funnels.id)),
-    db
-      .select()
-      .from(homepageSections)
-      .where(eq(homepageSections.clientId, clientId))
-      .orderBy(asc(homepageSections.position)),
-  ]);
+  const funnelRows = await db
+    .select()
+    .from(funnels)
+    .where(eq(funnels.clientId, clientId))
+    .orderBy(asc(funnels.id));
 
   const funnelsWithSteps = await Promise.all(
     funnelRows.map(async funnel => ({ ...funnel, steps: await getFunnelSteps(funnel.id) })),
   );
 
-  return { pages, funnels: funnelsWithSteps, sections };
+  return { funnels: funnelsWithSteps };
 }
 
 export async function getFunnelSteps(funnelId: number) {
@@ -117,38 +111,4 @@ export async function updateFunnelStep(
       trackingActions: input.trackingActions,
     }))
     .where(eq(funnelSteps.id, input.stepId));
-}
-
-export async function saveHomepageSectionOrder(
-  clientId: number,
-  sections: Array<{ id: number; sectionType: HomepageSectionType; enabled: boolean }>,
-): Promise<void> {
-  const db = await requireDb();
-  const existing = await db
-    .select({ id: homepageSections.id, sectionType: homepageSections.sectionType })
-    .from(homepageSections)
-    .where(eq(homepageSections.clientId, clientId));
-  const existingById = new Map(existing.map(section => [section.id, section.sectionType]));
-
-  if (
-    sections.length !== existing.length ||
-    sections.some(section => existingById.get(section.id) !== section.sectionType)
-  ) {
-    throw new Error("Homepage sections do not match this client.");
-  }
-
-  await db.transaction(async transaction => {
-    for (let index = 0; index < sections.length; index += 1) {
-      await transaction
-        .update(homepageSections)
-        .set(withUpdatedAt({ position: 1000 + index }))
-        .where(eq(homepageSections.id, sections[index].id));
-    }
-    for (let index = 0; index < sections.length; index += 1) {
-      await transaction
-        .update(homepageSections)
-        .set(withUpdatedAt({ position: index, enabled: sections[index].enabled ? 1 : 0 }))
-        .where(eq(homepageSections.id, sections[index].id));
-    }
-  });
 }

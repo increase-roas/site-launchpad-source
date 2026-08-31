@@ -1,3 +1,4 @@
+import { PageHeading } from "@/components/dashboard/PanelCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
@@ -14,7 +15,7 @@ export default function DraftClientCreate() {
     onSuccess: async view => {
       await utils.clients.list.invalidate();
       toast.success("Client created.");
-      setLocation(`/workspace/${view.client.id}/funnels`);
+      setLocation(`/workspace/${view.client.id}`);
     },
     onError: error => toast.error(error.message),
   });
@@ -25,19 +26,19 @@ export default function DraftClientCreate() {
       <button
         type="button"
         onClick={() => setLocation("/")}
-        className="inline-flex items-center gap-2 text-sm font-extrabold text-muted-foreground hover:text-foreground"
+        className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" />
-        All clients
+        Clients
       </button>
-      <section className="rounded-3xl border border-white/8 bg-card/80 p-6 sm:p-8">
-        <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-cyan-300">New client</p>
-        <h1 className="mt-2 text-3xl font-extrabold tracking-tight">Add Client</h1>
-        <p className="mt-2 text-sm font-medium leading-relaxed text-muted-foreground">
-          Enter the business name. You can fill phone, address, and offer details later.
-        </p>
-        <label className="mt-6 block space-y-2">
-          <span className="text-sm font-extrabold">Business Name</span>
+      <PageHeading
+        title="New client"
+        description="Enter the business name. You can fill phone, address, and offer details later."
+      />
+
+      <section className="launchpad-panel rounded-lg p-4 sm:p-5">
+        <label className="block space-y-2">
+          <span className="text-sm font-medium">Business name</span>
           <Input
             autoFocus
             value={businessName}
@@ -49,17 +50,21 @@ export default function DraftClientCreate() {
               }
             }}
             placeholder="Paradise Spas"
-            className="h-13 rounded-xl border-white/10 bg-white/[0.035] text-base"
           />
         </label>
         <Button
           type="button"
+          size="sm"
           disabled={name.length < 2 || createMutation.isPending}
           onClick={() => createMutation.mutate({ businessName: name })}
-          className="mt-5 h-13 w-full gap-2 rounded-xl bg-cyan-400 text-base font-extrabold text-slate-950 hover:bg-cyan-300"
+          className="mt-4 h-9 w-full gap-1.5 text-xs font-semibold"
         >
-          {createMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
-          Create Client
+          {createMutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Plus className="h-4 w-4" aria-hidden="true" />
+          )}
+          Create client
         </Button>
       </section>
     </div>

@@ -19,7 +19,6 @@ import {
   funnelSurveyQuestions,
   funnels,
   genericPaidFunnelPublishes,
-  homepageSections,
   paidFunnelGraphRevisions,
   paidFunnelGraphs,
   paidFunnelPublishes,
@@ -29,7 +28,6 @@ import {
   paidFunnelTemplateVersions,
   paidFunnelTemplates,
   paidFunnels,
-  sitePages,
   users,
   wranglerSecretSetups,
 } from "./schema";
@@ -81,10 +79,6 @@ const applicationTables = {
     table: genericPaidFunnelPublishes,
     databaseName: "generic_paid_funnel_publishes",
   },
-  homepageSections: {
-    table: homepageSections,
-    databaseName: "homepageSections",
-  },
   paidFunnelGraphRevisions: {
     table: paidFunnelGraphRevisions,
     databaseName: "paid_funnel_graph_revisions",
@@ -118,7 +112,6 @@ const applicationTables = {
     databaseName: "paid_funnel_templates",
   },
   paidFunnels: { table: paidFunnels, databaseName: "paid_funnels" },
-  sitePages: { table: sitePages, databaseName: "sitePages" },
   users: { table: users, databaseName: "users" },
   wranglerSecretSetups: {
     table: wranglerSecretSetups,
@@ -140,7 +133,7 @@ describe("PostgreSQL application-table RLS", () => {
       .sort((left, right) => left.exportName.localeCompare(right.exportName));
 
     expect(discovered).toEqual(expected);
-    expect(discovered).toHaveLength(29);
+    expect(discovered).toHaveLength(27);
   });
 
   it("enables RLS without schema policies on every application table", () => {

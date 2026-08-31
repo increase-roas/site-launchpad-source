@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import type {
+  AstroClientConfig,
   AstroSitePublish,
   Client,
   ClientAsset,
@@ -24,6 +25,7 @@ import {
 import {
   CLIENT_INTEGRATION_SECRET_KEYS,
   clientIntegrationFieldError,
+  computeClientIntegrationReadiness,
   type ClientIntegrationProfileKey,
 } from "../../shared/clientIntegrationProfile";
 import {
@@ -37,6 +39,7 @@ import {
 } from "../db";
 import {
   loadOrBackfillResolvedClientIntegrationProfile,
+  revealClientIntegrationSecret,
   saveClientIntegrationProfile,
   toProfileDto,
 } from "../clientIntegrations";
@@ -44,7 +47,10 @@ import { encryptSetupValue, hasProtectedValue } from "../clientSecurity";
 import { observeRuntimeOperation } from "../_core/operationTelemetry";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { UpdateConflictError, isDuplicateKeyError, mapRouterError } from "../trpcErrors";
-import { wranglerSecretStatusFromProfile } from "../astroConfigDb";
+import {
+  websiteIntegrationEnablementFrom,
+  wranglerSecretStatusFromProfile,
+} from "../astroConfigDb";
 import { buildOperationalSummary } from "../../shared/operationalSummary";
 
 const secretColumnByField = {
@@ -171,6 +177,7 @@ function clientViewFrom(
     websitePublish?: AstroSitePublish;
     simpleFormPublishes?: FunnelPublish[];
     genericFunnelPublishes?: GenericPaidFunnelPublish[];
+    astroConfig?: AstroClientConfig;
   } = {},
 ) {
   const secretStatus = secretStatusFromRow(secretRow);
@@ -180,6 +187,13 @@ function clientViewFrom(
     secretStatus,
   );
   const profileDto = toProfileDto(launch.profile, client.id);
+  const enabledIntegrations = websiteIntegrationEnablementFrom(launch.astroConfig);
+  const websiteReadiness = computeClientIntegrationReadiness({
+    identifiers: profileDto.identifiers,
+    secretPresence: profileDto.secretPresence,
+    reconciliationStatus: profileDto.reconciliationStatus,
+    enabledIntegrations,
+  });
   const funnelPublishes = [
     ...(launch.simpleFormPublishes ?? []),
     ...(launch.genericFunnelPublishes ?? []),
@@ -187,13 +201,14 @@ function clientViewFrom(
   const operationalSummary = buildOperationalSummary({
     client: client as unknown as ClientInput,
     presentAssetSlots: assets.map(asset => asset.slot).filter(isAssetSlot),
-    websiteIntegrationsReady: profileDto.readiness.websiteReady,
+    websiteIntegrationsReady: websiteReadiness.websiteReady,
     funnelIntegrationsReady: profileDto.readiness.funnelReady,
     websitePublish: launch.websitePublish
       ? { status: launch.websitePublish.status, liveUrl: launch.websitePublish.liveUrl }
       : null,
     funnelPublishes,
     secretStatus: wranglerSecretStatusFromProfile(profileDto),
+    enabledIntegrations,
   });
   return { client, assets, secretStatus, readiness, operationalSummary };
 }
@@ -207,6 +222,7 @@ export async function getClientView(clientId: number) {
     websitePublish: data.websitePublish,
     simpleFormPublishes: data.simpleFormPublishes,
     genericFunnelPublishes: data.genericFunnelPublishes,
+    astroConfig: data.astroConfig,
   });
 }
 
@@ -220,6 +236,7 @@ export const clientsRouter = router({
       websitePublishes,
       simpleFormPublishes,
       genericFunnelPublishes,
+      astroConfigs,
     } =
       await observeRuntimeOperation(
         "clients_list_database",
@@ -234,6 +251,7 @@ export const clientsRouter = router({
     const secretsByClient = new Map(secretRows.map(row => [row.clientId, row]));
     const profilesByClient = new Map(integrationProfiles.map(row => [row.clientId, row]));
     const websiteByClient = new Map(websitePublishes.map(row => [row.clientId, row]));
+    const astroConfigByClient = new Map(astroConfigs.map(row => [row.clientId, row]));
     const simpleByClient = new Map<number, FunnelPublish[]>();
     for (const job of simpleFormPublishes) {
       const current = simpleByClient.get(job.clientId) ?? [];
@@ -252,6 +270,7 @@ export const clientsRouter = router({
         websitePublish: websiteByClient.get(row.id),
         simpleFormPublishes: simpleByClient.get(row.id) ?? [],
         genericFunnelPublishes: genericByClient.get(row.id) ?? [],
+        astroConfig: astroConfigByClient.get(row.id),
       }),
     );
   }),
@@ -269,6 +288,29 @@ export const clientsRouter = router({
         return (await loadOrBackfillResolvedClientIntegrationProfile(input.clientId)).dto;
       } catch (error) {
         throw mapRouterError(error, "Integrations could not be loaded.");
+      }
+    }),
+
+  revealIntegrationSecret: adminProcedure
+    .input(
+      z.object({
+        clientId: z.number().int().positive(),
+        key: z.enum(CLIENT_INTEGRATION_SECRET_KEYS),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const existing = await getClientById(input.clientId);
+        if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Client not found." });
+        const value = await revealClientIntegrationSecret({
+          actorId: ctx.user.id,
+          actorEmail: ctx.user.email,
+          clientId: input.clientId,
+          key: input.key,
+        });
+        return { key: input.key, value };
+      } catch (error) {
+        throw mapRouterError(error, "The stored value could not be read.");
       }
     }),
 

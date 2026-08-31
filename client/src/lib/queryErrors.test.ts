@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   clientSwitcherLabel,
   isServerQueryError,
-  paidAdsWorkspaceErrorCopy,
   shouldRetryWorkspaceQuery,
 } from "./queryErrors";
 
@@ -42,11 +41,5 @@ describe("workspace and funnel query error handling", () => {
     expect(shouldRetryWorkspaceQuery(0, serverError)).toBe(false);
     expect(shouldRetryWorkspaceQuery(0, validation)).toBe(true);
     expect(shouldRetryWorkspaceQuery(1, validation)).toBe(false);
-  });
-
-  it("shows a Funnels error card instead of hanging on a server error", () => {
-    const copy = paidAdsWorkspaceErrorCopy();
-    expect(copy.title).toBe("Paid Ads funnels could not be loaded.");
-    expect(copy.detail).toMatch(/try again/i);
   });
 });

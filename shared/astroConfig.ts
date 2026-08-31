@@ -1,5 +1,8 @@
 import { z } from "zod";
 import { BUSINESS_DAY_VALUES, businessHourSchema } from "./client";
+import { siteFontStylesheetHref } from "./astroFontCatalog";
+
+const DEFAULT_FONTS = { display: "Manrope", body: "Manrope", mono: "JetBrains Mono" } as const;
 
 export const ASTRO_SCHEMA_TYPE_VALUES = [
   "HomeAndConstructionBusiness",
@@ -221,21 +224,6 @@ export const astroHomepageSectionSchema = z
     }
   });
 
-export const astroHomepageSectionOrderSchema = z
-  .array(
-    z.object({
-      id: z.string().min(1),
-      type: z.enum(ASTRO_SECTION_TYPE_VALUES),
-      enabled: z.boolean(),
-    }),
-  )
-  .max(40)
-  .superRefine((sections, context) => {
-    if (new Set(sections.map(section => section.id)).size !== sections.length) {
-      context.addIssue({ code: "custom", message: "Each homepage section must appear once." });
-    }
-  });
-
 export const astroIntegrationSchema = z
   .object({ enabled: z.boolean(), config: z.record(z.string(), z.string().max(2000)) })
   .superRefine((integration, context) => {
@@ -298,7 +286,6 @@ export const astroClientConfigInputSchema = z.object({
   brand: z.object({
     theme: z.enum(ASTRO_THEME_VALUES),
     fonts: z.object({ display: z.string().trim().min(1).max(120), body: z.string().trim().min(1).max(120), mono: z.string().trim().min(1).max(120), googleFontsUrl: optionalHttpUrl }),
-    borderRadii: z.object({ card: z.number().min(0).max(999), button: z.number().min(0).max(999), pill: z.number().min(0).max(999) }),
   }),
   navigationItems: z.array(astroNavigationItemSchema).max(30),
   categories: z.record(z.enum(ASTRO_CATEGORY_VALUES), astroCategorySchema),
@@ -317,7 +304,6 @@ export const astroClientConfigInputSchema = z.object({
 export type AstroClientConfigInput = z.infer<typeof astroClientConfigInputSchema>;
 export type AstroNavigationItem = z.infer<typeof astroNavigationItemSchema>;
 export type AstroHomepageSection = z.infer<typeof astroHomepageSectionSchema>;
-export type AstroHomepageSectionOrder = z.infer<typeof astroHomepageSectionOrderSchema>;
 
 const sectionFields: Record<AstroSectionType, Record<string, string>> = {
   hero: { eyebrow: "", headline: "", subheadline: "", ctaLabel: "", ctaHref: "" },
@@ -344,6 +330,19 @@ export function createAstroHomepageSection(
   id = `section-${type}-${Date.now()}`,
 ): AstroHomepageSection {
   return { id, type, enabled: false, fields: { ...sectionFields[type] } };
+}
+
+/**
+ * The one place homepage composition is counted. Readiness on Pages, Overview,
+ * and Launch all read this so they cannot disagree about what publishes.
+ */
+export function summarizeHomepageSections(
+  sections: readonly AstroHomepageSection[],
+): { enabled: number; total: number } {
+  return {
+    enabled: sections.filter(section => section.enabled).length,
+    total: sections.length,
+  };
 }
 
 export const ASTRO_INTEGRATION_FIELDS: Record<AstroIntegration, Record<string, string>> = {
@@ -397,7 +396,7 @@ export function createDefaultAstroConfig(client: {
     address: { street1: client.streetAddress, street2: client.street2 ?? "", city: client.city, state: client.state, postalCode: client.postalCode, country: client.country || "US", latitude: client.latitude ?? "", longitude: client.longitude ?? "", googlePlaceId: client.googlePlaceId ?? "" },
     hours: client.businessHours,
     socialLinks: { facebook: client.facebookUrl, instagram: "", youtube: "", tiktok: "", x: "", linkedin: "", googleBusiness: "" },
-    brand: { theme: client.theme, fonts: { display: "Manrope", body: "Manrope", mono: "JetBrains Mono", googleFontsUrl: "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" }, borderRadii: { card: 24, button: 12, pill: 999 } },
+    brand: { theme: client.theme, fonts: { ...DEFAULT_FONTS, googleFontsUrl: siteFontStylesheetHref(DEFAULT_FONTS) } },
     navigationItems: [
       { id: "nav-categories", type: "categories", label: "Products", href: "", inHeader: true, inFooter: true },
       { id: "nav-visit", type: "link", label: "Visit Us", href: "/visit-us", inHeader: true, inFooter: true },
@@ -450,6 +449,12 @@ const CATEGORY_ASSET_SLOTS: Record<AstroCategory, AstroAssetSlot> = {
   "cold-plunge": "categoryColdPlunge",
   "massage-chairs": "categoryMassageChairs",
 };
+
+/**
+ * Corner rounding is fixed rather than client-configurable. The template still
+ * requires `brand.radius`, and caps card and button at 48px.
+ */
+const CANONICAL_BRAND_RADIUS = { card: 24, button: 12, pill: 999 };
 
 const BASE_CANONICAL_COLORS = {
   primary: "#16469B",
@@ -795,7 +800,7 @@ export function toCanonicalAstroClientConfig(
         favicon: isAbsoluteAsset(assets.favicon) ? assets.favicon : "/brand/favicon.svg",
         ogImage: isAbsoluteAsset(assets.ogImage) ? assets.ogImage : "/brand/og-default.png",
       },
-      radius: input.brand.borderRadii,
+      radius: CANONICAL_BRAND_RADIUS,
     },
     nav: {
       items: navItems.length > 0 ? navItems : [{ type: "categories" }],

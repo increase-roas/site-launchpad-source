@@ -33,10 +33,10 @@ export default function AuthCallback() {
 
   return (
     <main className="grid min-h-screen place-items-center bg-background px-4">
-      <section className="w-full max-w-md rounded-3xl border border-white/8 bg-card/70 p-8 text-center">
+      <section className="w-full max-w-md rounded-lg border border-border bg-card/70 p-8 text-center">
         {errorMessage ? (
           <>
-            <h1 className="text-2xl font-extrabold">
+            <h1 className="text-2xl font-semibold">
               Sign-in failed
             </h1>
             <p className="mt-3 text-muted-foreground">
@@ -44,15 +44,15 @@ export default function AuthCallback() {
             </p>
             <a
               href="/"
-              className="mt-6 inline-flex h-12 items-center rounded-xl bg-cyan-400 px-5 font-extrabold text-slate-950"
+              className="mt-6 inline-flex h-12 items-center rounded-lg bg-primary px-5 font-semibold text-primary-foreground"
             >
               Return to sign in
             </a>
           </>
         ) : (
           <>
-            <Loader2 className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
-            <h1 className="mt-5 text-2xl font-extrabold">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+            <h1 className="mt-5 text-2xl font-semibold">
               Finishing sign-in
             </h1>
             <p className="mt-3 text-muted-foreground">

@@ -4,6 +4,9 @@ import {
   type SupportedImageMimeType,
 } from "@shared/assetUpload";
 
+/** Callers need the reason a bulk upload failed, not just that it did. */
+export type AssetUploadResult = { ok: true } | { ok: false; message: string };
+
 type UploadTarget = {
   clientId: number;
   assetKind: AssetKind;

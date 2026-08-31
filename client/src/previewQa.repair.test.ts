@@ -8,40 +8,41 @@ function source(relativePath: string): string {
   return readFileSync(path.join(clientRoot, relativePath), "utf8");
 }
 
-describe("paid ads workspace error surfaces", () => {
+describe("campaign workspace error surfaces", () => {
   it("does not coerce clients.list errors into a No clients yet label", () => {
     const workspaceSource = source("contexts/WorkspaceContext.tsx");
-    const switcherSource = source("components/ClientSwitcher.tsx");
+    const listSource = source("features/clients/ClientsPage.tsx");
 
     expect(workspaceSource).toContain("clientsQuery.isError");
-    expect(switcherSource).toContain("clientSwitcherLabel");
-    expect(switcherSource).toContain("isError");
-    expect(switcherSource).not.toContain("isUnauthorized");
-    expect(switcherSource).not.toContain("Sign in again");
-    expect(switcherSource).not.toContain(
-      'clients.length ? "Choose client" : "No clients yet"',
-    );
-  });
-
-  it("fails the Funnels page immediately on workspace.get error instead of retry-spinning", () => {
-    const paidAdsSource = source("pages/PaidAdsWorkspace.tsx");
-    const errorIndex = paidAdsSource.indexOf("workspaceQuery.isError");
-    const loadingIndex = paidAdsSource.indexOf("workspaceQuery.isLoading");
-
-    expect(paidAdsSource).toContain("shouldRetryWorkspaceQuery");
-    expect(paidAdsSource).toContain("paidAdsWorkspaceErrorCopy");
-    expect(paidAdsSource).not.toContain("Sign in again");
+    expect(listSource).toContain("isError");
+    expect(listSource).toContain("Clients could not be loaded");
+    // A load failure must stay distinct from a genuinely empty workspace.
+    const errorIndex = listSource.indexOf("isError");
+    const emptyIndex = listSource.indexOf("clients.length === 0");
     expect(errorIndex).toBeGreaterThan(0);
-    expect(loadingIndex).toBeGreaterThan(errorIndex);
+    expect(emptyIndex).toBeGreaterThan(errorIndex);
+    expect(listSource).not.toContain("isUnauthorized");
+    expect(listSource).not.toContain("Sign in again");
   });
 
-  it("preserves a valid studio deep link on initial mount", () => {
-    const paidAdsSource = source("pages/PaidAdsWorkspace.tsx");
+  it("shows the campaign list failure instead of an invitation to create one", () => {
+    const campaignsSource = source("features/campaigns/CampaignsPage.tsx");
+    const errorIndex = campaignsSource.indexOf("listQuery.error");
+    const createIndex = campaignsSource.indexOf("creatable.map");
 
-    expect(paidAdsSource).toContain("const previousClientIdRef = useRef(clientId)");
-    expect(paidAdsSource).toContain(
+    // A load failure must not read as a client that simply has no campaign.
+    expect(errorIndex).toBeGreaterThan(0);
+    expect(createIndex).toBeGreaterThan(errorIndex);
+    expect(campaignsSource).not.toContain("Sign in again");
+  });
+
+  it("preserves a valid campaign deep link on initial mount", () => {
+    const campaignsSource = source("features/campaigns/CampaignsPage.tsx");
+
+    expect(campaignsSource).toContain("const previousClientIdRef = useRef(clientId)");
+    expect(campaignsSource).toContain(
       "if (previousClientIdRef.current === clientId) return;",
     );
-    expect(paidAdsSource).toContain("previousClientIdRef.current = clientId;");
+    expect(campaignsSource).toContain("previousClientIdRef.current = clientId;");
   });
 });

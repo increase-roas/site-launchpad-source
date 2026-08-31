@@ -3,8 +3,11 @@ import express, { type ErrorRequestHandler, type Express } from "express";
 import type { Server } from "node:http";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
+import { createDevelopmentAssetRoutes } from "../developmentAssetRoutes";
+import { getDevelopmentAssetStore } from "../developmentAssetStore";
 import {
   deriveRuntimeMode,
+  readAssetStorageDriver,
   type RuntimeMode,
   validateRuntimeEnv,
 } from "./env";
@@ -63,6 +66,11 @@ export async function createApp(
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "Not Found" });
   });
+
+  // Must precede the dev server, which otherwise claims every remaining route.
+  if (readAssetStorageDriver(mode) === "local") {
+    app.use(createDevelopmentAssetRoutes(getDevelopmentAssetStore()));
+  }
 
   if (mode === "development") {
     if (!options.developmentServer) {

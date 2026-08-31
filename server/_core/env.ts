@@ -7,6 +7,9 @@ const DEVELOPMENT_RUNTIME_ENV = [
   "AUTH_ADMIN_EMAILS",
   "JWT_SECRET",
   "DATABASE_URL",
+] as const;
+
+const R2_RUNTIME_ENV = [
   "R2_ACCOUNT_ID",
   "R2_ACCESS_KEY_ID",
   "R2_SECRET_ACCESS_KEY",
@@ -36,15 +39,40 @@ export function deriveRuntimeMode(nodeEnv = process.env.NODE_ENV): RuntimeMode {
   }
 }
 
-function requiredEnvNames(mode: RuntimeMode): readonly string[] {
+export type AssetStorageDriver = "r2" | "local";
+
+/**
+ * Development machines without object-storage credentials can keep uploaded
+ * assets on disk. Production always uses R2.
+ */
+export function readAssetStorageDriver(
+  mode: RuntimeMode,
+  environment: NodeJS.ProcessEnv = process.env,
+): AssetStorageDriver {
+  const value = environment.ASSET_STORAGE_DRIVER?.trim().toLowerCase();
+  if (!value || value === "r2") return "r2";
+  if (value !== "local") {
+    throw new Error('ASSET_STORAGE_DRIVER must be either "r2" or "local".');
+  }
+  if (mode === "production") {
+    throw new Error('ASSET_STORAGE_DRIVER must be "r2" in production.');
+  }
+  return "local";
+}
+
+function requiredEnvNames(
+  mode: RuntimeMode,
+  storageDriver: AssetStorageDriver,
+): readonly string[] {
+  const storageNames = storageDriver === "r2" ? R2_RUNTIME_ENV : [];
   switch (mode) {
     case "build":
     case "test":
       return [];
     case "development":
-      return DEVELOPMENT_RUNTIME_ENV;
+      return [...DEVELOPMENT_RUNTIME_ENV, ...storageNames];
     case "production":
-      return PRODUCTION_RUNTIME_ENV;
+      return [...PRODUCTION_RUNTIME_ENV, ...storageNames];
     default: {
       const exhaustiveMode: never = mode;
       return exhaustiveMode;
@@ -56,7 +84,8 @@ export function validateRuntimeEnv(
   mode: RuntimeMode,
   environment: NodeJS.ProcessEnv = process.env,
 ): void {
-  const missing = requiredEnvNames(mode).filter(
+  const storageDriver = readAssetStorageDriver(mode, environment);
+  const missing = requiredEnvNames(mode, storageDriver).filter(
     name =>
       name === "AUTH_ADMIN_EMAILS"
         ? environment[name] === undefined
@@ -71,7 +100,7 @@ export function validateRuntimeEnv(
 
   if (mode === "development" || mode === "production") {
     readSupabaseAuthConfiguration(environment);
-    readR2Configuration(environment);
+    if (storageDriver === "r2") readR2Configuration(environment);
   }
 }
 

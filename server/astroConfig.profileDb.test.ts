@@ -189,7 +189,6 @@ describe("Astro canonical integration profile database flow", () => {
         clientId: 5,
         socialLinks: defaultConfig.socialLinks,
         fonts: defaultConfig.brand.fonts,
-        borderRadii: defaultConfig.brand.borderRadii,
         navigationItems: defaultConfig.navigationItems,
         categories: defaultConfig.categories,
         financing: defaultConfig.financing,
