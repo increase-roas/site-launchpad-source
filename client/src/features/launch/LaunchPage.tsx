@@ -1,6 +1,5 @@
 import { ClientAvatar } from "@/app/ClientDirectory";
-import { Disclosure } from "@/components/dashboard/Disclosure";
-import { EmptyPanelState, PanelCard } from "@/components/dashboard/PanelCard";
+import { EmptyPanelState } from "@/components/dashboard/PanelCard";
 import { StatusBadge, type BadgeTone } from "@/components/dashboard/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
@@ -12,17 +11,16 @@ import {
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { clientDeployGaps, summarizeHomepageSections } from "@shared/astroConfig";
-import type {
-  AstroSitePreviewHistoryItem,
-  AstroSitePreviewStatusView,
-} from "@shared/astroSitePreview";
+import type { AstroSitePreviewStatusView } from "@shared/astroSitePreview";
 import type { AstroSitePublishStatusView } from "@shared/astroSitePublish";
 import {
+  AlertTriangle,
   Check,
   CheckCircle2,
-  Circle,
   ExternalLink,
   Eye,
+  Globe,
+  Info,
   Loader2,
   Rocket,
   UsersRound,
@@ -44,6 +42,15 @@ import {
   publishPollIntervalMs,
   publishStepLabel,
 } from "./astroPublishFlow";
+import {
+  isPreviewWorkerUrl,
+  previewEnvironmentAlerts,
+  productionEnvironmentAlerts,
+  resolveProductionLiveUrl,
+  sameSiteUrl,
+  type LaunchAlert,
+  type LaunchAlertTone,
+} from "./launchAlerts";
 import {
   buildLaunchChecks,
   launchBlockers,
@@ -87,8 +94,7 @@ export default function LaunchPage({ clientId }: { clientId: number }) {
   });
   const advanceInFlightRef = useRef(false);
 
-  const { preview, history, startPreview, approvePreview } =
-    useAstroPreviewJob(clientId);
+  const { preview, startPreview, approvePreview } = useAstroPreviewJob(clientId);
   const startPublishMutation = trpc.astroConfig.startPublish.useMutation({
     onSuccess: status => {
       utils.astroConfig.publishStatus.setData(queryInput, status);
@@ -148,10 +154,33 @@ export default function LaunchPage({ clientId }: { clientId: number }) {
   });
   const readiness = launchReadiness(checks);
   const blockers = launchBlockers(checks);
-  const liveUrl = publish?.liveUrl ?? summary.liveUrl;
+  const rawLiveUrl = publish?.liveUrl ?? summary.liveUrl;
+  const liveUrl = resolveProductionLiveUrl(rawLiveUrl, preview?.previewUrl);
+  const liveUrlIsPreview = Boolean(
+    rawLiveUrl &&
+      !liveUrl &&
+      (sameSiteUrl(rawLiveUrl, preview?.previewUrl) || isPreviewWorkerUrl(rawLiveUrl)),
+  );
   const publishing = isPublishActive(publish);
   const previewKind = previewEnvironmentKind(preview);
   const publishKind = publishEnvironmentKind(publish);
+  const previewAlerts = previewEnvironmentAlerts({
+    kind: previewKind,
+    error: previewError(preview),
+    warningCount: preview?.warnings.length ?? 0,
+    hasPreviewUrl: Boolean(preview?.previewUrl),
+    approved: Boolean(preview?.approvedSha),
+  });
+  const productionAlerts = productionEnvironmentAlerts({
+    kind: publishKind,
+    error: publish?.error ?? null,
+    hasLiveUrl: Boolean(liveUrl),
+    previewKind,
+    approved: Boolean(preview?.approvedSha),
+    blockers,
+    liveUrlIsPreview,
+  });
+  const pageAlerts = [...previewAlerts, ...productionAlerts];
   const next = nextLaunchAction({
     readiness,
     blockers,
@@ -204,13 +233,31 @@ export default function LaunchPage({ clientId }: { clientId: number }) {
           >
             <a href={liveUrl} target="_blank" rel="noreferrer">
               <span className="max-w-[16rem] truncate">
-                {liveHost ?? "Open live site"}
+                Production · {liveHost ?? "Open live site"}
               </span>
               <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
             </a>
           </Button>
         ) : null}
       </section>
+
+      {pageAlerts.length ? (
+        <section
+          className="launchpad-panel rounded-lg border-warning/40 p-3"
+          aria-label="Launch notices"
+        >
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            Needs attention
+          </p>
+          <ul className="grid gap-2 lg:grid-cols-2">
+            {pageAlerts.map(alert => (
+              <li key={alert.key}>
+                <EnvironmentAlert alert={alert} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <section className="launchpad-panel rounded-lg p-4">
@@ -315,6 +362,10 @@ export default function LaunchPage({ clientId }: { clientId: number }) {
           liveUrl={liveUrl}
           publish={publish}
           publishing={publishing}
+          previewKind={previewKind}
+          approved={Boolean(preview?.approvedSha)}
+          blockers={blockers}
+          liveUrlIsPreview={liveUrlIsPreview}
           startPending={startPublishMutation.isPending}
           retryPending={advancePublishMutation.isPending}
           onStart={() => startPublishMutation.mutate({ clientId })}
@@ -325,40 +376,6 @@ export default function LaunchPage({ clientId }: { clientId: number }) {
           }}
         />
       </div>
-
-      {preview?.status === "ready" && preview.previewUrl ? (
-        <PreviewViewport
-          businessName={client.businessName}
-          previewUrl={preview.previewUrl}
-        />
-      ) : null}
-
-      <PanelCard
-        title="Launch checks"
-        description="What must be true before a production publish is clean."
-        action={
-          <StatusBadge
-            tone={readinessTone(readiness)}
-            label={`${readiness.passed} of ${readiness.total} passing`}
-          />
-        }
-      >
-        <ul className="grid gap-2 sm:grid-cols-2">
-          {checks.map(check => (
-            <CheckTile key={check.key} check={check} />
-          ))}
-        </ul>
-      </PanelCard>
-
-      {history.length > 1 ? (
-        <Disclosure
-          title="Preview history"
-          meta={`${history.length} jobs`}
-          bodyClassName="p-0"
-        >
-          <HistoryTable history={history} />
-        </Disclosure>
-      ) : null}
     </div>
   );
 }
@@ -383,10 +400,17 @@ function PreviewEnvironment({
   const currentPhase = preview
     ? previewPipelinePhase(preview.step)
     : "prepare";
+  const alerts = previewEnvironmentAlerts({
+    kind,
+    error: previewError(preview),
+    warningCount: preview?.warnings.length ?? 0,
+    hasPreviewUrl: Boolean(preview?.previewUrl),
+    approved: Boolean(preview?.approvedSha),
+  });
 
   return (
     <EnvironmentCard
-      eyebrow="Preview"
+      lane="preview"
       title={environmentTitle(kind, host, businessName)}
       status={previewStatus(kind)}
       host={host}
@@ -396,8 +420,8 @@ function PreviewEnvironment({
       currentPhase={currentPhase}
       percent={preview ? previewPercent(preview.progress) : 0}
       currentStep={preview ? previewStepLabel(preview.step) : null}
-      error={previewError(preview)}
-      warnings={preview?.warnings ?? []}
+      alerts={alerts}
+      warningMessages={preview?.warnings.map(warning => warning.message) ?? []}
       actions={
         <>
           {(kind === "ready" || kind === "stale") && preview?.previewUrl ? (
@@ -416,6 +440,7 @@ function PreviewEnvironment({
           <Button
             type="button"
             size="sm"
+            variant={kind === "idle" || kind === "failed" || kind === "stale" ? "default" : "outline"}
             disabled={generating}
             onClick={() => startPreview.mutate({ clientId })}
             className="h-9 gap-1.5 text-xs font-semibold"
@@ -423,7 +448,7 @@ function PreviewEnvironment({
             {generating ? (
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             ) : (
-              <Rocket className="h-4 w-4" aria-hidden="true" />
+              <Eye className="h-4 w-4" aria-hidden="true" />
             )}
             {previewActionLabel(preview)}
           </Button>
@@ -461,6 +486,10 @@ function ProductionEnvironment({
   liveUrl,
   publish,
   publishing,
+  previewKind,
+  approved,
+  blockers,
+  liveUrlIsPreview,
   startPending,
   retryPending,
   onStart,
@@ -469,6 +498,10 @@ function ProductionEnvironment({
   liveUrl: string | null | undefined;
   publish: AstroSitePublishStatusView | null | undefined;
   publishing: boolean;
+  previewKind: PreviewEnvironmentKind;
+  approved: boolean;
+  blockers: LaunchCheck[];
+  liveUrlIsPreview: boolean;
   startPending: boolean;
   retryPending: boolean;
   onStart: () => void;
@@ -480,10 +513,19 @@ function ProductionEnvironment({
   const currentPhase = publish
     ? publishPipelinePhase(publish.step)
     : "prepare";
+  const alerts = productionEnvironmentAlerts({
+    kind,
+    error: publish?.error ?? null,
+    hasLiveUrl: Boolean(liveUrl),
+    previewKind,
+    approved,
+    blockers,
+    liveUrlIsPreview,
+  });
 
   return (
     <EnvironmentCard
-      eyebrow="Production"
+      lane="production"
       title={productionTitle(kind, host)}
       status={publishStatus(kind)}
       host={host}
@@ -497,8 +539,8 @@ function ProductionEnvironment({
       currentPhase={currentPhase}
       percent={publish ? publishPercent(publish.progress) : 0}
       currentStep={publish ? publishStepLabel(publish.step) : null}
-      error={publish?.error}
-      warnings={[]}
+      alerts={alerts}
+      warningMessages={[]}
       actions={
         <>
           {liveUrl ? (
@@ -509,7 +551,7 @@ function ProductionEnvironment({
               className="h-9 gap-1.5 text-xs font-semibold"
             >
               <a href={liveUrl} target="_blank" rel="noreferrer">
-                <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                <Globe className="h-4 w-4" aria-hidden="true" />
                 Open
               </a>
             </Button>
@@ -555,7 +597,7 @@ function ProductionEnvironment({
 }
 
 function EnvironmentCard({
-  eyebrow,
+  lane,
   title,
   status,
   host,
@@ -565,12 +607,12 @@ function EnvironmentCard({
   currentPhase,
   percent,
   currentStep,
-  error,
-  warnings,
+  alerts,
+  warningMessages,
   actions,
   footer,
 }: {
-  eyebrow: string;
+  lane: "preview" | "production";
   title: string;
   status: { tone: BadgeTone; label: string };
   host: string | null;
@@ -580,30 +622,59 @@ function EnvironmentCard({
   currentPhase: LaunchPipelinePhase;
   percent: number;
   currentStep: string | null;
-  error: string | null | undefined;
-  warnings: readonly { code: string; message: string }[];
+  alerts: LaunchAlert[];
+  warningMessages: readonly string[];
   actions: ReactNode;
   footer: ReactNode;
 }) {
+  const LaneIcon = lane === "preview" ? Eye : Globe;
+  const laneCopy = lane === "preview"
+    ? { label: "Preview", caption: "Staging Worker" }
+    : { label: "Production", caption: "Live website" };
+
   return (
-    <section className="launchpad-panel flex flex-col overflow-hidden rounded-lg">
-      <header className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            {eyebrow}
-          </p>
-          {href && host ? (
-            <a
-              href={href}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-1 block truncate text-sm font-semibold leading-tight hover:underline"
-            >
-              {title}
-            </a>
-          ) : (
-            <h2 className="mt-1 truncate text-sm font-semibold leading-tight">{title}</h2>
-          )}
+    <section
+      className={cn(
+        "launchpad-panel flex flex-col overflow-hidden rounded-lg border-l-[3px]",
+        laneRailClass(lane, jobKind, alerts),
+      )}
+    >
+      <header
+        className={cn(
+          "flex items-start justify-between gap-3 border-b border-border px-4 py-3",
+          lane === "preview" ? "bg-info/[0.04]" : "bg-success/[0.04]",
+        )}
+      >
+        <div className="flex min-w-0 items-start gap-3">
+          <span
+            className={cn(
+              "grid h-9 w-9 shrink-0 place-items-center rounded-lg",
+              lane === "preview" ? "bg-info/10 text-info" : "bg-success/10 text-success",
+            )}
+          >
+            <LaneIcon className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              {laneCopy.label}
+              <span className="mx-1.5 font-normal text-border">·</span>
+              <span className="font-medium normal-case tracking-normal">
+                {laneCopy.caption}
+              </span>
+            </p>
+            {href && host ? (
+              <a
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 block truncate text-sm font-semibold leading-tight hover:underline"
+              >
+                <HostMark host={host} lane={lane} />
+              </a>
+            ) : (
+              <h2 className="mt-1 truncate text-sm font-semibold leading-tight">{title}</h2>
+            )}
+          </div>
         </div>
         <StatusBadge tone={status.tone} label={status.label} dot />
       </header>
@@ -618,12 +689,12 @@ function EnvironmentCard({
               <div>
                 <div
                   className="h-1.5 overflow-hidden rounded-full bg-muted"
-            role="img"
+                  role="img"
                   aria-label={`${percent}% complete`}
-          >
-            <div
-              className={cn(
-                "h-full rounded-full transition-[width]",
+                >
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-[width]",
                       jobKind === "failed" ? "bg-destructive" : "bg-primary",
                     )}
                     style={{ width: `${percent}%` }}
@@ -638,28 +709,15 @@ function EnvironmentCard({
             ) : null}
           </div>
         ) : (
-          <p className="rounded-lg border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
-            No deployment in this environment yet.
-          </p>
+          <EmptyEnvironment lane={lane} />
         )}
 
-        {error ? (
-          <p className="rounded-lg border border-destructive/25 bg-destructive/[0.05] p-3 text-xs leading-relaxed text-destructive">
-            {error}
-          </p>
-        ) : null}
-
-        {warnings.length ? (
-          <div className="rounded-lg border border-border bg-muted/40 p-3">
-            <p className="text-xs font-semibold">
-              {warnings.length} setup warning{warnings.length === 1 ? "" : "s"}
-            </p>
-            <ul className="mt-1 space-y-1 text-xs text-muted-foreground">
-              {warnings.map(warning => (
-                <li key={`${warning.code}-${warning.message}`}>{warning.message}</li>
-              ))}
-            </ul>
-          </div>
+        {warningMessages.length && alerts.some(alert => alert.key === "preview-warnings") ? (
+          <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+            {warningMessages.map(message => (
+              <li key={message}>{message}</li>
+            ))}
+          </ul>
         ) : null}
 
         <div className="mt-auto flex flex-wrap items-center gap-2">{actions}</div>
@@ -667,6 +725,94 @@ function EnvironmentCard({
       </div>
     </section>
   );
+}
+
+function EmptyEnvironment({ lane }: { lane: "preview" | "production" }) {
+  if (lane === "preview") {
+    return (
+      <div className="rounded-lg border border-dashed border-info/30 bg-info/[0.04] px-3 py-4">
+        <p className="text-xs font-semibold text-foreground">No staging site yet</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          Generate a preview to review copy, media, and branding on a Cloudflare Worker that
+          does not affect the live site.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-dashed border-success/30 bg-success/[0.04] px-3 py-4">
+      <p className="text-xs font-semibold text-foreground">No live website yet</p>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+        Production is the customer-facing Worker. Publish only after the preview looks right
+        and is approved.
+      </p>
+    </div>
+  );
+}
+
+function EnvironmentAlert({ alert }: { alert: LaunchAlert }) {
+  const Icon = alertIcon(alert.tone);
+  return (
+    <div
+      role="alert"
+      className={cn(
+        "flex items-start gap-2.5 rounded-lg border px-3 py-2.5",
+        alertSurfaceClass(alert.tone),
+      )}
+    >
+      <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+      <div className="min-w-0">
+        <p className="text-xs font-semibold leading-tight">{alert.title}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-current/80">{alert.detail}</p>
+      </div>
+    </div>
+  );
+}
+
+function alertIcon(tone: LaunchAlertTone) {
+  switch (tone) {
+    case "danger":
+      return AlertTriangle;
+    case "warning":
+      return AlertTriangle;
+    case "info":
+      return Info;
+    default: {
+      const exhaustive: never = tone;
+      return exhaustive;
+    }
+  }
+}
+
+function alertSurfaceClass(tone: LaunchAlertTone): string {
+  switch (tone) {
+    case "danger":
+      return "border-destructive/30 bg-destructive/[0.06] text-destructive";
+    case "warning":
+      return "border-warning/35 bg-warning/[0.08] text-warning";
+    case "info":
+      return "border-info/30 bg-info/[0.06] text-info";
+    default: {
+      const exhaustive: never = tone;
+      return exhaustive;
+    }
+  }
+}
+
+function laneRailClass(
+  lane: "preview" | "production",
+  jobKind: PipelineJobKind,
+  alerts: LaunchAlert[],
+): string {
+  if (alerts.some(alert => alert.tone === "danger") || jobKind === "failed") {
+    return "border-l-destructive";
+  }
+  if (alerts.some(alert => alert.tone === "warning")) {
+    return "border-l-warning";
+  }
+  if (lane === "preview") return "border-l-info";
+  return jobKind === "complete" ? "border-l-success" : "border-l-primary";
 }
 
 function PipelineStepper({
@@ -743,112 +889,6 @@ function PhaseMark({
   }
 }
 
-function PreviewViewport({
-  businessName,
-  previewUrl,
-}: {
-  businessName: string;
-  previewUrl: string;
-}) {
-  const host = clientSiteHost(previewUrl);
-
-  return (
-    <section className="launchpad-panel overflow-hidden rounded-lg">
-      <header className="flex items-center gap-3 border-b border-border bg-muted/40 px-3 py-2">
-        <span className="flex gap-1" aria-hidden="true">
-          <span className="h-2 w-2 rounded-full bg-border" />
-          <span className="h-2 w-2 rounded-full bg-border" />
-          <span className="h-2 w-2 rounded-full bg-border" />
-        </span>
-        <p className="min-w-0 flex-1 truncate rounded-md border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground">
-          {host ?? previewUrl}
-        </p>
-        <Button asChild size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs font-semibold">
-          <a href={previewUrl} target="_blank" rel="noreferrer">
-            Open
-                <ExternalLink className="h-3 w-3" aria-hidden="true" />
-              </a>
-        </Button>
-      </header>
-      <iframe
-        title={`${businessName} preview`}
-        src={previewUrl}
-        className="h-[32rem] w-full bg-background"
-      />
-    </section>
-  );
-}
-
-function CheckTile({ check }: { check: LaunchCheck }) {
-  return (
-    <li
-      className={cn(
-        "flex items-start gap-3 rounded-lg border px-3 py-3",
-        check.state === "fail"
-          ? "border-warning/35 bg-warning/[0.04]"
-          : check.state === "pass"
-            ? "border-border bg-card"
-            : "border-border bg-muted/30",
-      )}
-    >
-      <span className="mt-0.5">
-        {check.state === "pass" ? (
-          <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
-        ) : check.state === "fail" ? (
-          <Circle className="h-4 w-4 text-warning" aria-hidden="true" />
-        ) : (
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
-        )}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium leading-tight">{check.label}</p>
-        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-          {check.detail}
-        </p>
-      </div>
-      {check.state === "fail" ? (
-        <Button
-          asChild
-          variant="outline"
-          size="sm"
-          className="h-7 shrink-0 text-xs font-semibold"
-        >
-          <Link href={check.fixHref}>Fix</Link>
-        </Button>
-      ) : null}
-    </li>
-  );
-}
-
-function HistoryTable({ history }: { history: AstroSitePreviewHistoryItem[] }) {
-  return (
-    <table className="w-full text-left text-xs">
-      <thead className="border-b border-border bg-muted/40 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-        <tr>
-          <th className="px-4 py-2 font-semibold">Job</th>
-          <th className="px-4 py-2 font-semibold">Revision</th>
-          <th className="px-4 py-2 font-semibold">Status</th>
-          <th className="px-4 py-2 font-semibold">Commit</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-border">
-        {history.map((job, index) => (
-          <tr key={job.id} className="text-muted-foreground">
-            <td className="px-4 py-2.5 font-semibold text-foreground">
-              Preview #{history.length - index}
-            </td>
-            <td className="px-4 py-2.5 tabular-nums">{job.clientRevision}</td>
-            <td className="px-4 py-2.5 capitalize">{job.status}</td>
-            <td className="px-4 py-2.5 font-mono">
-              {job.commitSha ? job.commitSha.slice(0, 9) : "—"}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
 function RepoLink({ href }: { href: string }) {
   return (
     <a
@@ -865,6 +905,27 @@ function RepoLink({ href }: { href: string }) {
 
 function Dot() {
   return <span aria-hidden="true">·</span>;
+}
+
+function HostMark({
+  host,
+  lane,
+}: {
+  host: string;
+  lane: "preview" | "production";
+}) {
+  const marker = "-preview";
+  const index = host.indexOf(marker);
+  if (lane === "preview" && index >= 0) {
+    return (
+      <>
+        {host.slice(0, index)}
+        <span className="text-info">{marker}</span>
+        {host.slice(index + marker.length)}
+      </>
+    );
+  }
+  return host;
 }
 
 function readinessPercent(readiness: LaunchReadiness): number {
