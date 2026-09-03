@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { sanitizeClientFolder } from "../shared/client";
 import type { R2ObjectStore } from "./r2";
 
 /**
@@ -20,6 +21,22 @@ const CONTENT_TYPE_BY_EXTENSION: Record<string, string> = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
 };
+
+export function clientAssetStoragePrefix(client: { id: number; shortName: string }): string {
+  const folder = sanitizeClientFolder(client.shortName) || `client-${client.id}`;
+  return `clients/${client.id}-${folder}`;
+}
+
+export async function removeLocalAssetPrefix(
+  rootDirectory: string,
+  prefix: string,
+): Promise<void> {
+  if (!isSafeStorageKey(prefix)) return;
+  const root = path.resolve(rootDirectory);
+  const target = path.resolve(root, ...prefix.split("/"));
+  if (target === root || !target.startsWith(root + path.sep)) return;
+  await rm(target, { recursive: true, force: true });
+}
 
 export function isSafeStorageKey(key: string): boolean {
   if (!key || key.length > MAX_STORAGE_KEY_LENGTH) return false;

@@ -75,6 +75,23 @@ describe("direct internal workspace access", () => {
     expect(layoutSource).toContain("<WorkspaceProvider>");
   });
 
+  it("deletes a client from the factory list after confirmation", () => {
+    expect(source("components/clients/ClientsTable.tsx")).toContain("onDeleteRequest");
+    expect(source("components/clients/ClientsTable.tsx")).toContain("Delete");
+    const page = source("features/clients/ClientsPage.tsx");
+    expect(page).toContain("clients.delete");
+    expect(page).toContain("AlertDialog");
+  });
+
+  it("starts a factory preview instead of opening a published live URL", () => {
+    const layoutSource = source("app/AppShell.tsx");
+
+    expect(layoutSource).toContain("openFactoryPreview");
+    expect(layoutSource).toContain("startPreview.mutate");
+    expect(layoutSource).not.toContain("href={previewUrl}");
+    expect(layoutSource).not.toContain("clientPreviewHref");
+  });
+
   it("loads public R2 previews directly without protected storage fetches", () => {
     const previewSources = [
       source("components/astro/media/MediaSlotRail.tsx"),

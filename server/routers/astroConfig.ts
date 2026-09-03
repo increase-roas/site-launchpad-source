@@ -13,6 +13,13 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { toClientAstroConfigView, toGeneratedConfigExport } from "../secretRedaction";
 import { mapRouterError } from "../trpcErrors";
 import {
+  advancePreview,
+  approvePreview,
+  previewHistory,
+  previewStatus,
+  startPreview,
+} from "../preview/astroSitePreview";
+import {
   advancePublish,
   publishStatus,
   startPublish,
@@ -66,6 +73,48 @@ export const astroConfigRouter = router({
       return toGeneratedConfigExport("client.config.ts", view.generatedConfig);
     } catch (error) {
       throw mapRouterError(error, "Generated client config could not be exported.");
+    }
+  }),
+
+  startPreview: protectedProcedure.input(clientIdInput).mutation(async ({ input }) => {
+    try {
+      return await startPreview(input.clientId);
+    } catch (error) {
+      throw mapRouterError(error, "Website preview could not be started.");
+    }
+  }),
+
+  advancePreview: protectedProcedure
+    .input(clientIdInput.extend({ retryFailed: z.boolean().optional() }))
+    .mutation(async ({ input }) => {
+      try {
+        return await advancePreview(input.clientId, input.retryFailed === true);
+      } catch (error) {
+        throw mapRouterError(error, "Website preview could not be advanced.");
+      }
+    }),
+
+  previewStatus: protectedProcedure.input(clientIdInput).query(async ({ input }) => {
+    try {
+      return await previewStatus(input.clientId);
+    } catch (error) {
+      throw mapRouterError(error, "Website preview status could not be loaded.");
+    }
+  }),
+
+  previewHistory: protectedProcedure.input(clientIdInput).query(async ({ input }) => {
+    try {
+      return await previewHistory(input.clientId);
+    } catch (error) {
+      throw mapRouterError(error, "Website preview history could not be loaded.");
+    }
+  }),
+
+  approvePreview: protectedProcedure.input(clientIdInput).mutation(async ({ input }) => {
+    try {
+      return await approvePreview(input.clientId);
+    } catch (error) {
+      throw mapRouterError(error, "Website preview could not be approved.");
     }
   }),
 

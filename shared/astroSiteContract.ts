@@ -3,14 +3,14 @@ import astroSiteManifestJson from "../server/templates/astro-site/launchpad.temp
 
 export const ASTRO_SITE_TEMPLATE_KEY = "htl-astro-website" as const;
 export const ASTRO_SITE_APPROVED_SOURCE_SHA =
-  "2ced3065460a31a497df96b214e2a0f0ace27f3d" as const;
+  "97b41767d21e00b3f3e7da92acb067cd35dfeb21" as const;
 
 export const astroSiteManifestSchema = z.strictObject({
   schemaVersion: z.literal(1),
   contractVersion: z.literal(1),
   templateKey: z.literal(ASTRO_SITE_TEMPLATE_KEY),
   name: z.literal("HTL Astro Website"),
-  repo: z.literal("increaseroasir/32-htl-website-template-astrobuild"),
+  repo: z.literal("increase-roas/32-htl-website-template-astrobuild"),
   defaultBranch: z.literal("main"),
   type: z.literal("website"),
   framework: z.literal("astro"),

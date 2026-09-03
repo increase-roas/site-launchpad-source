@@ -16,6 +16,11 @@ const mocks = vi.hoisted(() => ({
   startPublish: vi.fn(),
   advancePublish: vi.fn(),
   publishStatus: vi.fn(),
+  startPreview: vi.fn(),
+  advancePreview: vi.fn(),
+  previewStatus: vi.fn(),
+  previewHistory: vi.fn(),
+  approvePreview: vi.fn(),
 }));
 
 vi.mock("./astroConfigDb", () => ({
@@ -27,6 +32,13 @@ vi.mock("./publisher/publishAstroSite", () => ({
   startPublish: mocks.startPublish,
   advancePublish: mocks.advancePublish,
   publishStatus: mocks.publishStatus,
+}));
+vi.mock("./preview/astroSitePreview", () => ({
+  startPreview: mocks.startPreview,
+  advancePreview: mocks.advancePreview,
+  previewStatus: mocks.previewStatus,
+  previewHistory: mocks.previewHistory,
+  approvePreview: mocks.approvePreview,
 }));
 import { astroConfigRouter } from "./routers/astroConfig";
 
@@ -241,5 +253,56 @@ describe("authenticated Astro config procedures", () => {
     ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     expect(mocks.startPublish).not.toHaveBeenCalled();
     expect(mocks.advancePublish).not.toHaveBeenCalled();
+  });
+
+  it("starts, resumes, reads, and approves the dedicated website preview job", async () => {
+    const previewView = {
+      id: "22222222-2222-4222-8222-222222222222",
+      status: "ready" as const,
+      step: "ready" as const,
+      progress: { completed: 8, total: 8 },
+      clientRevision: 27,
+      currentRevision: 27,
+      stale: false,
+      templateSha: "2ced3065460a31a497df96b214e2a0f0ace27f3d",
+      commitSha: "9ef83ab672aaaaaaaaaaaaaaaaaaaaaaaaaa",
+      previewUrl: "https://website-abc-5-preview.example.workers.dev",
+      repositoryName: "website-abc-5",
+      workerName: "website-abc-5-preview",
+      repositoryUrl: "https://github.com/example/website-abc-5",
+      warnings: [],
+      error: null,
+      errorCode: null,
+      approvedSha: null,
+      approvedAt: null,
+      dispatchRequestedAt: null,
+      workflowRunId: "200",
+      workflowStatus: "success",
+      completedAt: new Date("2026-09-02T12:00:00.000Z"),
+      createdAt: new Date("2026-09-02T11:00:00.000Z"),
+      updatedAt: new Date("2026-09-02T12:00:00.000Z"),
+    };
+    mocks.startPreview.mockResolvedValue({ ...previewView, status: "pending", step: "create_repository" });
+    mocks.advancePreview.mockResolvedValue(previewView);
+    mocks.previewStatus.mockResolvedValue(previewView);
+    mocks.previewHistory.mockResolvedValue([previewView]);
+    mocks.approvePreview.mockResolvedValue({
+      ...previewView,
+      approvedSha: previewView.commitSha,
+    });
+
+    const caller = astroConfigRouter.createCaller(context());
+    await caller.startPreview({ clientId: 5 });
+    const advanced = await caller.advancePreview({ clientId: 5, retryFailed: true });
+    const status = await caller.previewStatus({ clientId: 5 });
+    const history = await caller.previewHistory({ clientId: 5 });
+    const approved = await caller.approvePreview({ clientId: 5 });
+
+    expect(mocks.startPreview).toHaveBeenCalledWith(5);
+    expect(mocks.advancePreview).toHaveBeenCalledWith(5, true);
+    expect(status.previewUrl).toBe(previewView.previewUrl);
+    expect(history).toHaveLength(1);
+    expect(approved.approvedSha).toBe(previewView.commitSha);
+    expect(advanced.commitSha).toBe(previewView.commitSha);
   });
 });

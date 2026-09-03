@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   astroClientConfigs,
   clients,
@@ -241,6 +241,7 @@ export async function getAstroConfigView(clientId: number) {
     integrationProfile: integrationProfile.dto,
     generatedConfig,
     generatedAt: configRows[0]?.generatedAt ?? null,
+    websiteRevision: configRows[0]?.websiteRevision ?? 0,
   };
 }
 
@@ -336,6 +337,7 @@ export async function saveAstroConfig(clientId: number, input: AstroClientConfig
         integrations: normalized.integrations,
         generatedConfigEncrypted: encryptSetupValue(generatedConfig),
         generatedAt,
+        websiteRevision: 1,
       })
       .onConflictDoUpdate({
         target: postgresConflictTargets.astroClientConfigs,
@@ -349,6 +351,7 @@ export async function saveAstroConfig(clientId: number, input: AstroClientConfig
           integrations: normalized.integrations,
           generatedConfigEncrypted: encryptSetupValue(generatedConfig),
           generatedAt,
+          websiteRevision: sql`${astroClientConfigs.websiteRevision} + 1`,
         }),
       });
   });

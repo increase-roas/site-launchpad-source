@@ -448,6 +448,60 @@ describe("GitHub publisher client", () => {
     expect(JSON.stringify(requests)).not.toContain("secret-value");
   });
 
+  it("puts repository Actions secrets as sealed boxes and never sends plaintext", async () => {
+    const encryptActionsSecret = vi.fn(async (publicKey: string, plaintext: string) => {
+      expect(publicKey).toBe("public-key-bytes");
+      if (plaintext === "publisher-cloudflare-token") return "sealed-box-for-token";
+      if (plaintext === "033f78dee4e7b173f5dd2d3a3b69c3b5") return "sealed-box-for-account";
+      throw new Error("Unexpected secret plaintext.");
+    });
+    const { fetchFn, requests } = createMockFetch([
+      jsonResponse({ key_id: "key-123", key: "public-key-bytes" }),
+      new Response(null, { status: 204 }),
+      new Response(null, { status: 201 }),
+    ]);
+    const client = createGitHubApiClient({
+      token: "opaque-test-credential",
+      fetchFn,
+      encryptActionsSecret,
+    });
+
+    await expect(
+      client.putRepositoryActionsSecrets({
+        owner: "increase-roas",
+        repository: "website-theme-matrix-qa-7",
+        secrets: {
+          CLOUDFLARE_API_TOKEN: "publisher-cloudflare-token",
+          CLOUDFLARE_ACCOUNT_ID: "033f78dee4e7b173f5dd2d3a3b69c3b5",
+        },
+        signal: abortSignal(),
+      })
+    ).resolves.toEqual({
+      updatedSecretNames: ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"],
+    });
+
+    expect(requests[0]?.url).toBe(
+      "https://api.github.com/repos/increase-roas/website-theme-matrix-qa-7/actions/secrets/public-key"
+    );
+    expect(requests[1]?.url).toBe(
+      "https://api.github.com/repos/increase-roas/website-theme-matrix-qa-7/actions/secrets/CLOUDFLARE_API_TOKEN"
+    );
+    expect(requests[1]?.init?.method).toBe("PUT");
+    expect(parseRequestBody(requests[1])).toEqual({
+      encrypted_value: "sealed-box-for-token",
+      key_id: "key-123",
+    });
+    expect(requests[2]?.url).toBe(
+      "https://api.github.com/repos/increase-roas/website-theme-matrix-qa-7/actions/secrets/CLOUDFLARE_ACCOUNT_ID"
+    );
+    expect(parseRequestBody(requests[2])).toEqual({
+      encrypted_value: "sealed-box-for-account",
+      key_id: "key-123",
+    });
+    expect(JSON.stringify(requests)).not.toContain("publisher-cloudflare-token");
+    expect(encryptActionsSecret).toHaveBeenCalledTimes(2);
+  });
+
   it("reads the publisher managed-file manifest as text and tolerates absence", async () => {
     const manifest = '{"version":1,"paths":["package.json"]}\n';
     const { fetchFn } = createMockFetch([

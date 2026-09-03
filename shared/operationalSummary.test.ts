@@ -43,6 +43,22 @@ describe("operational launch summary", () => {
     expect(summary.liveUrl).toBe("https://northland.example.workers.dev");
   });
 
+  it("does not treat a published funnel as the website live URL", () => {
+    const summary = buildOperationalSummary({
+      client: validClientInput,
+      presentAssetSlots: ASSET_SLOT_VALUES,
+      websiteIntegrationsReady: true,
+      funnelIntegrationsReady: true,
+      websitePublish: null,
+      funnelPublishes: [
+        { status: "published", liveUrl: "https://funnel-theme-matrix-qa-1.increase-roas.workers.dev/" },
+      ],
+    });
+    expect(summary.liveUrl).toBeNull();
+    expect(summary.items.find(item => item.key === "websiteLive")?.complete).toBe(false);
+    expect(summary.items.find(item => item.key === "funnelsLive")?.complete).toBe(true);
+  });
+
   it("keeps photos inside website setup and does not list them on the board", () => {
     const summary = buildOperationalSummary({
       client: validClientInput,

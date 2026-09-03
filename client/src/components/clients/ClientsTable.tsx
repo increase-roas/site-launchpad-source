@@ -77,6 +77,7 @@ type ClientsTableProps = {
   direction: ClientSortDirection;
   onSort: (sort: ClientSortKey) => void;
   onOpen: (clientId: number) => void;
+  onDeleteRequest: (client: ClientBoardItem) => void;
   clientHref: (clientId: number) => string;
 };
 
@@ -86,6 +87,7 @@ export function ClientsTable({
   direction,
   onSort,
   onOpen,
+  onDeleteRequest,
   clientHref,
 }: ClientsTableProps) {
   const handleRowClick = (
@@ -340,6 +342,13 @@ export function ClientsTable({
                             </DropdownMenuItem>
                           </>
                         ) : null}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onSelect={() => onDeleteRequest({ client, operationalSummary })}
+                        >
+                          Delete
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>

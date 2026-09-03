@@ -14,7 +14,9 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { WorkspaceProvider, useWorkspace } from "@/contexts/WorkspaceContext";
-import { clientStatusTone } from "@/lib/clientBoard";
+import { clientLiveSiteHref, clientStatusTone } from "@/lib/clientBoard";
+import { useAstroPreviewJob } from "@/features/launch/useAstroPreviewJob";
+import { isPreviewActive, previewActionLabel } from "@/features/launch/astroPreviewFlow";
 import { cn } from "@/lib/utils";
 import {
   configurationRoute,
@@ -47,7 +49,6 @@ import {
   X,
 } from "lucide-react";
 import { ReactNode, useState } from "react";
-import { toast } from "sonner";
 import { Link, useLocation } from "wouter";
 
 const SECTION_ICONS: Record<PrimarySection, typeof UsersRound> = {
@@ -235,8 +236,18 @@ function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
   const [location] = useLocation();
   const clientScoped = isClientScopedLocation(location);
 
-  const previewUrl =
-    selectedClient?.operationalSummary.liveUrl || selectedClient?.client.websiteUrl;
+  const { preview, startPreview } = useAstroPreviewJob(selectedClientId);
+  const liveSiteUrl = clientLiveSiteHref({
+    liveUrl: selectedClient?.operationalSummary.liveUrl,
+  });
+  const openFactoryPreview = () => {
+    if (!selectedClientId) return;
+    if (preview?.status === "ready" && preview.previewUrl && !preview.stale) {
+      window.open(preview.previewUrl, "_blank", "noreferrer");
+      return;
+    }
+    startPreview.mutate({ clientId: selectedClientId });
+  };
 
   return (
     <header
@@ -259,26 +270,20 @@ function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
           <CurrentClient />
 
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
-            {previewUrl ? (
-              <Button asChild size="sm" className="h-9 gap-1.5 text-xs font-semibold">
-                <a href={previewUrl} target="_blank" rel="noreferrer">
-                  <Eye className="h-4 w-4" aria-hidden="true" />
-                  <span className="hidden sm:inline">Preview website</span>
-                </a>
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                size="sm"
-                className="h-9 gap-1.5 text-xs font-semibold"
-                onClick={() =>
-                  toast.info("This client has no preview or website address yet.")
-                }
-              >
-                <Eye className="h-4 w-4" aria-hidden="true" />
-                <span className="hidden sm:inline">Preview website</span>
-              </Button>
-            )}
+            <Button
+              type="button"
+              size="sm"
+              className="h-9 gap-1.5 text-xs font-semibold"
+              disabled={!selectedClientId || startPreview.isPending || isPreviewActive(preview)}
+              onClick={openFactoryPreview}
+            >
+              <Eye className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">
+                {preview?.status === "ready" && preview.previewUrl && !preview.stale
+                  ? "Open Preview"
+                  : previewActionLabel(preview)}
+              </span>
+            </Button>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -312,9 +317,9 @@ function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
                         Integrations
                       </Link>
                     </DropdownMenuItem>
-                    {previewUrl ? (
+                    {liveSiteUrl ? (
                       <DropdownMenuItem asChild>
-                        <a href={previewUrl} target="_blank" rel="noreferrer">
+                        <a href={liveSiteUrl} target="_blank" rel="noreferrer">
                           <ExternalLink className="mr-2 h-4 w-4" aria-hidden="true" />
                           Open live site
                         </a>

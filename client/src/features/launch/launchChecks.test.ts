@@ -97,6 +97,25 @@ describe("pre-launch checks", () => {
     expect(secrets?.fixHref).toBe("/workspace/5/integrations");
   });
 
+  it("does not treat an unpublished website as a reason to block Publish", () => {
+    const checks = buildLaunchChecks({
+      clientId: 5,
+      summary: summary({
+        items: [
+          { key: "businessInformation", label: "Business", complete: true },
+          { key: "websiteSetup", label: "Website setup", complete: true },
+          { key: "websiteIntegrations", label: "Website integrations", complete: true },
+          { key: "websiteLive", label: "Website live", complete: false },
+        ],
+      }),
+      homepageSections: { enabled: 1, total: 2 },
+      clientDeploy: { gaps: [] },
+    });
+
+    expect(checks.map(check => check.key)).not.toContain("websiteLive");
+    expect(launchReadiness(checks).ready).toBe(true);
+  });
+
   it("raises no check for campaign readiness while campaigns are deferred", () => {
     // Otherwise a website could never publish: the campaign items can only be
     // completed from a screen operators cannot reach in this phase.

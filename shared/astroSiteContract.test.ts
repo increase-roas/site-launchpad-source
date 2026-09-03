@@ -26,7 +26,7 @@ describe("Astro website template contract", () => {
       schemaVersion: 1,
       contractVersion: 1,
       templateKey: "htl-astro-website",
-      repo: "increaseroasir/32-htl-website-template-astrobuild",
+      repo: "increase-roas/32-htl-website-template-astrobuild",
       defaultBranch: "main",
       type: "website",
       framework: "astro",

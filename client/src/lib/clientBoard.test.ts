@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ThemeValue } from "@shared/client";
 import type { OperationalStatus } from "@shared/operationalSummary";
 import {
@@ -8,6 +8,9 @@ import {
   countClientsByStatus,
   DEFAULT_CLIENT_BOARD_QUERY,
   filterClients,
+  assignPreviewTab,
+  clientLiveSiteHref,
+  clientPreviewHref,
   clientSiteHost,
   clientThemeLabel,
   formatClientUpdatedAt,
@@ -248,6 +251,37 @@ describe("client board", () => {
     expect(clientThemeLabel("retro")).toBeNull();
     expect(clientThemeLabel(null)).toBeNull();
     expect(clientThemeLabel(undefined)).toBeNull();
+  });
+
+  it("does not treat a published funnel or example.com as website preview", () => {
+    expect(
+      clientPreviewHref({
+        liveUrl: "https://funnel-theme-matrix-qa-1.increase-roas.workers.dev/",
+        websiteUrl: "https://example.com",
+      }),
+    ).toBeNull();
+    expect(
+      clientPreviewHref({
+        liveUrl: "https://the-hot-tub.workers.dev",
+        websiteUrl: "https://thehottub.com",
+        factoryPreviewUrl: "http://localhost:4321/",
+      }),
+    ).toBe("http://localhost:4321/");
+    expect(
+      clientLiveSiteHref({
+        liveUrl: "https://the-hot-tub.increase-roas.workers.dev/",
+      }),
+    ).toBe("https://the-hot-tub.increase-roas.workers.dev/");
+    expect(clientLiveSiteHref({ liveUrl: "https://example.com" })).toBeNull();
+  });
+
+  it("navigates a tab opened from the preview click", () => {
+    const replace = vi.fn();
+    assignPreviewTab(
+      { closed: false, location: { replace } } as unknown as Window,
+      "http://localhost:4321/",
+    );
+    expect(replace).toHaveBeenCalledWith("http://localhost:4321/");
   });
 
   it("reads the host of a published site and tolerates a broken address", () => {

@@ -51,7 +51,10 @@ export function buildLaunchChecks(input: LaunchChecksInput): LaunchCheck[] {
   const runtime = summary.runtimeConfiguration;
 
   return [
-    ...trackedOperationalItems(summary).map(item => ({
+    // websiteLive is the outcome of Publish, not a prerequisite.
+    ...trackedOperationalItems(summary)
+    .filter(item => item.key !== "websiteLive")
+    .map(item => ({
       key: item.key,
       label: item.label,
       detail: item.complete ? "Complete" : "Outstanding",

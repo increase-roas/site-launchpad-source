@@ -187,7 +187,7 @@ export function buildOperationalSummary(input: {
   });
 
   const jobs = [input.websitePublish, ...input.funnelPublishes];
-  const liveUrl = firstLiveUrl(jobs);
+  const liveUrl = firstLiveUrl([input.websitePublish]);
   let status: OperationalStatus = "setup_needed";
   if (jobs.some(job => isFailedPublishJob(job))) status = "issue";
   else if (jobs.some(job => isActivePublishJob(job))) status = "publishing";

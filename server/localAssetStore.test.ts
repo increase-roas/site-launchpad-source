@@ -3,9 +3,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  clientAssetStoragePrefix,
   createLocalAssetStore,
   isSafeStorageKey,
   parseUploadUrl,
+  removeLocalAssetPrefix,
   signUploadToken,
   verifyUploadToken,
 } from "./localAssetStore";
@@ -190,6 +192,26 @@ describe("writeUploadedObject", () => {
     await expect(
       writeUploadedObject("tmp/7/incoming", expiresAt, "bad", Buffer.from("payload")),
     ).resolves.toBe(false);
+  });
+});
+
+describe("client local asset prefix", () => {
+  it("matches the upload folder for a named client", () => {
+    expect(clientAssetStoragePrefix({ id: 7, shortName: "Theme Matrix QA" })).toBe(
+      "clients/7-theme-matrix-qa",
+    );
+  });
+
+  it("removes the client directory without leaving the root", async () => {
+    const { rootDirectory, store } = await makeStore();
+    await store.putObject({
+      key: "clients/7-theme-matrix-qa/astro/nav.webp",
+      body: Buffer.from("nav"),
+      contentType: "image/webp",
+      cacheControl: "public",
+    });
+    await removeLocalAssetPrefix(rootDirectory, "clients/7-theme-matrix-qa");
+    expect(await store.headObject("clients/7-theme-matrix-qa/astro/nav.webp")).toBeNull();
   });
 });
 

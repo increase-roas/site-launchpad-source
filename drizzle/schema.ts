@@ -20,6 +20,12 @@ import {
   astroSitePublishStepValues,
 } from "../shared/astroSitePublish";
 import {
+  astroSitePreviewErrorCodes,
+  astroSitePreviewStatusValues,
+  astroSitePreviewStepValues,
+  type PreviewValidationIssue,
+} from "../shared/astroSitePreview";
+import {
   genericPaidFunnelPublishStatusValues,
   genericPaidFunnelPublishStepValues,
   type GenericPaidFunnelProvisionedResources,
@@ -347,6 +353,7 @@ export const astroClientConfigs = pgTable(
       .notNull(),
     generatedConfigEncrypted: text("generatedConfigEncrypted"),
     generatedAt: timestamp("generatedAt", { withTimezone: true, mode: "date" }),
+    websiteRevision: integer("websiteRevision").default(1).notNull(),
     createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
       .defaultNow()
       .notNull(),
@@ -788,6 +795,98 @@ export const astroSitePublishes = pgTable(
 
 export type AstroSitePublish = typeof astroSitePublishes.$inferSelect;
 export type InsertAstroSitePublish = typeof astroSitePublishes.$inferInsert;
+
+export const astroSitePreviewStepEnum = pgEnum(
+  "astro_site_preview_step",
+  astroSitePreviewStepValues
+);
+export const astroSitePreviewStatusEnum = pgEnum(
+  "astro_site_preview_status",
+  astroSitePreviewStatusValues
+);
+export const astroSitePreviewErrorCodeEnum = pgEnum(
+  "astro_site_preview_error_code",
+  astroSitePreviewErrorCodes
+);
+
+export const astroSitePreviews = pgTable(
+  "astroSitePreviews",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    clientId: integer("clientId")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    externalSiteId: varchar("externalSiteId", { length: 120 }).notNull(),
+    templateKey: varchar("templateKey", { length: 80 }).notNull(),
+    templateRepo: varchar("templateRepo", { length: 240 }).notNull(),
+    contractVersion: integer("contractVersion").notNull(),
+    templateSha: varchar("templateSha", { length: 120 }).notNull(),
+    clientRevision: integer("clientRevision").notNull(),
+    resourceName: varchar("resourceName", { length: 120 }).notNull(),
+    repositoryName: varchar("repositoryName", { length: 120 }).notNull(),
+    workerName: varchar("workerName", { length: 120 }).notNull(),
+    d1DatabaseName: varchar("d1DatabaseName", { length: 120 }).notNull(),
+    r2BucketName: varchar("r2BucketName", { length: 120 }).notNull(),
+    step: astroSitePreviewStepEnum("step")
+      .default("create_repository")
+      .notNull(),
+    status: astroSitePreviewStatusEnum("status").default("pending").notNull(),
+    repositoryId: varchar("repositoryId", { length: 120 }),
+    repositoryFullName: varchar("repositoryFullName", { length: 240 }),
+    repositoryUrl: varchar("repositoryUrl", { length: 1000 }),
+    defaultBranch: varchar("defaultBranch", { length: 120 }),
+    repositoryCreateRequestedAt: timestamp("repositoryCreateRequestedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    d1DatabaseId: varchar("d1DatabaseId", { length: 120 }),
+    r2BucketId: varchar("r2BucketId", { length: 120 }),
+    r2PublicUrl: varchar("r2PublicUrl", { length: 1000 }),
+    commitSha: varchar("commitSha", { length: 120 }),
+    previewUrl: varchar("previewUrl", { length: 1000 }),
+    dispatchRequestedAt: timestamp("dispatchRequestedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    workflowRunId: varchar("workflowRunId", { length: 120 }),
+    workflowStatus: varchar("workflowStatus", { length: 80 }),
+    workflowCheckedAt: timestamp("workflowCheckedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    runtimeSecretsPatchedAt: timestamp("runtimeSecretsPatchedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    materialSnapshotEncrypted: text("materialSnapshotEncrypted").notNull(),
+    warnings: jsonb("warnings").$type<PreviewValidationIssue[]>().notNull(),
+    errorCode: astroSitePreviewErrorCodeEnum("errorCode"),
+    approvedSha: varchar("approvedSha", { length: 120 }),
+    approvedAt: timestamp("approvedAt", { withTimezone: true, mode: "date" }),
+    leaseToken: uuid("leaseToken"),
+    leaseUntil: timestamp("leaseUntil", { withTimezone: true, mode: "date" }),
+    lastError: text("lastError"),
+    attemptCount: integer("attemptCount").default(0).notNull(),
+    completedAt: timestamp("completedAt", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  table => [
+    index("astro_site_previews_client_idx").on(table.clientId),
+    index("astro_site_previews_status_idx").on(table.status),
+    index("astro_site_previews_lease_until_idx").on(table.leaseUntil),
+  ]
+).enableRLS();
+
+export type AstroSitePreview = typeof astroSitePreviews.$inferSelect;
+export type InsertAstroSitePreview = typeof astroSitePreviews.$inferInsert;
 
 export const clientIntegrationReconciliationStatusValues = [
   "pending",

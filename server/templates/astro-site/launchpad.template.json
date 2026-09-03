@@ -3,7 +3,7 @@
   "contractVersion": 1,
   "templateKey": "htl-astro-website",
   "name": "HTL Astro Website",
-  "repo": "increaseroasir/32-htl-website-template-astrobuild",
+  "repo": "increase-roas/32-htl-website-template-astrobuild",
   "defaultBranch": "main",
   "type": "website",
   "framework": "astro",

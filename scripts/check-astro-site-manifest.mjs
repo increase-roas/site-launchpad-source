@@ -20,7 +20,7 @@ const localCanonicalManifestPath = path.join(
   "launchpad.template.json",
 );
 const publicCanonicalUrl =
-  "https://raw.githubusercontent.com/increaseroasir/32-htl-website-template-astrobuild/main/launchpad.template.json";
+  "https://raw.githubusercontent.com/increase-roas/32-htl-website-template-astrobuild/main/launchpad.template.json";
 
 async function fileExists(filePath) {
   try {

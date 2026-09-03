@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { clientSecretSetups, users } from "../drizzle/schema";
+import { clientSecretSetups, clients, users } from "../drizzle/schema";
 import { UpdateConflictError } from "./trpcErrors";
 
 const seedMocks = vi.hoisted(() => ({
@@ -15,6 +15,7 @@ import {
   createClientWithSecretsInTransaction,
   createDraftClientWithDb,
   createDraftClientInTransaction,
+  deleteClientWithDb,
   resolveOptimisticUpdate,
   upsertUserWithDb,
 } from "./db";
@@ -231,5 +232,28 @@ describe("createDraftClientInTransaction", () => {
     await expect(createDraftClientWithDb(db as never, "Northland Spas")).resolves.toBe(78);
     expect(db.transaction).toHaveBeenCalledTimes(1);
     expect(seedMocks.seedWorkspaceDefaults).toHaveBeenCalledWith(tx, 78);
+  });
+});
+
+describe("deleteClientWithDb", () => {
+  it("deletes the client row by id", async () => {
+    const returning = vi.fn(async () => [{ id: 7, shortName: "Paradise" }]);
+    const where = vi.fn(() => ({ returning }));
+    const database = { delete: vi.fn(() => ({ where })) };
+
+    await expect(deleteClientWithDb(database as never, 7)).resolves.toEqual({
+      id: 7,
+      shortName: "Paradise",
+    });
+    expect(database.delete).toHaveBeenCalledWith(clients);
+    expect(where).toHaveBeenCalledWith(expect.anything());
+  });
+
+  it("returns undefined when the client is already gone", async () => {
+    const returning = vi.fn(async () => []);
+    const where = vi.fn(() => ({ returning }));
+    const database = { delete: vi.fn(() => ({ where })) };
+
+    await expect(deleteClientWithDb(database as never, 99)).resolves.toBeUndefined();
   });
 });

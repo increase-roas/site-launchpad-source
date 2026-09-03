@@ -1,7 +1,9 @@
 import path from "node:path";
 import {
+  clientAssetStoragePrefix,
   createLocalAssetStore,
   DEFAULT_LOCAL_ASSET_URL_PREFIX,
+  removeLocalAssetPrefix,
   type LocalAssetStore,
 } from "./localAssetStore";
 
@@ -31,4 +33,18 @@ export function getDevelopmentAssetStore(
     signingSecret,
   });
   return store;
+}
+
+/** Best-effort: leftover local files must not fail a completed delete. */
+export async function removeDeletedClientLocalAssets(client: {
+  id: number;
+  shortName: string;
+}): Promise<void> {
+  if (process.env.ASSET_STORAGE_DRIVER !== "local") return;
+  try {
+    const store = getDevelopmentAssetStore();
+    await removeLocalAssetPrefix(store.rootDirectory, clientAssetStoragePrefix(client));
+  } catch {
+    return;
+  }
 }

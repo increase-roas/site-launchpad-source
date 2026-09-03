@@ -72,6 +72,46 @@ export function clientThemeLabel(theme: string | null | undefined): string | nul
     : null;
 }
 
+export function isFactoryPlaceholderUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host === "example.com" || host.endsWith(".example.com");
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Temporary factory preview only. A published Worker — including leftover
+ * paid-funnel jobs — is not a preview of the unpublished website.
+ */
+export function clientPreviewHref(input: {
+  liveUrl?: string | null;
+  websiteUrl?: string | null;
+  factoryPreviewUrl?: string | null;
+}): string | null {
+  const factory = input.factoryPreviewUrl?.trim();
+  return factory || null;
+}
+
+/** Published website only. Placeholders and funnel Workers stay out. */
+export function clientLiveSiteHref(input: {
+  liveUrl?: string | null;
+}): string | null {
+  const live = input.liveUrl?.trim();
+  if (!live || isFactoryPlaceholderUrl(live)) return null;
+  return live;
+}
+
+/** Keep the tab from the click so a later async preview URL is not popup-blocked. */
+export function assignPreviewTab(tab: Window | null, url: string) {
+  if (tab && !tab.closed) {
+    tab.location.replace(url);
+    return;
+  }
+  window.open(url, "_blank", "noreferrer");
+}
+
 /** The host of a published site, for a readable address next to the link. */
 export function clientSiteHost(url: string | null | undefined): string | null {
   if (!url) return null;

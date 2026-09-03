@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   listClientViewData: vi.fn(),
   createClientWithSecrets: vi.fn(),
   createDraftClient: vi.fn(),
+  deleteClient: vi.fn(),
   saveClientSecretSetup: vi.fn(),
 }));
 
@@ -29,6 +30,9 @@ const workspaceMocks = vi.hoisted(() => ({
 
 vi.mock("./db", () => mocks);
 vi.mock("./workspaceDb", () => workspaceMocks);
+vi.mock("./developmentAssetStore", () => ({
+  removeDeletedClientLocalAssets: vi.fn(),
+}));
 
 import { appRouter } from "./routers";
 
@@ -153,6 +157,7 @@ describe("client launch gating", () => {
     });
     mocks.createClientWithSecrets.mockResolvedValue(7);
     mocks.createDraftClient.mockResolvedValue(7);
+    mocks.deleteClient.mockResolvedValue(baseClient);
     mocks.saveClientSecretSetup.mockResolvedValue(undefined);
     workspaceMocks.ensureWorkspaceDefaults.mockResolvedValue(undefined);
   });
@@ -443,5 +448,29 @@ describe("client launch gating", () => {
       code: "UNAUTHORIZED",
       message: UNAUTHED_ERR_MSG,
     });
+  });
+
+  it("deletes a client from the factory list", async () => {
+    const caller = appRouter.createCaller(createContext());
+    await expect(caller.clients.delete({ clientId: 7 })).resolves.toEqual({ clientId: 7 });
+    expect(mocks.deleteClient).toHaveBeenCalledWith(7);
+  });
+
+  it("returns not found when the client is already gone", async () => {
+    mocks.deleteClient.mockResolvedValueOnce(undefined);
+    const caller = appRouter.createCaller(createContext());
+    await expect(caller.clients.delete({ clientId: 99 })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: "Client not found.",
+    });
+  });
+
+  it("rejects unauthenticated client deletes", async () => {
+    const caller = appRouter.createCaller(createContext(null));
+    await expect(caller.clients.delete({ clientId: 7 })).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      message: UNAUTHED_ERR_MSG,
+    });
+    expect(mocks.deleteClient).not.toHaveBeenCalled();
   });
 });

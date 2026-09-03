@@ -233,6 +233,20 @@ describe("Astro client config schema", () => {
     expect(first).toContain('"r2BindingName": "PRODUCT_IMAGES"');
   });
 
+  it("does not publish Launchpad local-asset URLs to the generated Worker config", () => {
+    const config = createDefaultAstroConfig(client);
+    const generated = generateAstroClientConfig(config, {
+      navLogo: "/local-assets/clients/7-theme-matrix-qa/astro/navLogo.webp",
+      footerLogo: "/local-assets/clients/7-theme-matrix-qa/astro/footerLogo.webp",
+      favicon: "/local-assets/clients/7-theme-matrix-qa/astro/favicon.webp",
+      ogImage: "/local-assets/clients/7-theme-matrix-qa/astro/ogImage.webp",
+    });
+    expect(generated).not.toContain("/local-assets/");
+    expect(generated).toContain("/brand/logo-nav.svg");
+    expect(generated).toContain("/brand/logo-footer.svg");
+    expect(generated).toContain("/brand/favicon.svg");
+  });
+
   it("rejects Astro hours that repeat a weekday", () => {
     const config = createDefaultAstroConfig(client);
     config.hours[1] = { ...config.hours[0] };

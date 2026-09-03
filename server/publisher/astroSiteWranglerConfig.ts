@@ -3,6 +3,7 @@ export type AstroSiteWranglerConfigInput = {
   d1DatabaseName: string;
   d1DatabaseId: string;
   r2BucketName: string;
+  sessionKvNamespaceId: string;
 };
 
 function tomlString(value: string): string {
@@ -14,7 +15,7 @@ export function renderAstroSiteWranglerToml(
 ): string {
   return `name = ${tomlString(input.workerName)}
 compatibility_date = "2026-08-01"
-compatibility_flags = ["nodejs_compat"]
+compatibility_flags = ["nodejs_compat", "nodejs_als"]
 
 [observability]
 enabled = true
@@ -27,5 +28,9 @@ database_id = ${tomlString(input.d1DatabaseId)}
 [[r2_buckets]]
 binding = "PRODUCT_IMAGES"
 bucket_name = ${tomlString(input.r2BucketName)}
+
+[[kv_namespaces]]
+binding = "SESSION"
+id = ${tomlString(input.sessionKvNamespaceId)}
 `;
 }

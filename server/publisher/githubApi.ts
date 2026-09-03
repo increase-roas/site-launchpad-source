@@ -3,6 +3,7 @@ import {
   fetchAwaitingCancellation,
   type FetchFunction,
 } from "../../shared/requestTimeout";
+import { encryptGitHubActionsSecret } from "./githubActionsSecret";
 
 export const GITHUB_API_VERSION = "2026-03-10";
 export const DEFAULT_PUBLISHER_REQUEST_TIMEOUT_MS = 10_000;
@@ -155,6 +156,12 @@ export type GitHubApiClient = {
     afterWorkflowRunId?: number;
     signal: AbortSignal;
   }): Promise<WorkflowRun | null>;
+  putRepositoryActionsSecrets(input: {
+    owner: string;
+    repository: string;
+    secrets: Record<string, string>;
+    signal: AbortSignal;
+  }): Promise<{ updatedSecretNames: string[] }>;
 };
 
 export class GitHubApiError extends Error {
@@ -441,11 +448,17 @@ export function expectedWorkflowDisplayTitle(
 export function createGitHubApiClient(options: {
   token: string;
   fetchFn?: FetchFunction;
+  encryptActionsSecret?: (
+    publicKeyBase64: string,
+    plaintext: string
+  ) => Promise<string>;
 }): GitHubApiClient {
   const request = createRequest({
     token: options.token,
     fetchFn: options.fetchFn ?? globalThis.fetch,
   });
+  const encryptSecret =
+    options.encryptActionsSecret ?? encryptGitHubActionsSecret;
 
   const commitFiles = async (
     input: CommitFilesInput
@@ -573,6 +586,55 @@ export function createGitHubApiClient(options: {
       return response === null
         ? null
         : parseOrganizationActionsSecret(response);
+    },
+    async putRepositoryActionsSecrets(input) {
+      const names = Object.keys(input.secrets);
+      if (names.length === 0) {
+        return { updatedSecretNames: [] };
+      }
+      const envelope = await request(
+        "repository Actions public key lookup",
+        `/repos/${encoded(input.owner)}/${encoded(input.repository)}/actions/secrets/public-key`,
+        { method: "GET" },
+        input.signal
+      );
+      const record = requireRecord(
+        envelope,
+        "repository Actions public key lookup"
+      );
+      const publicKey = requireString(
+        record,
+        "key",
+        "repository Actions public key lookup"
+      );
+      const keyId = requireString(
+        record,
+        "key_id",
+        "repository Actions public key lookup"
+      );
+      const updatedSecretNames: string[] = [];
+      for (const name of names) {
+        const plaintext = input.secrets[name];
+        if (typeof plaintext !== "string" || !plaintext) {
+          throw new GitHubApiError("repository Actions secret validation");
+        }
+        const encryptedValue = await encryptSecret(publicKey, plaintext);
+        await request(
+          "repository Actions secret update",
+          `/repos/${encoded(input.owner)}/${encoded(input.repository)}/actions/secrets/${encoded(name)}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({
+              encrypted_value: encryptedValue,
+              key_id: keyId,
+            }),
+          },
+          input.signal,
+          { expectNoContent: true }
+        );
+        updatedSecretNames.push(name);
+      }
+      return { updatedSecretNames };
     },
     async getRepository(input) {
       const response = await request(

@@ -557,6 +557,11 @@ function isAbsoluteAsset(value: string | undefined): value is string {
   return Boolean(value && (value.startsWith("/") || value.startsWith("https://")));
 }
 
+/** Launchpad `/local-assets` URLs are not reachable on the deployed Worker. */
+function isPublicDeployAsset(value: string | undefined): value is string {
+  return isAbsoluteAsset(value) && !value.startsWith("/local-assets");
+}
+
 export const CLIENT_DEPLOY_REQUIRED_ASSETS = [
   "navLogo",
   "footerLogo",
@@ -735,7 +740,7 @@ export function toCanonicalAstroClientConfig(
       enabled: true,
       label: configured.label,
       blurb: configured.description,
-      heroImage: isAbsoluteAsset(asset) ? asset : null,
+      heroImage: isPublicDeployAsset(asset) ? asset : null,
       sortOrder: index,
     }];
   }));
@@ -831,11 +836,11 @@ export function toCanonicalAstroClientConfig(
         googleFontsHref: nullIfEmpty(input.brand.fonts.googleFontsUrl),
       },
       logos: {
-        nav: isAbsoluteAsset(assets.navLogo) ? assets.navLogo : "/brand/logo-nav.svg",
-        footer: isAbsoluteAsset(assets.footerLogo) ? assets.footerLogo : "/brand/logo-footer.svg",
-        inventory: isAbsoluteAsset(assets.inventoryLogo) ? assets.inventoryLogo : null,
-        favicon: isAbsoluteAsset(assets.favicon) ? assets.favicon : "/brand/favicon.svg",
-        ogImage: isAbsoluteAsset(assets.ogImage) ? assets.ogImage : "/brand/og-default.png",
+        nav: isPublicDeployAsset(assets.navLogo) ? assets.navLogo : "/brand/logo-nav.svg",
+        footer: isPublicDeployAsset(assets.footerLogo) ? assets.footerLogo : "/brand/logo-footer.svg",
+        inventory: isPublicDeployAsset(assets.inventoryLogo) ? assets.inventoryLogo : null,
+        favicon: isPublicDeployAsset(assets.favicon) ? assets.favicon : "/brand/favicon.svg",
+        ogImage: isPublicDeployAsset(assets.ogImage) ? assets.ogImage : "/brand/og-default.png",
       },
       radius: CANONICAL_BRAND_RADIUS,
     },

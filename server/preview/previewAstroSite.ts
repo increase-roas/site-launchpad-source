@@ -1,41 +1,50 @@
 import { randomUUID } from "node:crypto";
-import type { AstroSitePublish } from "../../drizzle/schema";
+import type { AstroSitePreview } from "../../drizzle/schema";
 import {
   ASTRO_SITE_APPROVED_SOURCE_SHA,
   ASTRO_SITE_MANIFEST,
 } from "../../shared/astroSiteContract";
 import {
-  astroSitePublishProgress,
-  astroSitePublishResourceNames,
-  type AstroSitePublishStatusView,
-  type AstroSitePublishStep,
-} from "../../shared/astroSitePublish";
-import { getAstroSitePublishMaterial } from "../astroConfigDb";
-import { getClientById } from "../db";
-import { createCloudflareApiClient } from "./cloudflareApi";
+  PREVIEW_ERROR_MESSAGES,
+  astroSitePreviewProgress,
+  astroSitePreviewResourceNames,
+  pinnedPreviewTemplateSha,
+  previewIsStale,
+  type AstroSitePreviewErrorCode,
+  type AstroSitePreviewStatusView,
+  type AstroSitePreviewStep,
+  type PreviewValidationIssue,
+} from "../../shared/astroSitePreview";
+import { createCloudflareApiClient } from "../publisher/cloudflareApi";
 import {
   createGitHubApiClient,
   expectedWorkflowDisplayTitle,
-} from "./githubApi";
+} from "../publisher/githubApi";
 import {
   getCloudflarePublisherEnvironment,
   getGitHubPublisherEnvironment,
-} from "./publisherEnv";
+} from "../publisher/publisherEnv";
 import {
   PublisherManualAttentionError,
   reconcilePublicTemplateRepository,
-} from "./repositoryReconciliation";
+} from "../publisher/repositoryReconciliation";
 import {
   astroSiteSessionKvTitle,
   commitAstroSiteGeneratedSource,
-} from "./astroSiteSourceCommit";
-import { astroSitePublishStore } from "./astroSitePublishDb";
+} from "../publisher/astroSiteSourceCommit";
+import { astroSitePreviewStore } from "./astroSitePreviewDb";
+import {
+  buildAstroSitePreviewSnapshot,
+  protectPreviewMaterialSnapshot,
+  readPreviewMaterialSnapshot,
+} from "./previewMaterial";
+import { getAstroConfigView } from "../astroConfigDb";
 
-export type AstroSitePublishJob = AstroSitePublish;
+export type AstroSitePreviewJob = AstroSitePreview;
 
-export type AstroSitePublishStepValues = Partial<
+export type AstroSitePreviewStepValues = Partial<
   Pick<
-    AstroSitePublishJob,
+    AstroSitePreviewJob,
     | "repositoryId"
     | "repositoryFullName"
     | "repositoryUrl"
@@ -44,7 +53,7 @@ export type AstroSitePublishStepValues = Partial<
     | "r2BucketId"
     | "r2PublicUrl"
     | "commitSha"
-    | "liveUrl"
+    | "previewUrl"
     | "dispatchRequestedAt"
     | "workflowRunId"
     | "workflowStatus"
@@ -54,57 +63,69 @@ export type AstroSitePublishStepValues = Partial<
 >;
 
 type Completion = {
-  nextStep: AstroSitePublishStep;
-  values: AstroSitePublishStepValues;
+  nextStep: AstroSitePreviewStep;
+  values: AstroSitePreviewStepValues;
 };
 
-export interface AstroSitePublishStore {
+export interface AstroSitePreviewStore {
   start(input: {
     clientId: number;
     externalSiteId: string;
     templateKey: string;
     templateRepo: string;
     contractVersion: number;
+    templateSha: string;
+    clientRevision: number;
     resourceName: string;
     repositoryName: string;
     workerName: string;
     d1DatabaseName: string;
     r2BucketName: string;
+    materialSnapshotEncrypted: string;
+    warnings: PreviewValidationIssue[];
     now: Date;
-  }): Promise<AstroSitePublishJob>;
-  get(clientId: number): Promise<AstroSitePublishJob | null>;
+  }): Promise<AstroSitePreviewJob>;
+  getLatest(clientId: number): Promise<AstroSitePreviewJob | null>;
+  getById(jobId: string): Promise<AstroSitePreviewJob | null>;
+  listHistory(clientId: number): Promise<AstroSitePreviewJob[]>;
   claim(input: {
-    clientId: number;
+    jobId: string;
     allowFailed: boolean;
     leaseToken: string;
     leaseUntil: Date;
     now: Date;
-  }): Promise<AstroSitePublishJob | null>;
+  }): Promise<AstroSitePreviewJob | null>;
   markRepositoryCreateRequested(input: {
     jobId: string;
     leaseToken: string;
     requestedAt: Date;
-  }): Promise<AstroSitePublishJob | null>;
+  }): Promise<AstroSitePreviewJob | null>;
   markDispatchRequested(input: {
     jobId: string;
     leaseToken: string;
     requestedAt: Date;
-  }): Promise<AstroSitePublishJob | null>;
+  }): Promise<AstroSitePreviewJob | null>;
   complete(input: {
     jobId: string;
     leaseToken: string;
-    expectedStep: AstroSitePublishStep;
+    expectedStep: AstroSitePreviewStep;
     completion: Completion;
     now: Date;
-  }): Promise<AstroSitePublishJob | null>;
+  }): Promise<AstroSitePreviewJob | null>;
   fail(input: {
     jobId: string;
     leaseToken: string;
     message: string;
     now: Date;
-    resumeStep?: AstroSitePublishStep;
-    values?: AstroSitePublishStepValues;
-  }): Promise<AstroSitePublishJob | null>;
+    errorCode?: AstroSitePreviewErrorCode;
+    resumeStep?: AstroSitePreviewStep;
+    values?: AstroSitePreviewStepValues;
+  }): Promise<AstroSitePreviewJob | null>;
+  approve(input: {
+    jobId: string;
+    approvedSha: string;
+    now: Date;
+  }): Promise<AstroSitePreviewJob | null>;
 }
 
 type WorkflowResult = {
@@ -115,14 +136,14 @@ type WorkflowResult = {
   displayTitle: string;
 };
 
-export interface AstroSitePublishExternal {
+export interface AstroSitePreviewExternal {
   ensureRepository(input: {
     externalSiteId: string;
     repositoryName: string;
     allowCreate: boolean;
     markCreateRequested: () => Promise<void>;
     signal: AbortSignal;
-  }): Promise<Pick<AstroSitePublishJob, "repositoryId" | "repositoryFullName" | "repositoryUrl" | "defaultBranch">>;
+  }): Promise<Pick<AstroSitePreviewJob, "repositoryId" | "repositoryFullName" | "repositoryUrl" | "defaultBranch">>;
   ensureD1Database(input: { name: string; signal: AbortSignal }): Promise<{ d1DatabaseId: string }>;
   ensureR2Bucket(input: { name: string; signal: AbortSignal }): Promise<{ r2BucketId: string; r2PublicUrl: string }>;
   ensureKvNamespace(input: { title: string; signal: AbortSignal }): Promise<{ kvNamespaceId: string }>;
@@ -132,6 +153,8 @@ export interface AstroSitePublishExternal {
   }): Promise<void>;
   commitSource(input: {
     publishJobId: string;
+    clientId: number;
+    clientRevision: number;
     repositoryFullName: string;
     defaultBranch: string;
     workerName: string;
@@ -168,19 +191,19 @@ export interface AstroSitePublishExternal {
     signal: AbortSignal;
   }): Promise<void>;
   getWorkersDevStatus(input: { workerName: string; signal: AbortSignal }): Promise<{ liveUrl: string }>;
+  verifyPreviewUrl(input: { url: string; signal: AbortSignal }): Promise<void>;
 }
 
-export type AstroSitePublishDependencies = {
-  store: AstroSitePublishStore;
-  external: AstroSitePublishExternal;
-  loadMaterial(clientId: number): Promise<{ generatedConfig: string; runtimeSecrets: Record<string, string> }>;
+export type AstroSitePreviewDependencies = {
+  store: AstroSitePreviewStore;
+  external: AstroSitePreviewExternal;
+  currentRevision(clientId: number): Promise<number>;
   now: () => Date;
   createLeaseToken: () => string;
   leaseDurationMs: number;
   externalTimeoutMs: number;
 };
 
-type OwnerInput = { clientId: number; retryFailed?: boolean };
 const RECONCILIATION_WINDOW_MS = 60_000;
 
 function requireValue(value: string | null, message: string): string {
@@ -210,50 +233,91 @@ async function bounded<T>(
   }
 }
 
-function assertWorkflow(result: { displayTitle: string; headSha: string }, job: AstroSitePublishJob): void {
-  const sourceSha = requireValue(job.commitSha, "Published source commit is missing.");
+function assertWorkflow(result: { displayTitle: string; headSha: string }, job: AstroSitePreviewJob): void {
+  const sourceSha = requireValue(job.commitSha, "Preview source commit is missing.");
   if (
     result.displayTitle !== expectedWorkflowDisplayTitle(job.id, sourceSha) ||
     result.headSha !== sourceSha
   ) {
     throw new PublisherManualAttentionError(
-      "Workflow run does not match the website publish job and source commit; manual attention is required.",
+      "Workflow run does not match the preview job and source commit; manual attention is required.",
     );
   }
 }
 
-export function toAstroSitePublishStatus(job: AstroSitePublishJob): AstroSitePublishStatusView {
+function errorCodeForStep(step: AstroSitePreviewStep): AstroSitePreviewErrorCode {
+  switch (step) {
+    case "create_repository":
+      return "GITHUB_REPO_CREATE_FAILED";
+    case "ensure_d1_database":
+      return "D1_PROVISION_FAILED";
+    case "ensure_r2_bucket":
+      return "R2_PROVISION_FAILED";
+    case "commit_source":
+      return "CONFIG_COMMIT_FAILED";
+    case "dispatch_workflow":
+    case "monitor_workflow":
+      return "GITHUB_ACTION_FAILED";
+    case "patch_runtime_secrets":
+      return "CLOUDFLARE_DEPLOY_FAILED";
+    case "verify_preview":
+      return "PREVIEW_HEALTHCHECK_FAILED";
+    case "ready":
+      return "CLOUDFLARE_DEPLOY_FAILED";
+    default: {
+      const exhaustive: never = step;
+      return exhaustive;
+    }
+  }
+}
+
+export async function toAstroSitePreviewStatus(
+  job: AstroSitePreviewJob,
+  currentRevision: number,
+): Promise<AstroSitePreviewStatusView> {
   return {
     id: job.id,
     status: job.status,
     step: job.step,
-    progress: astroSitePublishProgress(job.step),
-    error: job.lastError,
-    externalSiteId: job.externalSiteId,
+    progress: astroSitePreviewProgress(job.step),
+    clientRevision: job.clientRevision,
+    currentRevision,
+    stale: previewIsStale({
+      currentRevision,
+      previewRevision: job.clientRevision,
+    }),
+    templateSha: job.templateSha,
+    commitSha: job.commitSha,
+    previewUrl: job.previewUrl,
     repositoryName: job.repositoryName,
     workerName: job.workerName,
     repositoryUrl: job.repositoryUrl,
-    liveUrl: job.liveUrl,
+    warnings: job.warnings,
+    error: job.lastError,
+    errorCode: job.errorCode,
+    approvedSha: job.approvedSha,
+    approvedAt: job.approvedAt,
     dispatchRequestedAt: job.dispatchRequestedAt,
     workflowRunId: job.workflowRunId,
     workflowStatus: job.workflowStatus,
     completedAt: job.completedAt,
+    createdAt: job.createdAt,
     updatedAt: job.updatedAt,
   };
 }
 
-async function current(input: OwnerInput, store: AstroSitePublishStore) {
-  const job = await store.get(input.clientId);
-  if (!job) throw new Error("Website publish job not found.");
-  return toAstroSitePublishStatus(job);
+async function current(
+  job: AstroSitePreviewJob,
+  deps: AstroSitePreviewDependencies,
+): Promise<AstroSitePreviewStatusView> {
+  return toAstroSitePreviewStatus(job, await deps.currentRevision(job.clientId));
 }
 
 async function complete(
-  input: OwnerInput,
-  job: AstroSitePublishJob,
+  job: AstroSitePreviewJob,
   leaseToken: string,
   completion: Completion,
-  deps: AstroSitePublishDependencies,
+  deps: AstroSitePreviewDependencies,
 ) {
   const result = await deps.store.complete({
     jobId: job.id,
@@ -262,15 +326,20 @@ async function complete(
     completion,
     now: deps.now(),
   });
-  return result ? toAstroSitePublishStatus(result) : current(input, deps.store);
+  return result
+    ? toAstroSitePreviewStatus(result, await deps.currentRevision(job.clientId))
+    : current(job, deps);
+}
+
+function loadSnapshot(job: AstroSitePreviewJob) {
+  return readPreviewMaterialSnapshot(job.materialSnapshotEncrypted);
 }
 
 async function execute(
-  input: OwnerInput,
-  job: AstroSitePublishJob,
+  job: AstroSitePreviewJob,
   leaseToken: string,
-  deps: AstroSitePublishDependencies,
-): Promise<AstroSitePublishStatusView> {
+  deps: AstroSitePreviewDependencies,
+): Promise<AstroSitePreviewStatusView> {
   switch (job.step) {
     case "create_repository": {
       const result = await bounded(deps.externalTimeoutMs, signal =>
@@ -284,27 +353,27 @@ async function execute(
               leaseToken,
               requestedAt: deps.now(),
             });
-            if (!marked) throw new Error("Website publish lease was lost.");
+            if (!marked) throw new Error("Website preview lease was lost.");
           },
           signal,
         }),
       );
-      return complete(input, job, leaseToken, { nextStep: "ensure_d1_database", values: result }, deps);
+      return complete(job, leaseToken, { nextStep: "ensure_d1_database", values: result }, deps);
     }
     case "ensure_d1_database": {
       const result = await bounded(deps.externalTimeoutMs, signal =>
         deps.external.ensureD1Database({ name: job.d1DatabaseName, signal }),
       );
-      return complete(input, job, leaseToken, { nextStep: "ensure_r2_bucket", values: result }, deps);
+      return complete(job, leaseToken, { nextStep: "ensure_r2_bucket", values: result }, deps);
     }
     case "ensure_r2_bucket": {
       const result = await bounded(deps.externalTimeoutMs, signal =>
         deps.external.ensureR2Bucket({ name: job.r2BucketName, signal }),
       );
-      return complete(input, job, leaseToken, { nextStep: "commit_source", values: result }, deps);
+      return complete(job, leaseToken, { nextStep: "commit_source", values: result }, deps);
     }
     case "commit_source": {
-      const material = await deps.loadMaterial(input.clientId);
+      const material = loadSnapshot(job);
       const kv = await bounded(deps.externalTimeoutMs, signal =>
         deps.external.ensureKvNamespace({
           title: astroSiteSessionKvTitle(job.workerName),
@@ -314,25 +383,27 @@ async function execute(
       const result = await bounded(deps.externalTimeoutMs, signal =>
         deps.external.commitSource({
           publishJobId: job.id,
-          repositoryFullName: requireValue(job.repositoryFullName, "Published repository is missing."),
-          defaultBranch: requireValue(job.defaultBranch, "Published repository branch is missing."),
+          clientId: job.clientId,
+          clientRevision: material.clientRevision,
+          repositoryFullName: requireValue(job.repositoryFullName, "Preview repository is missing."),
+          defaultBranch: requireValue(job.defaultBranch, "Preview repository branch is missing."),
           workerName: job.workerName,
           d1DatabaseName: job.d1DatabaseName,
-          d1DatabaseId: requireValue(job.d1DatabaseId, "D1 database is missing."),
+          d1DatabaseId: requireValue(job.d1DatabaseId, "Preview D1 database is missing."),
           r2BucketName: job.r2BucketName,
           sessionKvNamespaceId: kv.kvNamespaceId,
           generatedConfig: material.generatedConfig,
           signal,
         }),
       );
-      return complete(input, job, leaseToken, { nextStep: "dispatch_workflow", values: result }, deps);
+      return complete(job, leaseToken, { nextStep: "dispatch_workflow", values: result }, deps);
     }
     case "dispatch_workflow": {
-      const sourceSha = requireValue(job.commitSha, "Published source commit is missing.");
+      const sourceSha = requireValue(job.commitSha, "Preview source commit is missing.");
       if (job.dispatchRequestedAt) {
         const run = await bounded(deps.externalTimeoutMs, signal =>
           deps.external.findWorkflowRun({
-            repositoryFullName: requireValue(job.repositoryFullName, "Published repository is missing."),
+            repositoryFullName: requireValue(job.repositoryFullName, "Preview repository is missing."),
             publishJobId: job.id,
             sourceSha,
             afterWorkflowRunId: job.workflowRunId,
@@ -342,7 +413,7 @@ async function execute(
         const checkedAt = deps.now();
         if (!run) {
           if (checkedAt.getTime() - job.dispatchRequestedAt.getTime() <= RECONCILIATION_WINDOW_MS) {
-            return complete(input, job, leaseToken, {
+            return complete(job, leaseToken, {
               nextStep: "dispatch_workflow",
               values: { workflowCheckedAt: checkedAt },
             }, deps);
@@ -352,7 +423,7 @@ async function execute(
           );
         }
         assertWorkflow(run, job);
-        return complete(input, job, leaseToken, {
+        return complete(job, leaseToken, {
           nextStep: "monitor_workflow",
           values: {
             workflowRunId: run.workflowRunId,
@@ -363,23 +434,23 @@ async function execute(
       }
       const requestedAt = deps.now();
       const marked = await deps.store.markDispatchRequested({ jobId: job.id, leaseToken, requestedAt });
-      if (!marked) return current(input, deps.store);
+      if (!marked) return current(job, deps);
       await bounded(deps.externalTimeoutMs, signal =>
         deps.external.syncActionsSecrets({
-          repositoryFullName: requireValue(marked.repositoryFullName, "Published repository is missing."),
+          repositoryFullName: requireValue(marked.repositoryFullName, "Preview repository is missing."),
           signal,
         }),
       );
       await bounded(deps.externalTimeoutMs, signal =>
         deps.external.dispatchWorkflow({
-          repositoryFullName: requireValue(marked.repositoryFullName, "Published repository is missing."),
-          defaultBranch: requireValue(marked.defaultBranch, "Published repository branch is missing."),
+          repositoryFullName: requireValue(marked.repositoryFullName, "Preview repository is missing."),
+          defaultBranch: requireValue(marked.defaultBranch, "Preview repository branch is missing."),
           commitSha: sourceSha,
           publishJobId: marked.id,
           signal,
         }),
       );
-      return complete(input, marked, leaseToken, {
+      return complete(marked, leaseToken, {
         nextStep: "dispatch_workflow",
         values: { dispatchRequestedAt: requestedAt },
       }, deps);
@@ -387,7 +458,7 @@ async function execute(
     case "monitor_workflow": {
       const run = await bounded(deps.externalTimeoutMs, signal =>
         deps.external.getWorkflowRun({
-          repositoryFullName: requireValue(job.repositoryFullName, "Published repository is missing."),
+          repositoryFullName: requireValue(job.repositoryFullName, "Preview repository is missing."),
           workflowRunId: requireValue(job.workflowRunId, "Workflow run ID is missing."),
           signal,
         }),
@@ -395,7 +466,7 @@ async function execute(
       assertWorkflow(run, job);
       const checkedAt = deps.now();
       if (run.status !== "completed") {
-        return complete(input, job, leaseToken, {
+        return complete(job, leaseToken, {
           nextStep: "monitor_workflow",
           values: { workflowStatus: run.status, workflowCheckedAt: checkedAt },
         }, deps);
@@ -404,7 +475,8 @@ async function execute(
         const failed = await deps.store.fail({
           jobId: job.id,
           leaseToken,
-          message: "Deployment workflow failed. Retry to redeploy the existing website source.",
+          message: PREVIEW_ERROR_MESSAGES.ASTRO_BUILD_FAILED,
+          errorCode: "ASTRO_BUILD_FAILED",
           now: checkedAt,
           resumeStep: "dispatch_workflow",
           values: {
@@ -413,15 +485,17 @@ async function execute(
             workflowCheckedAt: checkedAt,
           },
         });
-        return failed ? toAstroSitePublishStatus(failed) : current(input, deps.store);
+        return failed
+          ? toAstroSitePreviewStatus(failed, await deps.currentRevision(job.clientId))
+          : current(job, deps);
       }
-      return complete(input, job, leaseToken, {
+      return complete(job, leaseToken, {
         nextStep: "patch_runtime_secrets",
         values: { workflowStatus: "success", workflowCheckedAt: checkedAt },
       }, deps);
     }
     case "patch_runtime_secrets": {
-      const material = await deps.loadMaterial(input.clientId);
+      const material = loadSnapshot(job);
       await bounded(deps.externalTimeoutMs, signal =>
         deps.external.patchRuntimeSecrets({
           workerName: job.workerName,
@@ -430,12 +504,12 @@ async function execute(
           signal,
         }),
       );
-      return complete(input, job, leaseToken, {
-        nextStep: "get_live_url",
+      return complete(job, leaseToken, {
+        nextStep: "verify_preview",
         values: { runtimeSecretsPatchedAt: deps.now() },
       }, deps);
     }
-    case "get_live_url": {
+    case "verify_preview": {
       const result = await bounded(deps.externalTimeoutMs, signal =>
         deps.external.getWorkersDevStatus({ workerName: job.workerName, signal }),
       );
@@ -443,59 +517,75 @@ async function execute(
       if (url.protocol !== "https:" || !url.hostname.endsWith(".workers.dev")) {
         throw new Error("A workers.dev deployment URL is required.");
       }
-      return complete(input, job, leaseToken, { nextStep: "published", values: { liveUrl: result.liveUrl } }, deps);
+      await bounded(deps.externalTimeoutMs, signal =>
+        deps.external.verifyPreviewUrl({ url: result.liveUrl, signal }),
+      );
+      return complete(job, leaseToken, { nextStep: "ready", values: { previewUrl: result.liveUrl } }, deps);
     }
-    case "published":
-      return toAstroSitePublishStatus(job);
+    case "ready":
+      return current(job, deps);
+    default: {
+      const exhaustive: never = job.step;
+      return exhaustive;
+    }
   }
 }
 
-export async function startAstroSitePublish(
-  input: { clientId: number; clientShortName: string },
-  deps: AstroSitePublishDependencies,
-): Promise<AstroSitePublishStatusView> {
-  const names = astroSitePublishResourceNames(input.clientShortName, input.clientId);
+export async function startAstroSitePreviewJob(
+  input: { clientId: number; clientShortName: string; snapshotEncrypted: string; clientRevision: number; warnings: PreviewValidationIssue[] },
+  deps: AstroSitePreviewDependencies,
+): Promise<AstroSitePreviewStatusView> {
+  const names = astroSitePreviewResourceNames(input.clientShortName, input.clientId);
   const job = await deps.store.start({
     clientId: input.clientId,
     ...names,
     templateKey: ASTRO_SITE_MANIFEST.templateKey,
     templateRepo: ASTRO_SITE_MANIFEST.repo,
     contractVersion: ASTRO_SITE_MANIFEST.contractVersion,
+    templateSha: pinnedPreviewTemplateSha(),
+    clientRevision: input.clientRevision,
+    materialSnapshotEncrypted: input.snapshotEncrypted,
+    warnings: input.warnings,
     now: deps.now(),
   });
-  return toAstroSitePublishStatus(job);
+  return toAstroSitePreviewStatus(job, input.clientRevision);
 }
 
-export async function advanceAstroSitePublish(
-  input: OwnerInput,
-  deps: AstroSitePublishDependencies,
-): Promise<AstroSitePublishStatusView> {
+export async function advanceAstroSitePreview(
+  input: { jobId: string; retryFailed?: boolean },
+  deps: AstroSitePreviewDependencies,
+): Promise<AstroSitePreviewStatusView> {
+  const existing = await deps.store.getById(input.jobId);
+  if (!existing) throw new Error("Website preview job not found.");
   const now = deps.now();
   const leaseToken = deps.createLeaseToken();
   const job = await deps.store.claim({
-    clientId: input.clientId,
+    jobId: input.jobId,
     allowFailed: input.retryFailed === true,
     leaseToken,
     now,
     leaseUntil: new Date(now.getTime() + deps.leaseDurationMs),
   });
-  if (!job) return current(input, deps.store);
+  if (!job) return current(existing, deps);
   try {
-    return await execute(input, job, leaseToken, deps);
+    return await execute(job, leaseToken, deps);
   } catch (error) {
     const failed = await deps.store.fail({
       jobId: job.id,
       leaseToken,
+      errorCode: errorCodeForStep(job.step),
       message: error instanceof PublisherManualAttentionError
         ? error.message
-        : "Website publish step failed. Retry to resume.",
+        : PREVIEW_ERROR_MESSAGES[errorCodeForStep(job.step)],
       now: deps.now(),
     });
-    return failed ? toAstroSitePublishStatus(failed) : current(input, deps.store);
+    return failed
+      ? toAstroSitePreviewStatus(failed, await deps.currentRevision(job.clientId))
+      : current(job, deps);
   }
 }
 
-function createRuntimeExternal(): AstroSitePublishExternal {
+function createRuntimeExternal(): AstroSitePreviewExternal {
   const githubEnvironment = getGitHubPublisherEnvironment();
   const cloudflareEnvironment = getCloudflarePublisherEnvironment();
   const github = createGitHubApiClient({ token: githubEnvironment.token });
@@ -559,7 +649,7 @@ function createRuntimeExternal(): AstroSitePublishExternal {
     },
     async commitSource(input) {
       const repository = splitFullName(input.repositoryFullName);
-      const message = `chore: configure Astro website ${input.publishJobId}`;
+      const message = `Generate preview for client ${input.clientId} revision ${input.clientRevision} job ${input.publishJobId}`;
       return commitAstroSiteGeneratedSource({
         github,
         ...repository,
@@ -620,19 +710,33 @@ function createRuntimeExternal(): AstroSitePublishExternal {
       if (!status.enabled || !status.url) throw new Error("workers.dev is not enabled for the website Worker.");
       return { liveUrl: status.url };
     },
+    async verifyPreviewUrl(input) {
+      const response = await fetch(input.url, {
+        redirect: "manual",
+        signal: input.signal,
+      });
+      if (response.status < 200 || response.status >= 400) {
+        throw new Error(PREVIEW_ERROR_MESSAGES.PREVIEW_HEALTHCHECK_FAILED);
+      }
+    },
   };
 }
 
-let configuredExternal: AstroSitePublishExternal | null = null;
-export function configureAstroSitePublishExternal(external: AstroSitePublishExternal): void {
+let configuredExternal: AstroSitePreviewExternal | null = null;
+export function configureAstroSitePreviewExternal(external: AstroSitePreviewExternal): void {
   configuredExternal = external;
 }
 
-function runtimeDependencies(): AstroSitePublishDependencies {
+async function currentRevision(clientId: number): Promise<number> {
+  const view = await getAstroConfigView(clientId);
+  return view.websiteRevision;
+}
+
+function runtimeDependencies(): AstroSitePreviewDependencies {
   return {
-    store: astroSitePublishStore,
+    store: astroSitePreviewStore,
     external: configuredExternal ?? createRuntimeExternal(),
-    loadMaterial: getAstroSitePublishMaterial,
+    currentRevision,
     now: () => new Date(),
     createLeaseToken: randomUUID,
     leaseDurationMs: 30_000,
@@ -640,20 +744,64 @@ function runtimeDependencies(): AstroSitePublishDependencies {
   };
 }
 
-export async function startPublish(clientId: number): Promise<AstroSitePublishStatusView> {
-  const [client] = await Promise.all([
-    getClientById(clientId),
-    getAstroSitePublishMaterial(clientId),
-  ]);
-  if (!client) throw new Error("Client not found.");
-  return startAstroSitePublish({ clientId, clientShortName: client.shortName }, runtimeDependencies());
+export async function startPreview(clientId: number): Promise<AstroSitePreviewStatusView> {
+  const built = await buildAstroSitePreviewSnapshot(clientId);
+  return startAstroSitePreviewJob(
+    {
+      clientId,
+      clientShortName: built.clientShortName,
+      snapshotEncrypted: protectPreviewMaterialSnapshot(built.snapshot),
+      clientRevision: built.snapshot.clientRevision,
+      warnings: built.snapshot.warnings,
+    },
+    runtimeDependencies(),
+  );
 }
 
-export async function advancePublish(clientId: number, retryFailed = false): Promise<AstroSitePublishStatusView> {
-  return advanceAstroSitePublish({ clientId, retryFailed }, runtimeDependencies());
+export async function advancePreview(
+  clientId: number,
+  retryFailed = false,
+): Promise<AstroSitePreviewStatusView> {
+  const job = await astroSitePreviewStore.getLatest(clientId);
+  if (!job) throw new Error("Website preview job not found.");
+  if (job.clientId !== clientId) throw new Error("Website preview job not found.");
+  return advanceAstroSitePreview({ jobId: job.id, retryFailed }, runtimeDependencies());
 }
 
-export async function publishStatus(clientId: number): Promise<AstroSitePublishStatusView | null> {
-  const job = await astroSitePublishStore.get(clientId);
-  return job ? toAstroSitePublishStatus(job) : null;
+export async function previewStatus(clientId: number): Promise<AstroSitePreviewStatusView | null> {
+  const job = await astroSitePreviewStore.getLatest(clientId);
+  if (!job) return null;
+  return toAstroSitePreviewStatus(job, await currentRevision(clientId));
+}
+
+export async function previewHistory(clientId: number) {
+  const jobs = await astroSitePreviewStore.listHistory(clientId);
+  return jobs.map(job => ({
+    id: job.id,
+    status: job.status,
+    step: job.step,
+    clientRevision: job.clientRevision,
+    commitSha: job.commitSha,
+    templateSha: job.templateSha,
+    previewUrl: job.previewUrl,
+    error: job.lastError,
+    errorCode: job.errorCode,
+    createdAt: job.createdAt,
+    completedAt: job.completedAt,
+  }));
+}
+
+export async function approvePreview(clientId: number): Promise<AstroSitePreviewStatusView> {
+  const job = await astroSitePreviewStore.getLatest(clientId);
+  if (!job) throw new Error("Website preview job not found.");
+  if (job.status !== "ready" || !job.commitSha) {
+    throw new Error("Approve a ready preview before publishing production.");
+  }
+  const approved = await astroSitePreviewStore.approve({
+    jobId: job.id,
+    approvedSha: job.commitSha,
+    now: new Date(),
+  });
+  if (!approved) throw new Error("Preview could not be approved.");
+  return toAstroSitePreviewStatus(approved, await currentRevision(clientId));
 }

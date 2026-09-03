@@ -305,6 +305,21 @@ export async function updateClient(
   resolveOptimisticUpdate(result, await getClientById(clientId));
 }
 
+type ClientDeleteDatabase = Pick<ReturnType<typeof drizzle>, "delete">;
+
+export async function deleteClientWithDb(
+  db: ClientDeleteDatabase,
+  clientId: number,
+): Promise<Client | undefined> {
+  const rows = await db.delete(clients).where(eq(clients.id, clientId)).returning();
+  return rows[0];
+}
+
+export async function deleteClient(clientId: number): Promise<Client | undefined> {
+  const db = await requireDb();
+  return deleteClientWithDb(db, clientId);
+}
+
 export async function getClientAssets(clientId: number): Promise<ClientAsset[]> {
   const db = await requireDb();
   return db.select().from(clientAssets).where(eq(clientAssets.clientId, clientId));

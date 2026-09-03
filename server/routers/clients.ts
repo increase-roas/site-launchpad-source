@@ -31,6 +31,7 @@ import {
 import {
   createClientWithSecrets,
   createDraftClient,
+  deleteClient,
   getClientById,
   getClientViewData,
   listClientViewData,
@@ -53,6 +54,7 @@ import {
   wranglerSecretStatusFromProfile,
 } from "../astroConfigDb";
 import { buildOperationalSummary } from "../../shared/operationalSummary";
+import { removeDeletedClientLocalAssets } from "../developmentAssetStore";
 
 const secretColumnByField = {
   metaPixelId: "metaPixelIdEncrypted",
@@ -385,6 +387,22 @@ export const clientsRouter = router({
           });
         }
         throw error;
+      }
+    }),
+
+  delete: protectedProcedure
+    .input(z.object({ clientId: z.number().int().positive() }))
+    .mutation(async ({ input }) => {
+      try {
+        const deleted = await deleteClient(input.clientId);
+        if (!deleted) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Client not found." });
+        }
+        await removeDeletedClientLocalAssets(deleted);
+        return { clientId: deleted.id };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw mapRouterError(error, "Client could not be deleted.");
       }
     }),
 

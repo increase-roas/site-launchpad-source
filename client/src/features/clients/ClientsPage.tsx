@@ -5,17 +5,30 @@ import {
   ClientsTable,
   ClientsTableSkeleton,
 } from "@/components/clients/ClientsTable";
-import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import {
   buildClientBoard,
   DEFAULT_CLIENT_BOARD_QUERY,
   nextSortDirection,
+  type ClientBoardItem,
   type ClientBoardQuery,
   type ClientSortKey,
   type ClientStatusFilter,
   type ClientThemeFilter,
 } from "@/lib/clientBoard";
+import { trpc } from "@/lib/trpc";
+import { cn } from "@/lib/utils";
 import { workspaceRoute } from "@/lib/workspaceNavigation";
 import {
   AlertTriangle,
@@ -26,11 +39,26 @@ import {
   UsersRound,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Link, useLocation } from "wouter";
 
 export default function ClientsPage() {
-  const { clients, isLoading, isError, refetchClients } = useWorkspace();
+  const { clients, selectedClientId, isLoading, isError, refetchClients } = useWorkspace();
   const [, setLocation] = useLocation();
+  const utils = trpc.useUtils();
+  const [pendingDelete, setPendingDelete] = useState<ClientBoardItem | null>(null);
+  const deleteClient = trpc.clients.delete.useMutation({
+    onSuccess: result => {
+      toast.success("Client deleted.");
+      setPendingDelete(null);
+      void utils.clients.list.invalidate();
+      refetchClients();
+      if (selectedClientId === result.clientId) {
+        setLocation("/clients");
+      }
+    },
+    onError: error => toast.error(error.message),
+  });
   const [board, setBoard] = useState<ClientBoardQuery>(() => {
     if (typeof window === "undefined") return DEFAULT_CLIENT_BOARD_QUERY;
     const query = new URLSearchParams(window.location.search).get("q");
@@ -212,9 +240,44 @@ export default function ClientsPage() {
             }))
           }
           onOpen={clientId => setLocation(workspaceRoute("overview", clientId))}
+          onDeleteRequest={setPendingDelete}
           clientHref={clientId => workspaceRoute("overview", clientId)}
         />
       )}
+
+      <AlertDialog
+        open={pendingDelete !== null}
+        onOpenChange={open => {
+          if (!open && !deleteClient.isPending) setPendingDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {pendingDelete?.client.businessName}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the client and its Launchpad configuration, media
+              records, and publish history. Published Workers and GitHub
+              repositories are not removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteClient.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={cn(buttonVariants({ variant: "destructive" }))}
+              disabled={deleteClient.isPending || !pendingDelete}
+              onClick={event => {
+                event.preventDefault();
+                if (!pendingDelete) return;
+                deleteClient.mutate({ clientId: pendingDelete.client.id });
+              }}
+            >
+              {deleteClient.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

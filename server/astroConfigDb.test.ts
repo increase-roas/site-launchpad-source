@@ -90,6 +90,7 @@ describe("Astro config persistence helpers", () => {
       },
       generatedConfigEncrypted: null,
       generatedAt: null,
+      websiteRevision: 1,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -127,6 +128,7 @@ describe("website integration enablement from the stored Astro config", () => {
       integrations: { ...defaults.integrations, ...integrations },
       generatedConfigEncrypted: null,
       generatedAt: null,
+      websiteRevision: 1,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

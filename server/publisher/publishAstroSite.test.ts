@@ -9,7 +9,7 @@ function jobFixture(): AstroSitePublishJob {
     clientId: 5,
     externalSiteId: "astro-site-client-5",
     templateKey: "htl-astro-website",
-    templateRepo: "increaseroasir/32-htl-website-template-astrobuild",
+    templateRepo: "increase-roas/32-htl-website-template-astrobuild",
     contractVersion: 1,
     resourceName: "website-north-star-5",
     repositoryName: "website-north-star-5",
@@ -75,6 +75,8 @@ function inMemoryDependencies(initial: AstroSitePublishJob) {
       ensureRepository: unused,
       ensureD1Database: unused,
       ensureR2Bucket: unused,
+      ensureKvNamespace: unused,
+      syncActionsSecrets: vi.fn().mockResolvedValue(undefined),
       commitSource: unused,
       dispatchWorkflow,
       findWorkflowRun,
@@ -164,6 +166,11 @@ describe("Astro website workflow Retry", () => {
       workflowRunId: "101",
     });
     expect(harness.dispatchWorkflow).toHaveBeenCalledTimes(1);
+    expect(harness.deps.external.syncActionsSecrets).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repositoryFullName: harness.current().repositoryFullName,
+      }),
+    );
     expect(harness.findWorkflowRun).toHaveBeenCalledWith(
       expect.objectContaining({ afterWorkflowRunId: "100", sourceSha: "source-sha" }),
     );
