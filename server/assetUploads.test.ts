@@ -63,7 +63,25 @@ function makeDependencies(
     })),
     putObject: vi.fn(async () => undefined),
     deleteObject: vi.fn(async () => undefined),
-    finalizeUpload: vi.fn(async () => ({ previousStorageKey: "clients/7-old/hero-old.webp" })),
+    finalizeUpload: vi.fn(async input => ({
+      previousStorageKey: "clients/7-old/hero-old.webp",
+      mediaItem: {
+        id: 42,
+        clientId: 7,
+        storageKey: input.mediaItem.storageKey,
+        storageUrl: input.mediaItem.storageUrl,
+        filename: input.mediaItem.filename,
+        originalFilename: input.mediaItem.originalFilename,
+        mimeType: input.mediaItem.mimeType,
+        byteSize: input.mediaItem.byteSize,
+        width: input.mediaItem.width,
+        height: input.mediaItem.height,
+        alt: input.mediaItem.alt ?? "",
+        description: input.mediaItem.description ?? "",
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
+    })),
     ...overrides,
   };
 }
@@ -108,6 +126,24 @@ describe("asset upload requests", () => {
       requiredHeaders: { "Content-Type": "image/png" },
       expiresAt: new Date(NOW.getTime() + 600_000),
     });
+  });
+
+  it("accepts a library upload that is not bound to a named slot", async () => {
+    const deps = makeDependencies();
+    const service = createAssetUploadService(deps);
+
+    await service.requestUpload({
+      clientId: 7,
+      assetKind: "library",
+      slot: "library",
+      originalFilename: "showroom.png",
+      mimeType: "image/png",
+      sizeBytes: 1024,
+    });
+
+    expect(deps.createUploadSession).toHaveBeenCalledWith(
+      expect.objectContaining({ assetKind: "library", slot: "library" }),
+    );
   });
 
   it("rejects a nonexistent client before persistence or presigning", async () => {
@@ -292,15 +328,33 @@ describe("asset upload completion", () => {
     expect(deleted).not.toContain(TEMP_KEY);
   });
 
-  it("swaps the pointer before deleting the temporary and previous objects", async () => {
+  it("saves the photo to the library and keeps the previous file", async () => {
     const events: string[] = [];
     const deps = makeDependencies({
       putObject: vi.fn(async () => {
         events.push("put-new");
       }),
-      finalizeUpload: vi.fn(async () => {
+      finalizeUpload: vi.fn(async input => {
         events.push("database-swap");
-        return { previousStorageKey: "clients/7-old/assets/hero-old.webp" };
+        return {
+          previousStorageKey: "clients/7-old/assets/hero-old.webp",
+          mediaItem: {
+            id: 42,
+            clientId: 7,
+            storageKey: input.mediaItem.storageKey,
+            storageUrl: input.mediaItem.storageUrl,
+            filename: input.mediaItem.filename,
+            originalFilename: input.mediaItem.originalFilename,
+            mimeType: input.mediaItem.mimeType,
+            byteSize: input.mediaItem.byteSize,
+            width: input.mediaItem.width,
+            height: input.mediaItem.height,
+            alt: input.mediaItem.alt ?? "",
+            description: input.mediaItem.description ?? "",
+            createdAt: NOW,
+            updatedAt: NOW,
+          },
+        };
       }),
       deleteObject: vi.fn(async key => {
         events.push(`delete:${key}`);
@@ -310,19 +364,17 @@ describe("asset upload completion", () => {
     const result = await createAssetUploadService(deps).completeUpload(UPLOAD_ID);
     const expectedHash = createHash("sha256").update(PROCESSED).digest("hex");
 
-    expect(events[0]).toBe("put-new");
-    expect(events[1]).toBe("database-swap");
-    expect(events[2]).toBe(`delete:${TEMP_KEY}`);
-    expect(events[3]).toBe("delete:clients/7-old/assets/hero-old.webp");
-    expect(result.asset.storageKey).toContain(expectedHash);
-    expect(result.asset.storageKey).toMatch(
+    expect(events).toEqual(["put-new", "database-swap", `delete:${TEMP_KEY}`]);
+    expect(result.asset?.storageKey).toContain(expectedHash);
+    expect(result.asset?.storageKey).toMatch(
       /^clients\/7-paradise-spas\/assets\/hero-[a-f0-9]{64}-[a-f0-9]{32}\.webp$/,
     );
-    expect(result.asset.storageUrl).toBe(
-      `https://assets.example.com/${result.asset.storageKey}`,
+    expect(result.mediaItem.id).toBe(42);
+    expect(result.asset?.storageUrl).toBe(
+      `https://assets.example.com/${result.asset?.storageKey}`,
     );
     expect(deps.putObject).toHaveBeenCalledWith({
-      key: result.asset.storageKey,
+      key: result.asset?.storageKey,
       body: PROCESSED,
       contentType: "image/webp",
       cacheControl: "public, max-age=31536000, immutable",
@@ -341,5 +393,26 @@ describe("asset upload completion", () => {
       assetKind: "client",
       asset: { slot: "hero" },
     });
+  });
+
+  it("stores a library upload without occupying a named slot", async () => {
+    const deps = makeDependencies({
+      getUploadSession: vi.fn(async () => ({
+        ...pendingSession,
+        assetKind: "library",
+        slot: "library",
+      })),
+    });
+
+    const result = await createAssetUploadService(deps).completeUpload(UPLOAD_ID);
+    expect(result.asset).toBeNull();
+    expect(result.assetKind).toBe("library");
+    expect(result.mediaItem.storageKey).toMatch(
+      /^clients\/7-paradise-spas\/library\/library-[a-f0-9]{64}-[a-f0-9]{32}\.webp$/,
+    );
+    expect(deps.finalizeUpload).toHaveBeenCalledWith(expect.objectContaining({
+      asset: null,
+      mediaItem: expect.objectContaining({ alt: "spa photo" }),
+    }));
   });
 });

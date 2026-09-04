@@ -67,7 +67,7 @@ type PageDefinition = {
   id: SitePageId;
   title: string;
   slug: string;
-  owner: { tab: ConfigurationTab; label: string };
+  owner: { tab: ConfigurationTab; section: ConfigSectionId; label: string };
   /** Configuration sections whose readiness decides whether this page is done. */
   sections: readonly ConfigSectionId[];
   describe: (config: AstroClientConfigInput) => PageAvailability;
@@ -78,7 +78,7 @@ const PAGE_DEFINITIONS: readonly PageDefinition[] = [
     id: "homepage",
     title: "Homepage",
     slug: "/",
-    owner: { tab: "content", label: "Homepage sections" },
+    owner: { tab: "content", section: "homepage", label: "Homepage sections" },
     sections: ["homepage"],
     describe: config => {
       const { enabled, total } = summarizeHomepageSections(config.homepageSections);
@@ -94,7 +94,7 @@ const PAGE_DEFINITIONS: readonly PageDefinition[] = [
     id: "categories",
     title: "Category pages",
     slug: "/{category}",
-    owner: { tab: "content", label: "Categories" },
+    owner: { tab: "content", section: "categories", label: "Categories" },
     sections: ["categories"],
     describe: config => {
       const enabled = ASTRO_CATEGORY_VALUES.filter(
@@ -115,7 +115,7 @@ const PAGE_DEFINITIONS: readonly PageDefinition[] = [
     id: "inventory",
     title: "Inventory",
     slug: "/inventory",
-    owner: { tab: "technical", label: "Product data" },
+    owner: { tab: "technical", section: "integrations", label: "Product data" },
     sections: ["integrations"],
     describe: config =>
       config.integrations.d1.enabled && config.integrations.r2.enabled
@@ -132,7 +132,7 @@ const PAGE_DEFINITIONS: readonly PageDefinition[] = [
     id: "visitUs",
     title: "Visit us",
     slug: "/visit-us",
-    owner: { tab: "basic", label: "Business details" },
+    owner: { tab: "basic", section: "address", label: "Business details" },
     sections: ["address", "hours", "contact"],
     describe: () => ({
       kind: "available",
@@ -143,7 +143,7 @@ const PAGE_DEFINITIONS: readonly PageDefinition[] = [
     id: "financing",
     title: "Financing",
     slug: "/financing",
-    owner: { tab: "content", label: "Financing" },
+    owner: { tab: "content", section: "financing", label: "Financing" },
     sections: ["financing"],
     describe: config =>
       config.financing.enabled
@@ -208,7 +208,11 @@ export function buildSiteMap(input: SiteMapInput): PageRow[] {
       state,
       detail,
       ownerLabel: definition.owner.label,
-      ownerHref: configurationRoute(input.clientId, definition.owner.tab),
+      ownerHref: configurationRoute(
+        input.clientId,
+        definition.owner.tab,
+        definition.owner.section,
+      ),
     };
   });
 }

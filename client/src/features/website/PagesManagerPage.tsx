@@ -69,7 +69,7 @@ export default function PagesManagerPage({ clientId }: { clientId: number }) {
 
   if (astroConfigQuery.isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 4 }, (_, index) => (
             <Skeleton key={index} className="h-24 rounded-lg" />
@@ -106,7 +106,7 @@ export default function PagesManagerPage({ clientId }: { clientId: number }) {
   const sections = summarizeHomepageSections(config.homepageSections);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Template pages"

@@ -107,19 +107,19 @@ describe("site map shape", () => {
   it("routes each page to the configuration surface that owns its content", () => {
     const pages = siteMap(baseConfig());
     expect(row(pages, "homepage").ownerHref).toBe(
-      `/workspace/${CLIENT_ID}/configuration?tab=content`,
+      `/workspace/${CLIENT_ID}/configuration?tab=content&section=homepage`,
     );
     expect(row(pages, "categories").ownerHref).toBe(
-      `/workspace/${CLIENT_ID}/configuration?tab=content`,
+      `/workspace/${CLIENT_ID}/configuration?tab=content&section=categories`,
     );
     expect(row(pages, "financing").ownerHref).toBe(
-      `/workspace/${CLIENT_ID}/configuration?tab=content`,
+      `/workspace/${CLIENT_ID}/configuration?tab=content&section=financing`,
     );
     expect(row(pages, "visitUs").ownerHref).toBe(
-      `/workspace/${CLIENT_ID}/configuration?tab=basic`,
+      `/workspace/${CLIENT_ID}/configuration?tab=basic&section=address`,
     );
     expect(row(pages, "inventory").ownerHref).toBe(
-      `/workspace/${CLIENT_ID}/configuration?tab=technical`,
+      `/workspace/${CLIENT_ID}/configuration?tab=technical&section=integrations`,
     );
   });
 

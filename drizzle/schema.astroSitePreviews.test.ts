@@ -37,5 +37,6 @@ describe("Astro site preview job schema", () => {
       config.columns.map(column => [column.name, column]),
     );
     expect(columns.websiteRevision?.notNull).toBe(true);
+    expect(columns.serviceAreas?.notNull).toBe(true);
   });
 });

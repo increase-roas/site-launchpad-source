@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { BUSINESS_DAY_VALUES, businessHourSchema } from "./client";
 import { siteFontStylesheetHref } from "./astroFontCatalog";
+import { resolveGalleryImages, type MediaLibraryItemRef } from "./mediaLibrary";
 
 const DEFAULT_FONTS = { display: "Manrope", body: "Manrope", mono: "JetBrains Mono" } as const;
 
@@ -18,16 +19,28 @@ export const ASTRO_CATEGORY_VALUES = [
   "massage-chairs",
 ] as const;
 export const ASTRO_SECTION_TYPE_VALUES = [
+  "announcement",
   "hero",
+  "stats",
+  "offercard",
+  "products",
+  "categoryrow",
   "cards",
-  "visit",
-  "steps",
+  "imagecards",
+  "benefits",
   "gallery",
   "reviews",
-  "bignumber",
+  "comparison",
+  "promise",
+  "visit",
+  "splitcards",
+  "steps",
   "faq",
   "ctaband",
   "cta",
+  "trust",
+  "bignumber",
+  "countdown",
 ] as const;
 export const ASTRO_INTEGRATION_VALUES = ["d1", "r2", "ghl", "meta", "zaraz", "sentry"] as const;
 export const ASTRO_ASSET_SLOT_VALUES = [
@@ -49,29 +62,53 @@ export type AstroCategory = (typeof ASTRO_CATEGORY_VALUES)[number];
 export type AstroIntegration = (typeof ASTRO_INTEGRATION_VALUES)[number];
 
 export const ASTRO_SECTION_LABELS: Record<AstroSectionType, string> = {
+  announcement: "Announcement bar",
   hero: "Hero",
+  stats: "Stats row",
+  offercard: "Offer card",
+  products: "Showroom products",
+  categoryrow: "Category row",
   cards: "Product cards",
-  visit: "Visit showroom",
-  steps: "How it works",
+  imagecards: "Image cards",
+  benefits: "Benefits",
   gallery: "Gallery",
   reviews: "Reviews",
-  bignumber: "Featured number",
+  comparison: "Comparison table",
+  promise: "Promise band",
+  visit: "Visit showroom",
+  splitcards: "Split cards",
+  steps: "How it works",
   faq: "FAQ",
   ctaband: "Call-to-action band",
-  cta: "Call to action",
+  cta: "Lead form",
+  trust: "Trust strip",
+  bignumber: "Featured number",
+  countdown: "Countdown",
 };
 
 export const ASTRO_SECTION_DESCRIPTIONS: Record<AstroSectionType, string> = {
-  hero: "Main headline, supporting copy, and primary action.",
+  announcement: "Thin bar above the homepage for a catalog or promotion.",
+  hero: "Main headline, supporting copy, lead card, and primary actions.",
+  stats: "A row of proof numbers.",
+  offercard: "A raised card making one offer with bullets and buttons.",
+  products: "Live inventory from the product database.",
+  categoryrow: "Cards built from the categories this client sells.",
   cards: "Product or service cards customers can browse.",
-  visit: "Showroom information and a reason to visit.",
-  steps: "A short sequence explaining what happens next.",
+  imagecards: "Image tiles with overlay text and links.",
+  benefits: "A short list of outcomes or reasons to buy.",
   gallery: "Approved website imagery.",
-  reviews: "Approved customer feedback.",
-  bignumber: "One prominent proof point or business statistic.",
+  reviews: "Customer quotes and an optional aggregate rating.",
+  comparison: "A you-versus-everyone-else table.",
+  promise: "Badge plus a checklist of local promises.",
+  visit: "Showroom information and a reason to visit.",
+  splitcards: "Two side-by-side photo cards with their own buttons.",
+  steps: "A short sequence explaining what happens next.",
   faq: "Common customer questions and answers.",
   ctaband: "A compact conversion prompt between sections.",
-  cta: "The final action customers should take.",
+  cta: "The shared lead form as its own section.",
+  trust: "A short strip of trust signals.",
+  bignumber: "One prominent proof point or business statistic.",
+  countdown: "A timed offer or event deadline.",
 };
 
 export const ASTRO_ASSET_LABELS: Record<AstroAssetSlot, string> = {
@@ -196,16 +233,28 @@ export const astroFinancingSchema = z
   });
 
 const SECTION_REQUIRED_FIELDS: Record<AstroSectionType, string[]> = {
+  announcement: ["text"],
   hero: ["headline", "subheadline", "ctaLabel", "ctaHref"],
+  stats: ["items"],
+  offercard: ["heading"],
+  products: ["heading"],
+  categoryrow: ["heading"],
   cards: ["heading", "items"],
+  imagecards: ["heading", "items"],
+  benefits: ["items"],
   visit: ["heading", "body", "ctaLabel", "ctaHref"],
+  splitcards: ["items"],
   steps: ["heading", "steps"],
   gallery: ["heading", "images"],
-  reviews: ["heading", "source"],
+  reviews: ["heading", "items"],
+  comparison: ["heading", "rows"],
+  promise: ["heading", "bullets"],
   bignumber: ["value", "label"],
   faq: ["heading", "items"],
   ctaband: ["headline", "ctaLabel", "ctaHref"],
-  cta: ["headline", "ctaLabel", "ctaHref"],
+  cta: ["headline", "ctaLabel"],
+  trust: ["items"],
+  countdown: ["heading", "endsAt"],
 };
 
 export const astroHomepageSectionSchema = z
@@ -290,6 +339,7 @@ export const astroClientConfigInputSchema = z.object({
   navigationItems: z.array(astroNavigationItemSchema).max(30),
   categories: z.record(z.enum(ASTRO_CATEGORY_VALUES), astroCategorySchema),
   financing: astroFinancingSchema,
+  serviceAreas: z.string().trim().max(2000).default(""),
   homepageSections: z.array(astroHomepageSectionSchema).max(40),
   integrations: z.object({
     d1: astroIntegrationSchema,
@@ -306,16 +356,43 @@ export type AstroNavigationItem = z.infer<typeof astroNavigationItemSchema>;
 export type AstroHomepageSection = z.infer<typeof astroHomepageSectionSchema>;
 
 const sectionFields: Record<AstroSectionType, Record<string, string>> = {
-  hero: { eyebrow: "", headline: "", subheadline: "", ctaLabel: "", ctaHref: "" },
+  announcement: { badge: "", text: "", href: "" },
+  hero: {
+    eyebrow: "",
+    headline: "",
+    subheadline: "",
+    highlight: "",
+    promo: "",
+    bullets: "",
+    backgroundImage: "",
+    ctaLabel: "",
+    ctaHref: "",
+    ctaLabel2: "",
+    ctaHref2: "",
+    leadHeading: "",
+    leadSubtext: "",
+    leadFootnote: "",
+  },
+  stats: { items: "" },
+  offercard: { eyebrow: "", heading: "", body: "", bullets: "", ctaLabel: "", ctaHref: "", ctaLabel2: "", ctaHref2: "" },
+  products: { eyebrow: "", heading: "", body: "", limit: "4", category: "", moreLabel: "", moreHref: "", disclaimer: "" },
+  categoryrow: { eyebrow: "", heading: "", body: "" },
   cards: { heading: "", intro: "", items: "" },
+  imagecards: { eyebrow: "", heading: "", items: "" },
+  benefits: { heading: "", items: "" },
   visit: { heading: "", body: "", ctaLabel: "", ctaHref: "" },
-  steps: { heading: "", steps: "" },
+  splitcards: { eyebrow: "", heading: "", items: "" },
+  steps: { eyebrow: "", heading: "", steps: "" },
   gallery: { heading: "", images: "" },
-  reviews: { heading: "", source: "" },
+  reviews: { eyebrow: "", heading: "", items: "", aggregate: "" },
+  comparison: { eyebrow: "", heading: "", body: "", themLabel: "", rows: "" },
+  promise: { badgeValue: "", badgeLabel: "", heading: "", body: "", bullets: "" },
   bignumber: { value: "", label: "", body: "" },
-  faq: { heading: "", items: "" },
-  ctaband: { headline: "", subheadline: "", ctaLabel: "", ctaHref: "" },
-  cta: { headline: "", ctaLabel: "", ctaHref: "" },
+  faq: { eyebrow: "", heading: "", items: "" },
+  ctaband: { eyebrow: "", headline: "", subheadline: "", ctaLabel: "", ctaHref: "", ctaLabel2: "", ctaHref2: "", footnote: "" },
+  cta: { headline: "", ctaLabel: "", subtext: "" },
+  trust: { items: "" },
+  countdown: { eyebrow: "", heading: "", body: "", endsAt: "" },
 };
 
 export const ASTRO_SECTION_FIELD_LABELS: Record<AstroSectionType, Record<string, string>> = Object.fromEntries(
@@ -404,6 +481,7 @@ export function createDefaultAstroConfig(client: {
     ],
     categories,
     financing: { enabled: false, lenderName: "", lenderUrl: "", disclaimer: "", terms: "", ctaLabel: "Apply for financing", monthlyExample: "" },
+    serviceAreas: "",
     homepageSections: ["hero", "cards", "visit", "gallery", "faq", "cta"].map((type, index) => {
       const section = createAstroHomepageSection(type as AstroSectionType, `section-${type}-${index}`);
       return type === "hero"
@@ -415,7 +493,7 @@ export function createDefaultAstroConfig(client: {
               headline: client.businessName,
               subheadline: client.tagline,
               ctaLabel: "Contact us",
-              ctaHref: "/contact",
+              ctaHref: "/visit-us",
             },
           }
         : section;
@@ -441,6 +519,34 @@ const CANONICAL_CATEGORY_KEYS: Record<AstroCategory, string> = {
   "cold-plunge": "cold-plunge",
   "massage-chairs": "massage-chair",
 };
+
+/** Template URL segments. Cold plunge is plural on the live site. */
+const CANONICAL_CATEGORY_HREFS: Record<string, string> = {
+  "hot-tub": "/hot-tubs",
+  "swim-spa": "/swim-spas",
+  "sauna": "/saunas",
+  "cold-plunge": "/cold-plunges",
+  "massage-chair": "/massage-chairs",
+};
+
+const CANONICAL_CATEGORY_ROUTES: Record<string, string> = {
+  "/hot-tubs": "hot-tub",
+  "/swim-spas": "swim-spa",
+  "/saunas": "sauna",
+  "/cold-plunge": "cold-plunge",
+  "/cold-plunges": "cold-plunge",
+  "/massage-chairs": "massage-chair",
+};
+
+const DEAD_TEMPLATE_HREFS: Record<string, string> = {
+  "/contact": "/visit-us",
+  "/cold-plunge": "/cold-plunges",
+};
+
+function rewriteTemplateHref(href: string): string {
+  const normalized = href.replace(/\/$/, "") || href;
+  return DEAD_TEMPLATE_HREFS[normalized] ?? href;
+}
 
 const CATEGORY_ASSET_SLOTS: Record<AstroCategory, AstroAssetSlot> = {
   "hot-tubs": "categoryHotTubs",
@@ -622,32 +728,152 @@ function splitConfiguredLines(value: string, expectedParts: number): string[][] 
     );
 }
 
-function toCanonicalHomepageSection(section: AstroHomepageSection): Record<string, unknown> | null {
+function parseServiceAreas(value: string): string[] {
+  return value
+    .split(/[\n,]/)
+    .map(area => area.trim())
+    .filter(Boolean);
+}
+
+function toClaims(value: string): Array<{ text: string; superlative: false; footnote: null }> {
+  return value
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(text => ({ text, superlative: false as const, footnote: null }));
+}
+
+function toActions(
+  ...pairs: Array<{ label: string; href: string; style: "primary" | "secondary" }>
+): Array<{ label: string; href: string; style: "primary" | "secondary" }> {
+  return pairs
+    .filter(pair => pair.label && pair.href)
+    .map(pair => ({
+      label: pair.label,
+      href: rewriteTemplateHref(pair.href),
+      style: pair.style,
+    }));
+}
+
+function parseImageCards(value: string): Array<{ title: string; body: string | null; image: string | null; href: string }> {
+  return splitConfiguredLines(value, 3).map(([title, body, href, image]) => ({
+    title,
+    body: nullIfEmpty(body ?? ""),
+    image: isAbsoluteAsset(image) ? image : null,
+    href: rewriteTemplateHref(href),
+  }));
+}
+
+function isYes(value: string | undefined): boolean {
+  return value === "yes" || value === "true" || value === "1";
+}
+
+function toCanonicalHomepageSection(
+  section: AstroHomepageSection,
+  galleryLibrary: readonly MediaLibraryItemRef[] = [],
+): Record<string, unknown> | null {
   if (!section.enabled) return null;
   const field = (name: string) => section.fields[name]?.trim() ?? "";
-  const action = field("ctaLabel") && field("ctaHref")
-    ? [{ label: field("ctaLabel"), href: field("ctaHref"), style: "primary" }]
-    : [];
+  const actions = toActions(
+    { label: field("ctaLabel"), href: field("ctaHref"), style: "primary" },
+    { label: field("ctaLabel2"), href: field("ctaHref2"), style: "secondary" },
+  );
 
   switch (section.type) {
+    case "announcement":
+      return field("text")
+        ? {
+            type: "announcement",
+            badge: nullIfEmpty(field("badge")),
+            text: field("text"),
+            href: nullIfEmpty(field("href")),
+          }
+        : null;
     case "hero":
       return {
         type: "hero",
         eyebrow: nullIfEmpty(field("eyebrow")),
         headline: nullIfEmpty(field("headline")),
+        highlight: field("highlight")
+          .split(",")
+          .map(part => part.trim())
+          .filter(Boolean),
         subhead: nullIfEmpty(field("subheadline")),
-        actions: action,
+        bullets: toClaims(field("bullets")),
+        backgroundImage: isAbsoluteAsset(field("backgroundImage")) ? field("backgroundImage") : null,
+        image: null,
+        promo: nullIfEmpty(field("promo")),
+        actions,
+        leadCard: field("leadHeading")
+          ? {
+              heading: field("leadHeading"),
+              subtext: nullIfEmpty(field("leadSubtext")),
+              footnote: nullIfEmpty(field("leadFootnote")),
+            }
+          : null,
       };
-    case "cards": {
-      const items = splitConfiguredLines(field("items"), 3).map(
-        ([title, body, href]) => ({ title, body, image: null, href }),
-      );
+    case "stats": {
+      const items = splitConfiguredLines(field("items"), 2).map(([value, label]) => ({
+        value,
+        label,
+        claim: null,
+      }));
+      return items.length > 0 ? { type: "stats", items } : null;
+    }
+    case "offercard":
+      return field("heading")
+        ? {
+            type: "offercard",
+            eyebrow: nullIfEmpty(field("eyebrow")),
+            heading: field("heading"),
+            body: nullIfEmpty(field("body")),
+            bullets: toClaims(field("bullets")),
+            actions,
+          }
+        : null;
+    case "products": {
+      const limit = Number(field("limit") || "4");
+      return {
+        type: "products",
+        eyebrow: nullIfEmpty(field("eyebrow")),
+        heading: field("heading"),
+        body: nullIfEmpty(field("body")),
+        limit: Number.isFinite(limit) ? Math.min(24, Math.max(1, Math.round(limit))) : 4,
+        category: nullIfEmpty(field("category")),
+        moreLink: field("moreLabel") && field("moreHref")
+          ? { label: field("moreLabel"), href: rewriteTemplateHref(field("moreHref")), style: "primary" }
+          : null,
+        disclaimer: nullIfEmpty(field("disclaimer")),
+      };
+    }
+    case "categoryrow":
+      return {
+        type: "categories",
+        eyebrow: nullIfEmpty(field("eyebrow")),
+        heading: field("heading") || "What we sell",
+        body: nullIfEmpty(field("body")),
+        showImages: true,
+      };
+    case "cards":
+    case "imagecards": {
+      const items = parseImageCards(field("items"));
       return items.length > 0
         ? {
             type: "imagecards",
+            eyebrow: nullIfEmpty(field("eyebrow") || field("intro")),
             heading: nullIfEmpty(field("heading")),
             items,
           }
+        : null;
+    }
+    case "benefits": {
+      const items = splitConfiguredLines(field("items"), 2).map(([title, body, icon]) => ({
+        title,
+        body,
+        icon: isAbsoluteAsset(icon) ? icon : null,
+      }));
+      return items.length > 0
+        ? { type: "benefits", heading: nullIfEmpty(field("heading")), items }
         : null;
     }
     case "visit":
@@ -660,55 +886,176 @@ function toCanonicalHomepageSection(section: AstroHomepageSection): Record<strin
           image: null,
           showAddress: true,
           showHours: true,
-          actions: action,
+          actions,
         }],
       };
+    case "splitcards": {
+      const items = splitConfiguredLines(field("items"), 2).map(([title, body, href, address, hours]) => ({
+        title,
+        body,
+        image: null,
+        showAddress: isYes(address),
+        showHours: isYes(hours),
+        actions: href
+          ? [{ label: "Learn more", href: rewriteTemplateHref(href), style: "primary" as const }]
+          : [],
+      }));
+      return items.length > 0
+        ? {
+            type: "splitcards",
+            eyebrow: nullIfEmpty(field("eyebrow")),
+            heading: nullIfEmpty(field("heading")),
+            items,
+          }
+        : null;
+    }
     case "steps": {
       const items = splitConfiguredLines(field("steps"), 2).map(
         ([title, body]) => ({ title, body }),
       );
       return items.length > 0
-        ? { type: "steps", heading: field("heading"), items }
+        ? { type: "steps", eyebrow: nullIfEmpty(field("eyebrow")), heading: field("heading"), items }
         : null;
     }
     case "gallery": {
-      const images = field("images")
-        .split(/\r?\n/)
-        .map(src => src.trim())
-        .filter(isAbsoluteAsset)
-        .map(src => ({ src, alt: field("heading") }));
+      const images = resolveGalleryImages(field("images"), galleryLibrary, field("heading"));
       return images.length > 0
         ? { type: "gallery", heading: nullIfEmpty(field("heading")), images }
         : null;
     }
-    case "reviews":
-      // The dashboard currently captures a source, but no review quotes. The
-      // canonical schema requires real quotes, so omitting this section is
-      // safer than generating testimonial content that was never supplied.
-      return null;
+    case "reviews": {
+      const items = splitConfiguredLines(field("items"), 2).map(([name, quote, rating, source, date]) => {
+        const parsed = Number(rating);
+        return {
+          name,
+          quote,
+          rating: Number.isFinite(parsed) ? Math.min(5, Math.max(1, parsed)) : 5,
+          source: nullIfEmpty(source ?? ""),
+          date: nullIfEmpty(date ?? ""),
+          location: null,
+          detail: null,
+        };
+      });
+      if (items.length === 0) return null;
+      const [aggregateRating, aggregateCount, aggregateSource] = field("aggregate")
+        .split("|")
+        .map(part => part.trim());
+      const rating = Number(aggregateRating);
+      const count = Number(aggregateCount);
+      return {
+        type: "reviews",
+        eyebrow: nullIfEmpty(field("eyebrow")),
+        heading: nullIfEmpty(field("heading")),
+        items,
+        aggregate: Number.isFinite(rating) && Number.isFinite(count) && count >= 1
+          ? {
+              rating: Math.min(5, Math.max(1, rating)),
+              count: Math.round(count),
+              source: nullIfEmpty(aggregateSource ?? ""),
+            }
+          : null,
+      };
+    }
+    case "comparison": {
+      const rows = splitConfiguredLines(field("rows"), 3).map(([label, us, them]) => ({
+        label,
+        us,
+        them,
+      }));
+      return rows.length > 0
+        ? {
+            type: "comparison",
+            eyebrow: nullIfEmpty(field("eyebrow")),
+            heading: field("heading"),
+            body: nullIfEmpty(field("body")),
+            usLabel: null,
+            themLabel: field("themLabel") || "Everyone else",
+            rows,
+          }
+        : null;
+    }
+    case "promise": {
+      const bullets = toClaims(field("bullets"));
+      return field("heading") && bullets.length > 0
+        ? {
+            type: "promise",
+            badgeValue: nullIfEmpty(field("badgeValue")),
+            badgeLabel: nullIfEmpty(field("badgeLabel")),
+            heading: field("heading"),
+            body: nullIfEmpty(field("body")),
+            bullets,
+          }
+        : null;
+    }
     case "bignumber":
-      return { type: "bignumber", value: field("value"), label: field("label") };
+      return { type: "bignumber", value: field("value"), label: field("label"), claim: null };
     case "faq": {
       const items = splitConfiguredLines(field("items"), 2).map(([q, a]) => ({ q, a }));
       return items.length > 0
-        ? { type: "faq", heading: nullIfEmpty(field("heading")), items }
+        ? { type: "faq", eyebrow: nullIfEmpty(field("eyebrow")), heading: nullIfEmpty(field("heading")), items }
         : null;
     }
     case "ctaband":
-    case "cta":
       return {
         type: "ctaband",
+        eyebrow: nullIfEmpty(field("eyebrow")),
         heading: field("headline"),
         body: nullIfEmpty(field("subheadline")),
-        actions: action,
+        actions,
+        footnote: nullIfEmpty(field("footnote")),
         tone: "dark",
       };
+    case "cta":
+      return field("headline") && field("ctaLabel")
+        ? {
+            type: "cta",
+            heading: field("headline"),
+            buttonLabel: field("ctaLabel"),
+            subtext: nullIfEmpty(field("subtext") || field("subheadline")),
+          }
+        : null;
+    case "trust": {
+      const items = field("items")
+        .split(/\r?\n/)
+        .map(item => item.trim())
+        .filter(Boolean);
+      return items.length > 0 ? { type: "trust", items, logos: [] } : null;
+    }
+    case "countdown":
+      return field("heading") && field("endsAt")
+        ? {
+            type: "countdown",
+            eyebrow: nullIfEmpty(field("eyebrow")),
+            heading: field("heading"),
+            body: nullIfEmpty(field("body")),
+            endsAt: field("endsAt"),
+          }
+        : null;
+    default: {
+      const _exhaustive: never = section.type;
+      return _exhaustive;
+    }
   }
+}
+
+function orderCanonicalHomepageSections(
+  sections: Array<Record<string, unknown>>,
+): Array<Record<string, unknown>> {
+  const announcements = sections.filter(section => section.type === "announcement");
+  const rest = sections.filter(section => section.type !== "announcement");
+  return [...announcements.slice(0, 1), ...rest];
+}
+
+function homepageLeadIsSafe(sections: Array<Record<string, unknown>>): boolean {
+  if (sections.length === 0) return true;
+  const first = sections[0]?.type;
+  return first === "hero" || first === "announcement";
 }
 
 export function toCanonicalAstroClientConfig(
   input: AstroClientConfigInput,
   assets: Record<string, string>,
+  galleryLibrary: readonly MediaLibraryItemRef[] = [],
 ): Record<string, unknown> {
   const enabledCategories = ASTRO_CATEGORY_VALUES.filter(
     category => input.categories[category].enabled,
@@ -745,13 +1092,6 @@ export function toCanonicalAstroClientConfig(
     }];
   }));
   const enabledCanonicalCategories = new Set(Object.keys(categories));
-  const canonicalCategoryRoutes: Record<string, string> = {
-    "/hot-tubs": "hot-tub",
-    "/swim-spas": "swim-spa",
-    "/saunas": "sauna",
-    "/cold-plunge": "cold-plunge",
-    "/massage-chairs": "massage-chair",
-  };
   const financing = input.financing.enabled
     ? {
         headline: input.financing.ctaLabel,
@@ -766,26 +1106,28 @@ export function toCanonicalAstroClientConfig(
     : null;
   const navItems = input.navigationItems.flatMap(item => {
     if (item.type === "categories") return [{ type: "categories" }];
-    const href = item.href.trim();
+    const rawHref = item.href.trim();
+    const href = rewriteTemplateHref(rawHref);
     if (!item.label.trim()) return [];
     if (href === "/financing" && !financing) return [];
-    const categoryKey = canonicalCategoryRoutes[href.replace(/\/$/, "")];
+    const categoryKey = CANONICAL_CATEGORY_ROUTES[href.replace(/\/$/, "")]
+      ?? CANONICAL_CATEGORY_ROUTES[rawHref.replace(/\/$/, "")];
     if (categoryKey && !enabledCanonicalCategories.has(categoryKey)) return [];
-    if (href.startsWith("/")) {
-      return [{ type: "link", label: item.label, href, inHeader: item.inHeader, inFooter: item.inFooter }];
+    const resolvedHref = categoryKey ? CANONICAL_CATEGORY_HREFS[categoryKey] ?? href : href;
+    if (resolvedHref.startsWith("/")) {
+      return [{ type: "link", label: item.label, href: resolvedHref, inHeader: item.inHeader, inFooter: item.inFooter }];
     }
     if (isHttpsUrl(href)) {
       return [{ type: "external", label: item.label, href, inHeader: item.inHeader, inFooter: item.inFooter }];
     }
     return [];
   });
-  const homepageSections = input.homepageSections
-    .map(toCanonicalHomepageSection)
-    .filter((section): section is Record<string, unknown> => section !== null);
-  const safeHomepageSections = homepageSections.length === 0 ||
-    homepageSections[0]?.type === "hero"
-    ? homepageSections
-    : [];
+  const homepageSections = orderCanonicalHomepageSections(
+    input.homepageSections
+      .map(section => toCanonicalHomepageSection(section, galleryLibrary))
+      .filter((section): section is Record<string, unknown> => section !== null),
+  );
+  const safeHomepageSections = homepageLeadIsSafe(homepageSections) ? homepageSections : [];
 
   return {
     deployMode,
@@ -850,7 +1192,7 @@ export function toCanonicalAstroClientConfig(
       legalItems: [{ label: "Privacy Policy", href: "/privacy-policy" }],
     },
     categories,
-    serviceAreas: [],
+    serviceAreas: parseServiceAreas(input.serviceAreas),
     financing,
     display: { showPrice: true, showMonthly: Boolean(financing) },
     homepage: {
@@ -870,8 +1212,12 @@ export function toCanonicalAstroClientConfig(
   };
 }
 
-export function generateAstroClientConfig(input: AstroClientConfigInput, assets: Record<string, string>): string {
-  const config = toCanonicalAstroClientConfig(input, assets);
+export function generateAstroClientConfig(
+  input: AstroClientConfigInput,
+  assets: Record<string, string>,
+  galleryLibrary: readonly MediaLibraryItemRef[] = [],
+): string {
+  const config = toCanonicalAstroClientConfig(input, assets, galleryLibrary);
   return [
     "// Generated by Site Launchpad. Edit in the dashboard and export again.",
     'import type { ClientConfigInput } from "./schema";',

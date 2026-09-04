@@ -246,6 +246,39 @@ export type AssetSlot = (typeof assetSlotValues)[number];
 
 export const assetSlotEnum = pgEnum("asset_slot", assetSlotValues);
 
+export const clientMediaItems = pgTable(
+  "clientMediaItems",
+  {
+    id: serial("id").primaryKey(),
+    clientId: integer("clientId")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    storageKey: varchar("storageKey", { length: 800 }).notNull(),
+    storageUrl: varchar("storageUrl", { length: 1000 }).notNull(),
+    filename: varchar("filename", { length: 240 }).notNull(),
+    originalFilename: varchar("originalFilename", { length: 500 }).notNull(),
+    mimeType: varchar("mimeType", { length: 120 }).notNull(),
+    byteSize: integer("byteSize").notNull(),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    alt: varchar("alt", { length: 240 }).default("").notNull(),
+    description: varchar("description", { length: 2000 }).default("").notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  table => [
+    uniqueIndex("client_media_items_storage_key_unique").on(table.storageKey),
+    index("client_media_items_client_idx").on(table.clientId),
+  ]
+).enableRLS();
+
+export type ClientMediaItem = typeof clientMediaItems.$inferSelect;
+export type InsertClientMediaItem = typeof clientMediaItems.$inferInsert;
+
 export const clientAssets = pgTable(
   "clientAssets",
   {
@@ -254,6 +287,9 @@ export const clientAssets = pgTable(
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
     slot: assetSlotEnum("slot").notNull(),
+    mediaItemId: integer("mediaItemId").references(() => clientMediaItems.id, {
+      onDelete: "set null",
+    }),
     storageKey: varchar("storageKey", { length: 800 }).notNull(),
     storageUrl: varchar("storageUrl", { length: 1000 }).notNull(),
     filename: varchar("filename", { length: 240 }).notNull(),
@@ -275,6 +311,7 @@ export const clientAssets = pgTable(
       table.slot
     ),
     index("client_assets_client_idx").on(table.clientId),
+    index("client_assets_media_item_idx").on(table.mediaItemId),
   ]
 ).enableRLS();
 
@@ -284,6 +321,7 @@ export type InsertClientAsset = typeof clientAssets.$inferInsert;
 export const assetUploadKindEnum = pgEnum("asset_upload_kind", [
   "client",
   "astro",
+  "library",
 ]);
 export const assetUploadStatusEnum = pgEnum("asset_upload_status", [
   "pending",
@@ -345,6 +383,7 @@ export const astroClientConfigs = pgTable(
       .$type<Record<string, Record<string, unknown>>>()
       .notNull(),
     financing: jsonb("financing").$type<Record<string, unknown>>().notNull(),
+    serviceAreas: text("serviceAreas").default("").notNull(),
     homepageSections: jsonb("homepageSections")
       .$type<Array<Record<string, unknown>>>()
       .notNull(),

@@ -243,7 +243,7 @@ export function CampaignEditor({
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div>
         <button
           type="button"

@@ -94,9 +94,8 @@ describe("direct internal workspace access", () => {
 
   it("loads public R2 previews directly without protected storage fetches", () => {
     const previewSources = [
-      source("components/astro/media/MediaSlotRail.tsx"),
+      source("components/astro/media/MediaWorkspace.tsx"),
       source("components/astro/media/MediaSlotDetail.tsx"),
-      source("components/astro/media/MediaSlotGrid.tsx"),
       source("features/campaigns/campaignFields.tsx"),
     ];
 

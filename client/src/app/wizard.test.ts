@@ -193,6 +193,47 @@ describe("wizard signals that screens may not have", () => {
     });
     expect(stateOf(allHidden, "pages")).not.toBe("complete");
   });
+
+  it("does not complete pages from a visible section when the content tab is still open", () => {
+    const steps = buildWizard({
+      operationalSummary: summary({}),
+      enabledSectionCount: 6,
+      pagesSetup: {
+        complete: false,
+        blockedBy: "Homepage sections is incomplete",
+        filled: 2,
+        total: 5,
+      },
+    });
+    const pages = steps.find(step => step.step === "pages");
+    expect(pages?.state).not.toBe("complete");
+    expect(pages?.blockedBy).toBe("Homepage sections is incomplete");
+    expect(pages?.filled).toBe(2);
+    expect(pages?.total).toBe(5);
+  });
+
+  it("completes pages from the content-tab signal even if the raw count is stale", () => {
+    const steps = buildWizard({
+      operationalSummary: summary({}),
+      enabledSectionCount: 0,
+      pagesSetup: { complete: true, filled: 4, total: 4 },
+    });
+    expect(stateOf(steps, "pages")).toBe("complete");
+  });
+
+  it("uses the technical-tab signal for integrations instead of the list summary", () => {
+    const steps = buildWizard({
+      operationalSummary: summary({ websiteIntegrations: true }),
+      integrationsSetup: {
+        complete: false,
+        blockedBy: "Client integrations is incomplete",
+      },
+    });
+    expect(stateOf(steps, "integrations")).not.toBe("complete");
+    expect(steps.find(step => step.step === "integrations")?.blockedBy).toBe(
+      "Client integrations is incomplete",
+    );
+  });
 });
 
 describe("wizard current step", () => {

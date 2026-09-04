@@ -9,6 +9,11 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { uploadAssetDirectly, type AssetUploadResult } from "@/lib/assetUpload";
 import { trpc } from "@/lib/trpc";
 import {
+  configSectionElementId,
+  parseConfigurationSearch,
+  tabForConfigSection,
+} from "@/lib/workspaceNavigation";
+import {
   MAX_RAW_UPLOAD_BYTES,
   isSupportedImageMimeType,
 } from "@shared/assetUpload";
@@ -20,6 +25,7 @@ import {
 } from "@shared/astroConfig";
 import {
   summarizeAstroConfigReadiness,
+  type ConfigSectionId,
   type ConfigTabId,
 } from "@shared/astroConfigReadiness";
 import { AlertCircle, Loader2, Save } from "lucide-react";
@@ -42,8 +48,9 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
     retry: 1,
     retryDelay: 250,
   });
+  const libraryQuery = trpc.assets.listLibrary.useQuery(queryInput);
   const [config, setConfig] = useState<AstroClientConfigInput | null>(null);
-  const [assets, setAssets] = useState<Array<{ slot: string; storageUrl: string; filename: string; byteSize: number }>>([]);
+  const [assets, setAssets] = useState<Array<{ slot: string; storageUrl: string; filename: string; byteSize: number; mediaItemId?: number | null; alt?: string; description?: string }>>([]);
   const [secretStatus, setSecretStatus] = useState<Record<WranglerSecretName, boolean> | null>(null);
   const [uploadingSlot, setUploadingSlot] = useState<AstroAssetSlot | null>(null);
   const uploadInFlightRef = useRef(false);
@@ -56,13 +63,14 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
   const inFlightPayloadRef = useRef("");
   const mountedClientIdRef = useRef(clientId);
   mountedClientIdRef.current = clientId;
-  const [activeTab, setActiveTab] = useState<ConfigTabId>(() => {
-    const tab = new URLSearchParams(window.location.search).get("tab");
-    return tab === "branding" || tab === "media" || tab === "content" || tab === "technical"
-      ? tab
-      : "basic";
-  });
+  const [activeTab, setActiveTab] = useState<ConfigTabId>(
+    () => parseConfigurationSearch(window.location.search).tab,
+  );
+  const pendingSectionRef = useRef<ConfigSectionId | null>(
+    parseConfigurationSearch(window.location.search).section,
+  );
   const selectTab = (tab: ConfigTabId) => {
+    pendingSectionRef.current = null;
     setActiveTab(tab);
     window.history.replaceState({}, "", `${window.location.pathname}?tab=${tab}`);
   };
@@ -75,12 +83,43 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
     if (!query.data || !shouldHydrateEditor(hydratedForClientIdRef.current, clientId)) return;
     setConfig(query.data.input);
     configRef.current = query.data.input;
-    setAssets(query.data.assets);
+    setAssets(query.data.assets.map(asset => ({
+      slot: asset.slot,
+      storageUrl: asset.storageUrl,
+      filename: asset.filename,
+      byteSize: asset.byteSize,
+      mediaItemId: asset.mediaItemId ?? undefined,
+    })));
     setSecretStatus(query.data.secretStatus);
     setSaveState("saved");
     dirtyRef.current = false;
     hydratedForClientIdRef.current = clientId;
   }, [query.data, clientId]);
+
+  useEffect(() => {
+    const section = pendingSectionRef.current;
+    if (!config || !section || activeTab !== tabForConfigSection(section)) return;
+
+    let cancelled = false;
+    let attempts = 0;
+    const scrollToSection = () => {
+      if (cancelled) return;
+      const node = document.getElementById(configSectionElementId(section));
+      if (node) {
+        pendingSectionRef.current = null;
+        node.scrollIntoView({ behavior: "smooth", block: "start" });
+        node.focus({ preventScroll: true });
+        return;
+      }
+      attempts += 1;
+      if (attempts < 16) window.requestAnimationFrame(scrollToSection);
+    };
+    const frame = window.requestAnimationFrame(scrollToSection);
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+    };
+  }, [config, activeTab]);
 
 
   const requestUploadMutation = trpc.assets.requestUpload.useMutation();
@@ -89,7 +128,13 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
   const saveMutation = trpc.astroConfig.save.useMutation({
     onMutate: () => setSaveState("saving"),
     onSuccess: view => {
-      setAssets(view.assets);
+      setAssets(view.assets.map(asset => ({
+        slot: asset.slot,
+        storageUrl: asset.storageUrl,
+        filename: asset.filename,
+        byteSize: asset.byteSize,
+        mediaItemId: asset.mediaItemId ?? undefined,
+      })));
       setSecretStatus(view.secretStatus);
       utils.astroConfig.get.setData(queryInput, view);
       const currentPayload = JSON.stringify(configRef.current);
@@ -145,6 +190,43 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
     setSaveState("pending");
   };
 
+  const applySlotAsset = (
+    slot: string,
+    asset: { slot: string; storageUrl: string; filename: string; byteSize: number; mediaItemId?: number | null; alt?: string; description?: string } | null,
+  ) => {
+    setAssets(currentAssets => (
+      asset
+        ? [...currentAssets.filter(entry => entry.slot !== slot), asset]
+        : currentAssets.filter(entry => entry.slot !== slot)
+    ));
+    const categoryBySlot = {
+      categoryHotTubs: "hot-tubs",
+      categorySwimSpas: "swim-spas",
+      categorySaunas: "saunas",
+      categoryColdPlunge: "cold-plunge",
+      categoryMassageChairs: "massage-chairs",
+    } as const;
+    const category = slot in categoryBySlot
+      ? categoryBySlot[slot as keyof typeof categoryBySlot]
+      : undefined;
+    const current = configRef.current;
+    if (!current || !category) return;
+    const next = {
+      ...current,
+      categories: {
+        ...current.categories,
+        [category]: {
+          ...current.categories[category],
+          heroImage: asset?.storageUrl ?? "",
+        },
+      },
+    };
+    setConfig(next);
+    configRef.current = next;
+    dirtyRef.current = true;
+    setSaveState("pending");
+  };
+
   const uploadFile = async (
     slot: AstroAssetSlot,
     file: File,
@@ -181,42 +263,21 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
           fetchFn: (input, init) => fetch(input, init),
         },
       );
-      setAssets(currentAssets => [
-        ...currentAssets.filter(asset => asset.slot !== slot),
-        completed.asset,
-      ]);
-      const current = configRef.current;
-      const categoryBySlot = {
-        categoryHotTubs: "hot-tubs",
-        categorySwimSpas: "swim-spas",
-        categorySaunas: "saunas",
-        categoryColdPlunge: "cold-plunge",
-        categoryMassageChairs: "massage-chairs",
-      } as const;
-      const category = slot in categoryBySlot
-        ? categoryBySlot[slot as keyof typeof categoryBySlot]
-        : undefined;
-      if (current) {
-        const next = category
-          ? {
-              ...current,
-              categories: {
-                ...current.categories,
-                [category]: {
-                  ...current.categories[category],
-                  heroImage: completed.asset.storageUrl,
-                },
-              },
-            }
-          : current;
-        setConfig(next);
-        configRef.current = next;
-        dirtyRef.current = true;
-        setSaveState("pending");
+      if (completed.asset) {
+        applySlotAsset(slot, {
+          slot,
+          storageUrl: completed.asset.storageUrl,
+          filename: completed.asset.filename,
+          byteSize: completed.asset.byteSize,
+          mediaItemId: completed.asset.mediaItemId ?? completed.mediaItem.id,
+          alt: completed.mediaItem.alt,
+          description: completed.mediaItem.description,
+        });
       }
       await Promise.all([
         utils.clients.list.invalidate(),
         utils.astroConfig.get.invalidate(queryInput),
+        utils.assets.listLibrary.invalidate(queryInput),
       ]);
       if (!options?.quiet) toast.success("Image added.");
       return { ok: true };
@@ -234,7 +295,7 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
   if (query.error) return <div className="launchpad-panel rounded-lg p-8 text-center"><AlertCircle className="mx-auto h-6 w-6 text-destructive" aria-hidden="true" /><p className="mt-3 text-sm font-semibold">Website configuration could not be loaded</p><p className="mt-1 text-xs text-muted-foreground">{query.error.message}</p><Button type="button" variant="outline" size="sm" className="mt-4 h-8 text-xs font-semibold" onClick={() => void query.refetch()}>Try again</Button></div>;
   if (query.isLoading || !config || !secretStatus || !readiness) return <div className="grid min-h-[65vh] place-items-center"><div className="text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" /><p className="mt-3 text-xs text-muted-foreground">Opening client configuration…</p></div></div>;
 
-  return <div className="space-y-4 pb-16">
+  return <div className="space-y-3 pb-4">
     {saveState === "error" ? (
       <div className="flex flex-wrap items-center gap-2">
         <span className="flex h-9 items-center gap-1.5 rounded-lg border border-destructive/25 bg-destructive/[0.06] px-3 text-xs font-semibold text-destructive">
@@ -247,12 +308,12 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
       </div>
     ) : null}
 
-    <Tabs value={activeTab} onValueChange={tab => selectTab(tab as ConfigTabId)} className="space-y-4">
+    <Tabs value={activeTab} onValueChange={tab => selectTab(tab as ConfigTabId)} className="gap-3">
       <ReadinessStrip readiness={readiness} active={activeTab} onSelect={selectTab} />
       <TabsContent value="basic"><BasicInfoTab value={config} readiness={readiness} onChange={changeConfig} /></TabsContent>
       <TabsContent value="branding"><BrandingTab value={config} readiness={readiness} onChange={changeConfig} /></TabsContent>
-      <TabsContent value="media"><MediaTab clientId={clientId} value={config} assets={assets} uploadingSlot={uploadingSlot} onUpload={uploadFile} /></TabsContent>
-      <TabsContent value="content"><ContentTab value={config} readiness={readiness} onChange={changeConfig} assets={assets} /></TabsContent>
+      <TabsContent value="media"><MediaTab clientId={clientId} value={config} assets={assets} uploadingSlot={uploadingSlot} onUpload={uploadFile} onSlotAssetChange={applySlotAsset} /></TabsContent>
+      <TabsContent value="content"><ContentTab value={config} readiness={readiness} onChange={changeConfig} assets={assets} mediaItems={libraryQuery.data?.items ?? []} /></TabsContent>
       <TabsContent value="technical"><TechnicalTab value={config} readiness={readiness} onChange={changeConfig} secretStatus={secretStatus} onOpenClientIntegrations={() => setLocation(`/workspace/${clientId}/integrations`)} /></TabsContent>
     </Tabs>
   </div>;

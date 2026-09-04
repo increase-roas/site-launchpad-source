@@ -7,11 +7,14 @@ import {
 import { ASSET_SLOT_VALUES } from "@shared/client";
 import {
   astroSlotId,
+  buildMediaBrowseEntries,
   buildMediaSlotCatalog,
   clientSlotId,
   countAddedByGroup,
+  filterMediaBrowseEntries,
   firstMissingSlotId,
   groupMediaSlots,
+  libraryBrowseId,
   nextMissingSlotId,
   resolveMediaSlots,
   type StoredMediaImage,
@@ -174,5 +177,61 @@ describe("nextMissingSlotId", () => {
 
   it("starts from the top when the current id is unknown", () => {
     expect(nextMissingSlotId(allMissing, "astro:nope")).toBe(allMissing[0].id);
+  });
+});
+
+describe("media browse filters", () => {
+  const slots = resolveMediaSlots(
+    catalog,
+    new Map([["navLogo", { ...image("nav.webp"), alt: "Header mark", mediaItemId: 9 }]]),
+    new Map(),
+  );
+  const library = [
+    {
+      id: 9,
+      storageUrl: "https://cdn.test/nav.webp",
+      filename: "nav.webp",
+      originalFilename: "nav.png",
+      mimeType: "image/webp",
+      byteSize: 2048,
+      width: 800,
+      height: 400,
+      alt: "Header mark",
+      description: "",
+      slots: ["navLogo"],
+      createdAt: "2026-09-04T12:00:00.000Z",
+    },
+    {
+      id: 21,
+      storageUrl: "https://cdn.test/showroom.webp",
+      filename: "showroom.webp",
+      originalFilename: "showroom.jpg",
+      mimeType: "image/webp",
+      byteSize: 4096,
+      width: 1600,
+      height: 900,
+      alt: "Showroom floor",
+      description: "Main floor",
+      slots: [],
+      createdAt: "2026-09-04T12:00:00.000Z",
+    },
+  ];
+
+  it("keeps assigned library photos on their slot instead of duplicating them", () => {
+    const entries = buildMediaBrowseEntries(slots, library);
+    expect(entries.filter(entry => entry.kind === "library")).toHaveLength(1);
+    expect(entries.find(entry => entry.kind === "library" && entry.item.id === 21)).toBeTruthy();
+    expect(entries.find(entry => entry.kind === "slot" && entry.slot.slot === "navLogo")).toBeTruthy();
+  });
+
+  it("filters by missing placements, group, and search text", () => {
+    const entries = buildMediaBrowseEntries(slots, library);
+    expect(filterMediaBrowseEntries(entries, "", "missing").every(entry => entry.kind === "slot" && !entry.slot.added)).toBe(true);
+    expect(filterMediaBrowseEntries(entries, "", "brand").every(entry => entry.kind === "slot" && entry.slot.group === "brand")).toBe(true);
+    expect(filterMediaBrowseEntries(entries, "showroom", "all").map(entry => entry.id)).toEqual([
+      clientSlotId("showroom"),
+      libraryBrowseId(21),
+    ]);
+    expect(filterMediaBrowseEntries(entries, "header", "all")[0]?.id).toBe(astroSlotId("navLogo"));
   });
 });

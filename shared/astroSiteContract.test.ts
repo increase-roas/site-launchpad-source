@@ -11,7 +11,9 @@ import {
 
 describe("Astro website template contract", () => {
   it("pins an exact reviewed canonical source commit", () => {
-    expect(ASTRO_SITE_APPROVED_SOURCE_SHA).toMatch(/^[0-9a-f]{40}$/);
+    expect(ASTRO_SITE_APPROVED_SOURCE_SHA).toBe(
+      "54558ce23c681cb47fcd36a36331b9073acc1fd3",
+    );
   });
   it("models the exact canonical repository, config, workflow, and bindings", () => {
     const raw = JSON.parse(

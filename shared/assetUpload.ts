@@ -1,4 +1,4 @@
-export const ASSET_KIND_VALUES = ["client", "astro"] as const;
+export const ASSET_KIND_VALUES = ["client", "astro", "library"] as const;
 export type AssetKind = (typeof ASSET_KIND_VALUES)[number];
 
 export const SUPPORTED_IMAGE_MIME_TYPES = [

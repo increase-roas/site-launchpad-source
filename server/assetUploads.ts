@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import type {
   AssetUploadSession,
+  ClientMediaItem,
   InsertAssetUploadSession,
   InsertClientAsset,
+  InsertClientMediaItem,
 } from "../drizzle/schema";
 import {
   ASSET_KIND_VALUES,
@@ -22,6 +24,10 @@ import {
   sanitizeClientFolder,
   type AssetSlot,
 } from "../shared/client";
+import {
+  defaultAltFromFilename,
+  LIBRARY_UPLOAD_SLOT,
+} from "../shared/mediaLibrary";
 import {
   mediaSpecificationForAsset,
   validateImageMetadata,
@@ -62,7 +68,8 @@ export type RequestAssetUploadInput = {
 export type CompletedAssetUpload = {
   clientId: number;
   assetKind: AssetKind;
-  asset: InsertClientAsset;
+  asset: InsertClientAsset | null;
+  mediaItem: ClientMediaItem;
 };
 
 export type AssetUploadServiceDependencies = {
@@ -92,9 +99,10 @@ export type AssetUploadServiceDependencies = {
   deleteObject(key: string): Promise<void>;
   finalizeUpload(input: {
     uploadId: string;
-    asset: InsertClientAsset;
+    asset: InsertClientAsset | null;
+    mediaItem: InsertClientMediaItem;
     completedAt: Date;
-  }): Promise<{ previousStorageKey: string | null }>;
+  }): Promise<{ previousStorageKey: string | null; mediaItem: ClientMediaItem }>;
 };
 
 export class AssetUploadError extends Error {
@@ -108,7 +116,42 @@ export class AssetUploadError extends Error {
 }
 
 function isValidSlot(assetKind: AssetKind, slot: string): boolean {
-  return assetKind === "client" ? CLIENT_SLOT_SET.has(slot) : ASTRO_SLOT_SET.has(slot);
+  switch (assetKind) {
+    case "client":
+      return CLIENT_SLOT_SET.has(slot);
+    case "astro":
+      return ASTRO_SLOT_SET.has(slot);
+    case "library":
+      return slot === LIBRARY_UPLOAD_SLOT;
+    default: {
+      const exhaustive: never = assetKind;
+      throw new Error(`Unhandled asset kind: ${String(exhaustive)}`);
+    }
+  }
+}
+
+function libraryStoredFilename(originalFilename: string): string {
+  const base = defaultAltFromFilename(originalFilename)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return `${base || "image"}.webp`;
+}
+
+function storageScope(assetKind: AssetKind): "assets" | "astro" | "library" {
+  switch (assetKind) {
+    case "client":
+      return "assets";
+    case "astro":
+      return "astro";
+    case "library":
+      return "library";
+    default: {
+      const exhaustive: never = assetKind;
+      return exhaustive;
+    }
+  }
 }
 
 function expectedTemporaryKey(session: AssetUploadSessionRecord): string {
@@ -302,10 +345,21 @@ export function createAssetUploadService(dependencies: AssetUploadServiceDepende
 
       let processed: ProcessedImage;
       try {
-        processed =
-          session.assetKind === "client"
-            ? await dependencies.processClientImage(source, session.slot as AssetSlot)
-            : await dependencies.processAstroImage(source, session.slot as AstroAssetSlot);
+        switch (session.assetKind) {
+          case "client":
+            processed = await dependencies.processClientImage(source, session.slot as AssetSlot);
+            break;
+          case "astro":
+            processed = await dependencies.processAstroImage(source, session.slot as AstroAssetSlot);
+            break;
+          case "library":
+            processed = await dependencies.processClientImage(source, "hero");
+            break;
+          default: {
+            const exhaustive: never = session.assetKind;
+            throw new Error(`Unhandled asset kind: ${String(exhaustive)}`);
+          }
+        }
       } catch {
         return failSession(
           dependencies,
@@ -333,27 +387,45 @@ export function createAssetUploadService(dependencies: AssetUploadServiceDepende
         return failSession(dependencies, uploadId, "Client not found.");
       }
       const folder = sanitizeClientFolder(client.shortName) || `client-${client.id}`;
-      const scope = session.assetKind === "client" ? "assets" : "astro";
+      const scope = storageScope(session.assetKind);
       const contentHash = createHash("sha256").update(processed.buffer).digest("hex");
       const version = dependencies.randomUUID().replace(/-/g, "");
       const permanentKey =
         `clients/${client.id}-${folder}/${scope}/${session.slot}-${contentHash}-${version}.webp`;
       const filename =
-        session.assetKind === "client"
-          ? ASSET_SLOT_FILENAMES[session.slot as AssetSlot]
-          : ASTRO_ASSET_FILENAMES[session.slot as AstroAssetSlot];
-      const asset: InsertClientAsset = {
+        session.assetKind === "library"
+          ? libraryStoredFilename(session.originalFilename)
+          : session.assetKind === "client"
+            ? ASSET_SLOT_FILENAMES[session.slot as AssetSlot]
+            : ASTRO_ASSET_FILENAMES[session.slot as AstroAssetSlot];
+      const storageUrl = publicAssetUrl(dependencies.publicAssetBaseUrl, permanentKey);
+      const mediaItem: InsertClientMediaItem = {
         clientId: client.id,
-        slot: session.slot as InsertClientAsset["slot"],
         storageKey: permanentKey,
-        storageUrl: publicAssetUrl(dependencies.publicAssetBaseUrl, permanentKey),
+        storageUrl,
         filename,
         originalFilename: session.originalFilename,
         mimeType: processed.mimeType,
         byteSize: processed.byteSize,
         width: processed.width,
         height: processed.height,
+        alt: defaultAltFromFilename(session.originalFilename),
+        description: "",
       };
+      const asset: InsertClientAsset | null = session.assetKind === "library"
+        ? null
+        : {
+            clientId: client.id,
+            slot: session.slot as InsertClientAsset["slot"],
+            storageKey: permanentKey,
+            storageUrl,
+            filename,
+            originalFilename: session.originalFilename,
+            mimeType: processed.mimeType,
+            byteSize: processed.byteSize,
+            width: processed.width,
+            height: processed.height,
+          };
 
       try {
         await dependencies.putObject({
@@ -370,11 +442,12 @@ export function createAssetUploadService(dependencies: AssetUploadServiceDepende
         );
       }
 
-      let previousStorageKey: string | null;
+      let saved: ClientMediaItem;
       try {
-        ({ previousStorageKey } = await dependencies.finalizeUpload({
+        ({ mediaItem: saved } = await dependencies.finalizeUpload({
           uploadId,
           asset,
+          mediaItem,
           completedAt: dependencies.now(),
         }));
       } catch {
@@ -386,11 +459,13 @@ export function createAssetUploadService(dependencies: AssetUploadServiceDepende
       }
 
       await dependencies.deleteObject(session.tempKey).catch(() => undefined);
-      if (previousStorageKey && previousStorageKey !== permanentKey) {
-        await dependencies.deleteObject(previousStorageKey).catch(() => undefined);
-      }
 
-      return { clientId: client.id, assetKind: session.assetKind, asset };
+      return {
+        clientId: client.id,
+        assetKind: session.assetKind,
+        asset,
+        mediaItem: saved,
+      };
     },
   };
 }

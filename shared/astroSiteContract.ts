@@ -3,7 +3,7 @@ import astroSiteManifestJson from "../server/templates/astro-site/launchpad.temp
 
 export const ASTRO_SITE_TEMPLATE_KEY = "htl-astro-website" as const;
 export const ASTRO_SITE_APPROVED_SOURCE_SHA =
-  "97b41767d21e00b3f3e7da92acb067cd35dfeb21" as const;
+  "54558ce23c681cb47fcd36a36331b9073acc1fd3" as const;
 
 export const astroSiteManifestSchema = z.strictObject({
   schemaVersion: z.literal(1),

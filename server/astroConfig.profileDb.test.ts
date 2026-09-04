@@ -20,6 +20,9 @@ const dbMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./db", () => dbMocks);
+vi.mock("./mediaLibraryDb", () => ({
+  listMediaLibrary: vi.fn(async () => []),
+}));
 
 import {
   getAstroConfigView,
@@ -192,6 +195,7 @@ describe("Astro canonical integration profile database flow", () => {
         navigationItems: defaultConfig.navigationItems,
         categories: defaultConfig.categories,
         financing: defaultConfig.financing,
+        serviceAreas: defaultConfig.serviceAreas,
         homepageSections: defaultConfig.homepageSections,
         integrations: defaultConfig.integrations,
         generatedConfigEncrypted: encryptSetupValue('export const config = { "deployMode": "client" };'),

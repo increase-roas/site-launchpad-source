@@ -43,7 +43,7 @@ export default function DeferredSettingsPage({
   const content = CONTENT[section];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PageHeading title={content.title} description={content.description} />
       <DeferredNotice
         title="Not enabled in this phase"

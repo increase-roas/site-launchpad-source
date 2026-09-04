@@ -1,4 +1,9 @@
 import { parseCampaignSearch } from "@/features/campaigns/campaignTabs";
+import {
+  CONFIG_SECTION_IDS,
+  CONFIG_TAB_SECTIONS,
+  type ConfigSectionId,
+} from "@shared/astroConfigReadiness";
 
 export type WorkspaceArea =
   | "overview"
@@ -66,9 +71,68 @@ export function workspaceRoute(area: WorkspaceArea, clientId?: number): string {
   }
 }
 
-export function configurationRoute(clientId: number, tab?: ConfigurationTab): string {
+const SECTION_TAB = Object.fromEntries(
+  (
+    Object.entries(CONFIG_TAB_SECTIONS) as [
+      ConfigurationTab,
+      readonly ConfigSectionId[],
+    ][]
+  ).flatMap(([tab, sections]) => sections.map(id => [id, tab])),
+) as Record<ConfigSectionId, ConfigurationTab>;
+
+export function isConfigurationTab(
+  value: string | null | undefined,
+): value is ConfigurationTab {
+  return CONFIGURATION_TABS.some(tab => tab === value);
+}
+
+export function isConfigSectionId(
+  value: string | null | undefined,
+): value is ConfigSectionId {
+  return CONFIG_SECTION_IDS.some(id => id === value);
+}
+
+export function tabForConfigSection(section: ConfigSectionId): ConfigurationTab {
+  return SECTION_TAB[section];
+}
+
+export function configSectionElementId(section: ConfigSectionId): string {
+  return `config-section-${section}`;
+}
+
+export function parseConfigurationSearch(search: string): {
+  tab: ConfigurationTab;
+  section: ConfigSectionId | null;
+} {
+  const params = new URLSearchParams(
+    search.startsWith("?") ? search.slice(1) : search,
+  );
+  const rawSection = params.get("section");
+  const section = isConfigSectionId(rawSection) ? rawSection : null;
+  const rawTab = params.get("tab");
+  const tab = section
+    ? tabForConfigSection(section)
+    : isConfigurationTab(rawTab)
+      ? rawTab
+      : "basic";
+  return { tab, section };
+}
+
+export function configurationRoute(
+  clientId: number,
+  tab?: ConfigurationTab,
+  section?: ConfigSectionId,
+): string {
   const base = workspaceRoute("configuration", clientId);
-  return tab ? `${base}?tab=${tab}` : base;
+  const resolvedSection = section && isConfigSectionId(section) ? section : undefined;
+  const resolvedTab = resolvedSection
+    ? tabForConfigSection(resolvedSection)
+    : tab;
+  const params = new URLSearchParams();
+  if (resolvedTab) params.set("tab", resolvedTab);
+  if (resolvedSection) params.set("section", resolvedSection);
+  const query = params.toString();
+  return query ? `${base}?${query}` : base;
 }
 
 export function integrationsRoute(clientId: number): string {

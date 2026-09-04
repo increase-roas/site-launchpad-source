@@ -87,7 +87,7 @@ export default function ClientsPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         {heading}
         <ClientsTableSkeleton rows={5} />
       </div>
@@ -96,7 +96,7 @@ export default function ClientsPage() {
 
   if (isError) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         {heading}
         <div className="launchpad-panel rounded-lg p-8 text-center">
           <AlertTriangle className="mx-auto h-6 w-6 text-destructive" aria-hidden="true" />
@@ -120,7 +120,7 @@ export default function ClientsPage() {
 
   if (clients.length === 0) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         {heading}
         <div className="launchpad-panel rounded-lg px-6 py-16 text-center">
           <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-primary/10 text-primary">
@@ -142,7 +142,7 @@ export default function ClientsPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {heading}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

@@ -50,6 +50,9 @@ describe("Astro client config schema", () => {
     expect(Object.keys(config.integrations)).toHaveLength(6);
     expect(Object.keys(config.categories)).toEqual(ASTRO_CATEGORY_VALUES);
     expect(config.hours).toHaveLength(7);
+    const hero = config.homepageSections.find(section => section.type === "hero");
+    expect(hero?.fields.ctaHref).toBe("/visit-us");
+    expect(hero?.fields.ctaHref).not.toBe("/contact");
   });
 
   it("validates E.164 SMS phones, coordinates, and optional social URLs", () => {
@@ -92,7 +95,7 @@ describe("Astro client config schema", () => {
     expect(parsed.integrations.meta.config).toEqual({});
   });
 
-  it("supports all ten explicit section types and rejects incomplete enabled sections", () => {
+  it("supports every explicit section type and rejects incomplete enabled sections", () => {
     for (const type of ASTRO_SECTION_TYPE_VALUES) {
       const section = createAstroHomepageSection(type, `test-${type}`);
       section.enabled = true;
@@ -284,5 +287,161 @@ describe("Astro client config schema", () => {
       "Map coordinates",
       "Site images: footerLogo, favicon, ogImage",
     ]);
+  });
+
+  it("rewrites dead template routes to pages that exist", () => {
+    const config = createDefaultAstroConfig(client);
+    config.categories["cold-plunge"] = {
+      enabled: true,
+      label: "Cold Plunges",
+      slug: "cold-plunge",
+      description: "Shop cold plunges.",
+      heroImage: "https://assets.example.com/cold-plunges.webp",
+    };
+    config.navigationItems.push({
+      id: "nav-plunge",
+      type: "link",
+      label: "Cold Plunges",
+      href: "/cold-plunge",
+      inHeader: true,
+      inFooter: false,
+    });
+    const hero = config.homepageSections.find(section => section.type === "hero");
+    if (hero) hero.fields.ctaHref = "/contact";
+
+    const canonical = toCanonicalAstroClientConfig(config, {
+      categoryColdPlunge: "https://assets.example.com/cold-plunges.webp",
+    }) as {
+      nav: { items: Array<{ type: string; href?: string }> };
+      homepage: { sections: Array<{ actions?: Array<{ href: string }> }> };
+    };
+
+    expect(canonical.nav.items).toContainEqual({
+      type: "link",
+      label: "Cold Plunges",
+      href: "/cold-plunges",
+      inHeader: true,
+      inFooter: false,
+    });
+    expect(canonical.nav.items.some(item => item.href === "/cold-plunge")).toBe(false);
+    expect(canonical.homepage.sections[0]?.actions?.[0]?.href).toBe("/visit-us");
+  });
+
+  it("treats /cold-plunges as the enabled category route", () => {
+    const config = createDefaultAstroConfig(client);
+    config.categories["cold-plunge"] = {
+      enabled: true,
+      label: "Cold Plunges",
+      slug: "cold-plunge",
+      description: "Shop cold plunges.",
+      heroImage: "https://assets.example.com/cold-plunges.webp",
+    };
+    config.navigationItems = [
+      {
+        id: "nav-plunge",
+        type: "link",
+        label: "Cold Plunges",
+        href: "/cold-plunges",
+        inHeader: true,
+        inFooter: true,
+      },
+    ];
+
+    const canonical = toCanonicalAstroClientConfig(config, {
+      categoryColdPlunge: "https://assets.example.com/cold-plunges.webp",
+    }) as { nav: { items: Array<{ href?: string }> } };
+
+    expect(canonical.nav.items).toContainEqual({
+      type: "link",
+      label: "Cold Plunges",
+      href: "/cold-plunges",
+      inHeader: true,
+      inFooter: true,
+    });
+
+    config.categories["cold-plunge"].enabled = false;
+    const disabled = toCanonicalAstroClientConfig(config, {}) as {
+      nav: { items: Array<{ href?: string }> };
+    };
+    expect(disabled.nav.items.some(item => item.href === "/cold-plunges")).toBe(false);
+  });
+
+  it("resolves gallery slides from the media library with per-image alt text", () => {
+    const config = createDefaultAstroConfig(client);
+    const gallery = createAstroHomepageSection("gallery", "gallery-1");
+    gallery.enabled = true;
+    gallery.fields.heading = "Showroom";
+    gallery.fields.images = JSON.stringify([
+      { id: 12, src: "https://old.example/stale.webp", alt: "Old", description: "" },
+    ]);
+    config.homepageSections = [
+      ...config.homepageSections.filter(section => section.type !== "gallery"),
+      gallery,
+    ];
+    const canonical = toCanonicalAstroClientConfig(config, {}, [
+      {
+        id: 12,
+        storageUrl: "https://assets.example.com/fresh.webp",
+        alt: "Showroom floor",
+        description: "Main floor",
+      },
+    ]) as { homepage: { sections: Array<{ images?: Array<{ src: string; alt: string }> }> } };
+    const published = canonical.homepage.sections.find(section => section.images);
+    expect(published?.images).toEqual([
+      { src: "https://assets.example.com/fresh.webp", alt: "Showroom floor" },
+    ]);
+  });
+
+  it("publishes reviews, service areas, and the template homepage section types", () => {
+    const config = createDefaultAstroConfig(client);
+    config.serviceAreas = "Lakeside\nEl Cajon, Santee";
+    const reviews = createAstroHomepageSection("reviews", "reviews-1");
+    reviews.enabled = true;
+    reviews.fields.heading = "Customer Reviews";
+    reviews.fields.items = "Karen | Great team. | 5 | Google Review | July 2026";
+    reviews.fields.aggregate = "4.7 | 48 | Google";
+    const announcement = createAstroHomepageSection("announcement", "announce-1");
+    announcement.enabled = true;
+    announcement.fields.badge = "Evergreen Catalog";
+    announcement.fields.text = "Shop hot tubs";
+    announcement.fields.href = "/hot-tubs";
+    const stats = createAstroHomepageSection("stats", "stats-1");
+    stats.enabled = true;
+    stats.fields.items = "5★ | Highly rated service\n100% | Out-the-door pricing";
+    const comparison = createAstroHomepageSection("comparison", "compare-1");
+    comparison.enabled = true;
+    comparison.fields.heading = "Why Choose Us";
+    comparison.fields.rows = "Pricing | Out-the-door price | Hidden fees later";
+    const leadForm = createAstroHomepageSection("cta", "cta-1");
+    leadForm.enabled = true;
+    leadForm.fields.headline = "Get a price";
+    leadForm.fields.ctaLabel = "Request pricing";
+    config.homepageSections = [announcement, config.homepageSections[0]!, stats, reviews, comparison, leadForm];
+
+    const canonical = toCanonicalAstroClientConfig(config, {}) as {
+      serviceAreas: string[];
+      homepage: { sections: Array<{ type: string; items?: unknown[]; heading?: string; buttonLabel?: string }> };
+    };
+
+    expect(canonical.serviceAreas).toEqual(["Lakeside", "El Cajon", "Santee"]);
+    expect(canonical.homepage.sections.map(section => section.type)).toEqual([
+      "announcement",
+      "hero",
+      "stats",
+      "reviews",
+      "comparison",
+      "cta",
+    ]);
+    expect(canonical.homepage.sections.find(section => section.type === "reviews")).toMatchObject({
+      heading: "Customer Reviews",
+      items: [{ name: "Karen", quote: "Great team.", rating: 5, source: "Google Review", date: "July 2026" }],
+      aggregate: { rating: 4.7, count: 48, source: "Google" },
+    });
+    expect(canonical.homepage.sections.find(section => section.type === "cta")).toEqual({
+      type: "cta",
+      heading: "Get a price",
+      buttonLabel: "Request pricing",
+      subtext: null,
+    });
   });
 });

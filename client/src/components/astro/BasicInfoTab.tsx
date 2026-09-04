@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -420,6 +421,24 @@ export function BasicInfoTab({
         }
       >
         <HoursTable hours={value.hours} onChange={hours => update("hours", hours)} />
+      </ConfigSection>
+
+      <ConfigSection
+        icon={MapPin}
+        title="Service areas"
+        description="Cities and regions shown in the footer and on Visit Us."
+        readiness={readiness.sections.address}
+        sectionId={null}
+      >
+        <FieldGrid columns={1}>
+          <FieldCell label="Service areas" {...cell("serviceAreas", true)} hint="One city or region per line.">
+            <Textarea
+              value={value.serviceAreas}
+              onChange={event => update("serviceAreas", event.target.value)}
+              className="min-h-24"
+            />
+          </FieldCell>
+        </FieldGrid>
       </ConfigSection>
 
       <ConfigSection

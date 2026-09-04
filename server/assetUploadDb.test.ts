@@ -1,19 +1,33 @@
 import { describe, expect, it, vi } from "vitest";
-import { assetUploadSessions, clientAssets } from "../drizzle/schema";
+import { assetUploadSessions, clientAssets, clientMediaItems } from "../drizzle/schema";
 import {
   finalizeAssetUploadInTransaction,
   finalizeAssetUploadWithDb,
 } from "./assetUploadDb";
 
 const completedAt = new Date("2026-08-15T12:00:00.000Z");
+const mediaItem = {
+  clientId: 7,
+  storageKey: "clients/7-test/library/hero-hash-version.webp",
+  storageUrl: "https://assets.example.com/clients/7-test/library/hero-hash-version.webp",
+  filename: "hero.webp",
+  originalFilename: "hero.png",
+  mimeType: "image/webp",
+  byteSize: 100,
+  width: 1200,
+  height: 800,
+  alt: "hero",
+  description: "",
+};
 const input = {
   uploadId: "123e4567-e89b-12d3-a456-426614174000",
   completedAt,
+  mediaItem,
   asset: {
     clientId: 7,
     slot: "hero" as const,
-    storageKey: "clients/7-test/assets/hero-hash-version.webp",
-    storageUrl: "https://assets.example.com/clients/7-test/assets/hero-hash-version.webp",
+    storageKey: mediaItem.storageKey,
+    storageUrl: mediaItem.storageUrl,
     filename: "hero.webp",
     originalFilename: "hero.png",
     mimeType: "image/webp",
@@ -54,6 +68,16 @@ function makeTransaction(status: "pending" | "completed" = "pending") {
     events.push("upsert-asset");
   });
   const insert = vi.fn(table => {
+    if (table === clientMediaItems) {
+      return {
+        values: vi.fn(() => ({
+          returning: vi.fn(async () => {
+            events.push("insert-media-item");
+            return [{ id: 42, ...mediaItem, createdAt: completedAt, updatedAt: completedAt }];
+          }),
+        })),
+      };
+    }
     expect(table).toBe(clientAssets);
     return {
       values: vi.fn(() => ({ onConflictDoUpdate })),
@@ -76,7 +100,7 @@ function makeTransaction(status: "pending" | "completed" = "pending") {
 }
 
 describe("asset upload transaction", () => {
-  it("locks the session, swaps the asset, and marks completion atomically", async () => {
+  it("saves the photo to the library, then updates the slot pointer", async () => {
     const fixture = makeTransaction();
 
     const result = await finalizeAssetUploadInTransaction(
@@ -84,11 +108,11 @@ describe("asset upload transaction", () => {
       input,
     );
 
-    expect(result).toEqual({
-      previousStorageKey: "clients/7-test/assets/hero-old.webp",
-    });
+    expect(result.previousStorageKey).toBe("clients/7-test/assets/hero-old.webp");
+    expect(result.mediaItem.id).toBe(42);
     expect(fixture.events).toEqual([
       "lock-session",
+      "insert-media-item",
       "read-previous",
       "upsert-asset",
       "complete-session",
@@ -96,6 +120,7 @@ describe("asset upload transaction", () => {
     expect(fixture.onConflictDoUpdate).toHaveBeenCalledWith({
       target: expect.any(Array),
       set: expect.objectContaining({
+        mediaItemId: 42,
         storageKey: input.asset.storageKey,
         storageUrl: input.asset.storageUrl,
         updatedAt: expect.any(Date),

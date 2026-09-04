@@ -4,7 +4,10 @@ import {
   clientDestinationRoute,
   configurationRedirectFromLegacyPath,
   configurationRoute,
+  configSectionElementId,
   getClientIdFromWorkspacePath,
+  parseConfigurationSearch,
+  tabForConfigSection,
   getWorkspaceArea,
   integrationsRoute,
   launchRedirectFromLegacyPath,
@@ -44,6 +47,37 @@ describe("selected-client workspace navigation", () => {
     expect(configurationRoute(7)).toBe("/workspace/7/configuration");
     expect(configurationRoute(7, "media")).toBe("/workspace/7/configuration?tab=media");
     expect(configurationRoute(7, "technical")).toBe("/workspace/7/configuration?tab=technical");
+    expect(configurationRoute(7, "content", "homepage")).toBe(
+      "/workspace/7/configuration?tab=content&section=homepage",
+    );
+    expect(configurationRoute(7, "content", "address")).toBe(
+      "/workspace/7/configuration?tab=basic&section=address",
+    );
+    expect(tabForConfigSection("financing")).toBe("content");
+    expect(configSectionElementId("homepage")).toBe("config-section-homepage");
+  });
+
+  it("reads the configuration tab and section from the query string", () => {
+    expect(parseConfigurationSearch("?tab=content&section=homepage")).toEqual({
+      tab: "content",
+      section: "homepage",
+    });
+    expect(parseConfigurationSearch("?section=financing")).toEqual({
+      tab: "content",
+      section: "financing",
+    });
+    expect(parseConfigurationSearch("?tab=media")).toEqual({
+      tab: "media",
+      section: null,
+    });
+    expect(parseConfigurationSearch("")).toEqual({
+      tab: "basic",
+      section: null,
+    });
+    expect(parseConfigurationSearch("?tab=technical&section=homepage")).toEqual({
+      tab: "content",
+      section: "homepage",
+    });
   });
 
   it("loads a new client id from both modern and legacy client paths", async () => {

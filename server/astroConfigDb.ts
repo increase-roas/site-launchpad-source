@@ -32,6 +32,7 @@ import {
   loadOrBackfillResolvedClientIntegrationProfile,
   saveClientIntegrationProfile,
 } from "./clientIntegrations";
+import { listMediaLibrary } from "./mediaLibraryDb";
 import { assertAstroSitePublishProfileReady } from "./studio/website/publishProfile";
 import {
   isIdentifierKey,
@@ -169,6 +170,7 @@ export function mergeStoredAstroConfig(
       ]),
     ) as AstroClientConfigInput["categories"],
     financing: { ...defaults.financing, ...row.financing } as AstroClientConfigInput["financing"],
+    serviceAreas: row.serviceAreas ?? defaults.serviceAreas,
     homepageSections: (row.homepageSections ??
       defaults.homepageSections) as AstroClientConfigInput["homepageSections"],
     integrations: Object.fromEntries(
@@ -212,11 +214,12 @@ export function applyAstroAssetUrls(
 
 export async function getAstroConfigView(clientId: number) {
   const db = await requireDb();
-  const [client, configRows, assets, integrationProfile] = await Promise.all([
+  const [client, configRows, assets, integrationProfile, mediaItems] = await Promise.all([
     getClientById(clientId),
     db.select().from(astroClientConfigs).where(eq(astroClientConfigs.clientId, clientId)).limit(1),
     getClientAssets(clientId),
     loadOrBackfillResolvedClientIntegrationProfile(clientId),
+    listMediaLibrary(clientId),
   ]);
   if (!client) throw new Error("Client not found.");
 
@@ -228,15 +231,22 @@ export async function getAstroConfigView(clientId: number) {
     assetUrls,
   );
   const secretStatus = wranglerSecretStatusFromProfile(integrationProfile.dto);
+  const galleryLibrary = mediaItems.map(item => ({
+    id: item.id,
+    storageUrl: item.storageUrl,
+    alt: item.alt,
+    description: item.description,
+  }));
 
   const generatedConfig = configRows[0]?.generatedConfigEncrypted
     ? decryptSetupValue(configRows[0].generatedConfigEncrypted)
-    : generateAstroClientConfig(input, assetUrls);
+    : generateAstroClientConfig(input, assetUrls, galleryLibrary);
 
   return {
     clientId,
     input,
     assets: assets.filter(asset => isAstroAssetSlot(asset.slot)),
+    mediaItems,
     secretStatus,
     integrationProfile: integrationProfile.dto,
     generatedConfig,
@@ -283,15 +293,24 @@ export async function saveAstroConfig(clientId: number, input: AstroClientConfig
   const db = await requireDb();
   const existing = await getClientById(clientId);
   if (!existing) throw new Error("Client not found.");
-  const assets = await getClientAssets(clientId);
+  const [assets, mediaItems] = await Promise.all([
+    getClientAssets(clientId),
+    listMediaLibrary(clientId),
+  ]);
   const assetUrls = Object.fromEntries(
     assets.filter(asset => isAstroAssetSlot(asset.slot)).map(asset => [asset.slot, asset.storageUrl]),
   );
+  const galleryLibrary = mediaItems.map(item => ({
+    id: item.id,
+    storageUrl: item.storageUrl,
+    alt: item.alt,
+    description: item.description,
+  }));
   const normalized = mergeStoredAstroConfig(
     applyAstroAssetUrls(input, assetUrls),
     undefined,
   );
-  const generatedConfig = generateAstroClientConfig(normalized, assetUrls);
+  const generatedConfig = generateAstroClientConfig(normalized, assetUrls, galleryLibrary);
   const generatedAt = new Date();
 
   await db.transaction(async transaction => {
@@ -333,6 +352,7 @@ export async function saveAstroConfig(clientId: number, input: AstroClientConfig
         navigationItems: normalized.navigationItems,
         categories: normalized.categories,
         financing: normalized.financing,
+        serviceAreas: normalized.serviceAreas,
         homepageSections: normalized.homepageSections,
         integrations: normalized.integrations,
         generatedConfigEncrypted: encryptSetupValue(generatedConfig),
@@ -347,6 +367,7 @@ export async function saveAstroConfig(clientId: number, input: AstroClientConfig
           navigationItems: normalized.navigationItems,
           categories: normalized.categories,
           financing: normalized.financing,
+          serviceAreas: normalized.serviceAreas,
           homepageSections: normalized.homepageSections,
           integrations: normalized.integrations,
           generatedConfigEncrypted: encryptSetupValue(generatedConfig),

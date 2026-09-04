@@ -113,6 +113,20 @@
       "when": 1787097600000,
       "tag": "0015_astro_site_preview",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1787101200000,
+      "tag": "0016_client_media_library",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787104800000,
+      "tag": "0017_astro_service_areas",
+      "breakpoints": true
     }
   ]
 }

@@ -221,7 +221,7 @@ export default function CampaignsPage({ clientId }: { clientId: number }) {
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <PageHeading title="Campaigns" />
 
       {listQuery.isLoading ? (

@@ -93,6 +93,26 @@ export function activeWizardSteps(): WizardStepDefinition[] {
   ).map((definition, position) => ({ ...definition, index: position + 1 }));
 }
 
+export type WizardDetailState = "complete" | "incomplete" | "invalid" | "off";
+
+export type WizardStepDetail = {
+  label: string;
+  state: WizardDetailState;
+  note?: string;
+};
+
+/**
+ * A configuration-backed reading for one step. `filled`/`total` and `details`
+ * are optional so list screens can still pass a boolean without a field count.
+ */
+export type SetupSignal = {
+  complete: boolean;
+  blockedBy?: string;
+  filled?: number;
+  total?: number;
+  details?: WizardStepDetail[];
+};
+
 /**
  * Signals a screen can supply. `operationalSummary` is always available from the
  * client list; the counts are only known on screens that load workspace data, so
@@ -103,11 +123,15 @@ export type WizardSignals = {
   enabledSectionCount?: number;
   funnelCount?: number;
   /** Configuration → Basic. When omitted, client setup falls back to the list summary. */
-  basicSetup?: { complete: boolean; blockedBy?: string };
-  /** Configuration → Branding. When omitted, both brand and media fall back to website setup. */
-  brandSetup?: { complete: boolean; blockedBy?: string };
-  /** Configuration → Media. When omitted, both brand and media fall back to website setup. */
-  mediaSetup?: { complete: boolean; blockedBy?: string };
+  basicSetup?: SetupSignal;
+  /** Configuration → Branding. When omitted, brand falls back to website setup. */
+  brandSetup?: SetupSignal;
+  /** Configuration → Media. When omitted, media falls back to website setup. */
+  mediaSetup?: SetupSignal;
+  /** Configuration → Content. When omitted, pages falls back to enabled-section count. */
+  pagesSetup?: SetupSignal;
+  /** Configuration → Technical. When omitted, integrations falls back to the list summary. */
+  integrationsSetup?: SetupSignal;
 };
 
 function itemComplete(
@@ -127,6 +151,9 @@ export type WizardStepStatus = WizardStepDefinition & {
   state: WizardStepState;
   /** Why the step is not complete, when that is known. */
   blockedBy?: string;
+  filled?: number;
+  total?: number;
+  details?: WizardStepDetail[];
 };
 
 export function buildWizard(signals: WizardSignals): WizardStepStatus[] {
@@ -144,11 +171,13 @@ export function buildWizard(signals: WizardSignals): WizardStepStatus[] {
 
   // Campaign readiness still arrives from the server, but while campaigns are
   // deferred it cannot be acted on, so it is not allowed to hold a step open.
-  const integrationsComplete = CAMPAIGNS_DEFERRED
-    ? websiteIntegrations
-    : websiteIntegrations === undefined || funnelIntegrations === undefined
-      ? undefined
-      : websiteIntegrations && funnelIntegrations;
+  const integrationsComplete =
+    signals.integrationsSetup?.complete ??
+    (CAMPAIGNS_DEFERRED
+      ? websiteIntegrations
+      : websiteIntegrations === undefined || funnelIntegrations === undefined
+        ? undefined
+        : websiteIntegrations && funnelIntegrations);
   const launchComplete = CAMPAIGNS_DEFERRED
     ? websiteLive
     : websiteLive === undefined || funnelsLive === undefined
@@ -156,11 +185,13 @@ export function buildWizard(signals: WizardSignals): WizardStepStatus[] {
       : websiteLive || funnelsLive;
 
   const pagesState: WizardStepState =
-    signals.enabledSectionCount === undefined
-      ? "unknown"
-      : signals.enabledSectionCount > 0
-        ? "complete"
-        : "todo";
+    signals.pagesSetup !== undefined
+      ? toState(signals.pagesSetup.complete)
+      : signals.enabledSectionCount === undefined
+        ? "unknown"
+        : signals.enabledSectionCount > 0
+          ? "complete"
+          : "todo";
 
   const funnelsState: WizardStepState =
     signals.funnelCount === undefined
@@ -183,11 +214,12 @@ export function buildWizard(signals: WizardSignals): WizardStepStatus[] {
     clientSetup: signals.basicSetup?.blockedBy ?? "Basic info is incomplete",
     brandContent: signals.brandSetup?.blockedBy ?? "Theme or fonts still need work",
     mediaGallery: signals.mediaSetup?.blockedBy ?? "Required site images are missing",
-    pages: "No homepage sections are visible",
+    pages: signals.pagesSetup?.blockedBy ?? "No homepage sections are visible",
     funnels: "No funnel has been created",
-    integrations: summary.runtimeConfiguration.requiredMissing.length
-      ? `Missing ${summary.runtimeConfiguration.requiredMissing.join(", ")}`
-      : "Required integrations are not connected",
+    integrations: signals.integrationsSetup?.blockedBy
+      ?? (summary.runtimeConfiguration.requiredMissing.length
+        ? `Missing ${summary.runtimeConfiguration.requiredMissing.join(", ")}`
+        : "Required integrations are not connected"),
     launch: "Nothing has been published",
   };
 
@@ -197,9 +229,18 @@ export function buildWizard(signals: WizardSignals): WizardStepStatus[] {
     definition => states[definition.step] === "todo",
   )?.step;
 
+  const meters: Partial<Record<WizardStep, SetupSignal>> = {
+    clientSetup: signals.basicSetup,
+    brandContent: signals.brandSetup,
+    mediaGallery: signals.mediaSetup,
+    pages: signals.pagesSetup,
+    integrations: signals.integrationsSetup,
+  };
+
   return visible.map(definition => {
     const state =
       definition.step === firstIncomplete ? "current" : states[definition.step];
+    const meter = meters[definition.step];
     return {
       ...definition,
       state,
@@ -207,6 +248,9 @@ export function buildWizard(signals: WizardSignals): WizardStepStatus[] {
         state === "todo" || state === "current"
           ? blockers[definition.step]
           : undefined,
+      filled: meter?.filled,
+      total: meter?.total,
+      details: meter?.details,
     };
   });
 }

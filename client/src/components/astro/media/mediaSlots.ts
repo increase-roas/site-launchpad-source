@@ -7,6 +7,7 @@ import {
 } from "@shared/astroConfig";
 import { REQUIRED_ASSET_SLOTS } from "@shared/astroConfigReadiness";
 import { ASSET_SLOT_LABELS, ASSET_SLOT_VALUES, type AssetSlot } from "@shared/client";
+import type { MediaLibraryItemView } from "@shared/mediaLibrary";
 import { mediaSpecificationForAsset, type MediaSpecification } from "@shared/mediaSpecifications";
 import { CATEGORY_ASSET_SLOT, CATEGORY_LABELS } from "../categories";
 
@@ -59,6 +60,9 @@ export type StoredMediaImage = {
   storageUrl: string;
   filename: string;
   byteSize: number;
+  mediaItemId?: number | null;
+  alt?: string;
+  description?: string;
 };
 
 export type ResolvedMediaSlot = MediaSlotDescriptor & {
@@ -198,4 +202,97 @@ export function nextMissingSlotId(slots: ResolvedMediaSlot[], currentId: string)
 
 export function firstMissingSlotId(slots: ResolvedMediaSlot[]): string | null {
   return slots.find(slot => !slot.added)?.id ?? null;
+}
+
+export const MEDIA_FILTER_VALUES = [
+  "all",
+  "missing",
+  "brand",
+  "category",
+  "marketing",
+  "library",
+] as const;
+export type MediaFilter = (typeof MEDIA_FILTER_VALUES)[number];
+
+export const MEDIA_FILTER_LABELS: Record<MediaFilter, string> = {
+  all: "All",
+  missing: "Missing",
+  brand: "Brand",
+  category: "Category",
+  marketing: "Marketing",
+  library: "Library",
+};
+
+export type MediaBrowseEntry =
+  | { id: string; kind: "slot"; slot: ResolvedMediaSlot }
+  | { id: string; kind: "library"; item: MediaLibraryItemView };
+
+export function libraryBrowseId(itemId: number): string {
+  return `library:${itemId}`;
+}
+
+/** Slots first, then unplaced library photos. Assigned library files stay on their slot cards. */
+export function buildMediaBrowseEntries(
+  slots: ResolvedMediaSlot[],
+  libraryItems: readonly MediaLibraryItemView[],
+): MediaBrowseEntry[] {
+  const placed = new Set(
+    slots.flatMap(slot => (slot.image?.mediaItemId != null ? [slot.image.mediaItemId] : [])),
+  );
+  return [
+    ...slots.map(slot => ({ id: slot.id, kind: "slot" as const, slot })),
+    ...libraryItems
+      .filter(item => item.slots.length === 0 && !placed.has(item.id))
+      .map(item => ({ id: libraryBrowseId(item.id), kind: "library" as const, item })),
+  ];
+}
+
+function entrySearchText(entry: MediaBrowseEntry): string {
+  if (entry.kind === "slot") {
+    const image = entry.slot.image;
+    return [
+      entry.slot.label,
+      entry.slot.guidance,
+      image?.filename,
+      image?.alt,
+      image?.description,
+    ].filter(Boolean).join(" ").toLowerCase();
+  }
+  return [
+    entry.item.filename,
+    entry.item.originalFilename,
+    entry.item.alt,
+    entry.item.description,
+    ...entry.item.slots,
+  ].join(" ").toLowerCase();
+}
+
+export function filterMediaBrowseEntries(
+  entries: readonly MediaBrowseEntry[],
+  query: string,
+  filter: MediaFilter,
+): MediaBrowseEntry[] {
+  const needle = query.trim().toLowerCase();
+  return entries.filter(entry => {
+    switch (filter) {
+      case "all":
+        break;
+      case "missing":
+        if (entry.kind !== "slot" || entry.slot.added) return false;
+        break;
+      case "brand":
+      case "category":
+      case "marketing":
+        if (entry.kind !== "slot" || entry.slot.group !== filter) return false;
+        break;
+      case "library":
+        if (entry.kind !== "library") return false;
+        break;
+      default: {
+        const exhaustive: never = filter;
+        throw new Error(`Unhandled media filter: ${String(exhaustive)}`);
+      }
+    }
+    return needle.length === 0 || entrySearchText(entry).includes(needle);
+  });
 }

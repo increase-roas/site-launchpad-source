@@ -20,7 +20,7 @@ export default function TemplatesPage() {
   const templates = templatesQuery.data ?? [];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PageHeading
         title="Templates"
         description="Approved starting points for client websites and funnels."

@@ -17,4 +17,13 @@ describe("media specifications", () => {
     expect(validateImageMetadata({ mimeType: "image/png", sizeBytes: 10, width: 800, height: 450 }, MEDIA_SPECIFICATIONS.hero)).toMatch(/at least/);
     expect(validateImageMetadata({ mimeType: "image/png", sizeBytes: 10, width: 1600, height: 1200 }, MEDIA_SPECIFICATIONS.hero)).toMatch(/16:9/);
   });
+
+  it("accepts any aspect ratio for library photos", () => {
+    expect(validateImageMetadata({
+      mimeType: "image/jpeg",
+      sizeBytes: 800_000,
+      width: 1200,
+      height: 1600,
+    }, MEDIA_SPECIFICATIONS.library)).toBeNull();
+  });
 });

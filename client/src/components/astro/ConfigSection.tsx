@@ -57,14 +57,15 @@ export function ConfigSection({
   title: string;
   description?: string;
   readiness?: SectionMeter;
-  sectionId?: ConfigSectionId;
+  /** Pass `null` to skip the DOM id when this block reuses another section's meter. */
+  sectionId?: ConfigSectionId | null;
   advancedLabel?: string;
   advancedSummary?: string;
   advanced?: ReactNode;
   toolbar?: ReactNode;
   children: ReactNode;
 }) {
-  const resolvedSectionId = sectionId ?? readiness?.id;
+  const resolvedSectionId = sectionId === null ? undefined : (sectionId ?? readiness?.id);
 
   return (
     <section
@@ -177,6 +178,7 @@ export function FieldCell({
   message,
   hint,
   span,
+  as,
   children,
 }: {
   label: string;
@@ -184,11 +186,14 @@ export function FieldCell({
   message?: string;
   hint?: string;
   span?: 2 | 3;
+  /** Use a div when the control contains buttons or nested fields. */
+  as?: "label" | "div";
   children: ReactNode;
 }) {
   const MessageIcon = state === "invalid" ? AlertCircle : TriangleAlert;
+  const Comp = as ?? "label";
   return (
-    <label
+    <Comp
       className={cn(
         "block px-4 py-3",
         CELL_TONE[state],
@@ -213,7 +218,7 @@ export function FieldCell({
       ) : hint ? (
         <span className="mt-1.5 block text-xs text-muted-foreground">{hint}</span>
       ) : null}
-    </label>
+    </Comp>
   );
 }
 

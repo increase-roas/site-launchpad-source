@@ -7,7 +7,7 @@ export const MEDIA_UPLOAD_MIME_TYPES = [
 export type MediaUploadMimeType = (typeof MEDIA_UPLOAD_MIME_TYPES)[number];
 
 export type MediaSpecification = {
-  key: "hero" | "landscape" | "square" | "logo" | "social" | "portrait" | "favicon";
+  key: "hero" | "landscape" | "square" | "logo" | "social" | "portrait" | "favicon" | "library";
   label: string;
   width: number;
   height: number;
@@ -16,6 +16,7 @@ export type MediaSpecification = {
   minWidth: number;
   minHeight: number;
   mimeTypes: readonly MediaUploadMimeType[];
+  enforceAspect?: boolean;
 };
 
 const MB = 1024 * 1024;
@@ -98,6 +99,18 @@ export const MEDIA_SPECIFICATIONS: Record<MediaSpecification["key"], MediaSpecif
     minHeight: 256,
     mimeTypes: ["image/webp", "image/png"],
   },
+  library: {
+    key: "library",
+    label: "WebP, JPEG or PNG · at least 400 × 300 px · Max 5 MB",
+    width: 1600,
+    height: 1200,
+    aspectLabel: "any",
+    maxBytes: 5 * MB,
+    minWidth: 400,
+    minHeight: 300,
+    mimeTypes: MEDIA_UPLOAD_MIME_TYPES,
+    enforceAspect: false,
+  },
 };
 
 const CLIENT_SLOT_SPECIFICATIONS: Record<string, MediaSpecification["key"]> = {
@@ -124,9 +137,10 @@ const ASTRO_SLOT_SPECIFICATIONS: Record<string, MediaSpecification["key"]> = {
 };
 
 export function mediaSpecificationForAsset(
-  assetKind: "client" | "astro",
+  assetKind: "client" | "astro" | "library",
   slot: string,
 ): MediaSpecification {
+  if (assetKind === "library") return MEDIA_SPECIFICATIONS.library;
   const key = (assetKind === "client" ? CLIENT_SLOT_SPECIFICATIONS : ASTRO_SLOT_SPECIFICATIONS)[slot];
   return MEDIA_SPECIFICATIONS[key ?? "landscape"];
 }
@@ -151,10 +165,12 @@ export function validateImageMetadata(
   if (metadata.width < spec.minWidth || metadata.height < spec.minHeight) {
     return `Image must be at least ${spec.minWidth} × ${spec.minHeight} px.`;
   }
-  const actualRatio = metadata.width / metadata.height;
-  const targetRatio = spec.width / spec.height;
-  if (Math.abs(actualRatio - targetRatio) / targetRatio > 0.035) {
-    return `Use a ${spec.aspectLabel} image so it does not crop strangely.`;
+  if (spec.enforceAspect !== false) {
+    const actualRatio = metadata.width / metadata.height;
+    const targetRatio = spec.width / spec.height;
+    if (Math.abs(actualRatio - targetRatio) / targetRatio > 0.035) {
+      return `Use a ${spec.aspectLabel} image so it does not crop strangely.`;
+    }
   }
   return null;
 }

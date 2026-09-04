@@ -56,7 +56,7 @@ export function ReadinessStrip({
             onClick={() => onSelect(tab)}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "flex flex-col gap-2 px-4 py-3 text-left transition-colors",
+              "flex flex-col gap-1.5 px-3 py-2 text-left transition-colors",
               isActive
                 ? "bg-primary/[0.06] shadow-[inset_0_-2px_0_var(--primary)]"
                 : "bg-card hover:bg-muted",

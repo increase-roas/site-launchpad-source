@@ -379,7 +379,7 @@ function Shell({ children }: { children: ReactNode }) {
 
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar onOpenNav={() => setDrawerOpen(true)} />
-          <main className="launchpad-workspace min-w-0 flex-1 p-3 sm:p-4 lg:px-5 lg:py-5">
+          <main className="launchpad-workspace min-w-0 flex-1 p-3 sm:p-4">
             {children}
           </main>
         </div>

@@ -97,4 +97,22 @@ describe("assets router boundary", () => {
       "123e4567-e89b-12d3-a456-426614174000",
     );
   });
+
+  it("rejects unauthenticated library edits before service work", async () => {
+    const library = {
+      listLibrary: vi.fn(async () => []),
+      updateLibraryItem: vi.fn(),
+      deleteLibraryItem: vi.fn(),
+      assignLibraryItem: vi.fn(),
+      clearSlot: vi.fn(),
+      deleteStoredObject: vi.fn(),
+    };
+    const caller = createAssetsRouter(operations, library).createCaller(context(false));
+
+    await expect(caller.listLibrary({ clientId: 7 })).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      message: UNAUTHED_ERR_MSG,
+    });
+    expect(library.listLibrary).not.toHaveBeenCalled();
+  });
 });

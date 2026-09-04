@@ -189,6 +189,7 @@ export function sectionForPath(path: string): ConfigSectionId | null {
   if (path.startsWith("navigationItems")) return "navigation";
   if (path.startsWith("categories")) return "categories";
   if (path.startsWith("financing")) return "financing";
+  if (path.startsWith("serviceAreas")) return "address";
   if (path.startsWith("homepageSections")) return "homepage";
   if (path.startsWith("integrations")) return "integrations";
   return null;

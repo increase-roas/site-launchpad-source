@@ -79,6 +79,7 @@ describe("Astro config persistence helpers", () => {
       navigationItems,
       categories: defaults.categories,
       financing: defaults.financing,
+      serviceAreas: defaults.serviceAreas,
       homepageSections,
       integrations: {
         ...defaults.integrations,
@@ -124,6 +125,7 @@ describe("website integration enablement from the stored Astro config", () => {
       navigationItems: defaults.navigationItems,
       categories: defaults.categories,
       financing: defaults.financing,
+      serviceAreas: defaults.serviceAreas,
       homepageSections: defaults.homepageSections,
       integrations: { ...defaults.integrations, ...integrations },
       generatedConfigEncrypted: null,

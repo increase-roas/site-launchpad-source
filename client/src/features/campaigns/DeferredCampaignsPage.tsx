@@ -13,7 +13,7 @@ import { Link } from "wouter";
  */
 export default function DeferredCampaignsPage({ clientId }: { clientId: number }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PageHeading
         title="Campaigns"
         description="Paid-traffic funnels that capture leads for this client."

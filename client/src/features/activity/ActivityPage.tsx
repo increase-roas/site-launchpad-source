@@ -33,7 +33,7 @@ export default function ActivityPage() {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PageHeading
         title="Activity"
         description="What every client is working through right now."
