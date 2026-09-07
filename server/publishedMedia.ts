@@ -24,6 +24,7 @@ import {
 export type PublishedMediaSyncDependencies = {
   destinationBucket: string;
   publicBaseUrl: string;
+  draftPublicBaseUrl?: string;
   used: readonly UsedDraftMedia[];
   publications: readonly MediaPublication[];
   readDraft(key: string): Promise<{ body: Buffer; contentType: string } | null>;
@@ -90,6 +91,7 @@ export async function executePublishedMediaSync(
     used: dependencies.used,
     publications: dependencies.publications,
     destinationBucket: dependencies.destinationBucket,
+    draftPublicBaseUrl: dependencies.draftPublicBaseUrl,
   });
   const urlByDraftKey: Record<string, string> = {};
 
@@ -182,6 +184,7 @@ export async function syncClientPublishedMedia(
   const { urlByDraftKey } = await executePublishedMediaSync({
     destinationBucket: input.destinationBucket,
     publicBaseUrl: input.publicBaseUrl,
+    draftPublicBaseUrl: readR2Configuration().publicAssetBaseUrl,
     used: usedMedia,
     publications,
     async readDraft(key) {

@@ -94,6 +94,30 @@ describe("executePublishedMediaSync", () => {
       "https://pub.example/clients/7-acme/astro/navLogo-aaa-111.webp",
     );
   });
+
+  it("does not download local drafts when a public draft origin is available", async () => {
+    const readDraft = vi.fn();
+    const putObject = vi.fn();
+
+    const result = await executePublishedMediaSync({
+      destinationBucket: "website-7-images",
+      publicBaseUrl: "https://pub.example",
+      draftPublicBaseUrl: "https://assets.example.com",
+      used: [draft],
+      publications: [],
+      readDraft,
+      putObject,
+      deleteObject: vi.fn(),
+      savePublication: vi.fn(),
+      removePublication: vi.fn(),
+    });
+
+    expect(readDraft).not.toHaveBeenCalled();
+    expect(putObject).not.toHaveBeenCalled();
+    expect(result.urlByDraftKey[draft.storageKey]).toBe(
+      "https://assets.example.com/clients/7-acme/astro/navLogo-aaa-111.webp",
+    );
+  });
 });
 
 describe("readDraftAssetObject", () => {

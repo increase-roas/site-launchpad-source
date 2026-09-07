@@ -98,6 +98,7 @@ export function planMediaSync(input: {
   used: readonly UsedDraftMedia[];
   publications: readonly MediaPublication[];
   destinationBucket: string;
+  draftPublicBaseUrl?: string;
 }): MediaSyncPlan {
   const usedKeys = new Set(input.used.map(item => item.storageKey));
   const publicationsForBucket = input.publications.filter(
@@ -119,6 +120,13 @@ export function planMediaSync(input: {
     const publication = publicationByDraftKey.get(media.storageKey);
     if (publication) {
       reuse.push({ media, publication });
+      continue;
+    }
+    if (input.draftPublicBaseUrl) {
+      keepPublic.push({
+        ...media,
+        storageUrl: publicObjectUrl(input.draftPublicBaseUrl, media.storageKey),
+      });
       continue;
     }
     upload.push(media);

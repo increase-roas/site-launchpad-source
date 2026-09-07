@@ -103,6 +103,53 @@ describe("planMediaSync", () => {
     expect(plan.delete).toEqual([leftover]);
   });
 
+  it("rewrites local drafts to the public draft origin instead of uploading them", () => {
+    const plan = planMediaSync({
+      used: [localNav, localHero],
+      publications: [],
+      destinationBucket: "website-7-images",
+      draftPublicBaseUrl: "https://assets.example.com",
+    });
+
+    expect(plan.upload).toEqual([]);
+    expect(plan.keepPublic).toEqual([
+      {
+        ...localNav,
+        storageUrl: "https://assets.example.com/clients/7-acme/astro/navLogo-aaa-111.webp",
+      },
+      {
+        ...localHero,
+        storageUrl: "https://assets.example.com/clients/7-acme/astro/categoryHotTubs-bbb-222.webp",
+      },
+    ]);
+  });
+
+  it("still reuses a copy already on the website bucket when a draft public origin is set", () => {
+    const existing: MediaPublication = {
+      mediaItemId: 11,
+      draftStorageKey: localNav.storageKey,
+      publishedKey: localNav.storageKey,
+      publishedUrl: "https://pub.example/clients/7-acme/astro/navLogo-aaa-111.webp",
+      destinationBucket: "website-7-images",
+    };
+
+    const plan = planMediaSync({
+      used: [localNav, localHero],
+      publications: [existing],
+      destinationBucket: "website-7-images",
+      draftPublicBaseUrl: "https://assets.example.com",
+    });
+
+    expect(plan.reuse.map(item => item.media.storageKey)).toEqual([localNav.storageKey]);
+    expect(plan.upload).toEqual([]);
+    expect(plan.keepPublic).toEqual([
+      {
+        ...localHero,
+        storageUrl: "https://assets.example.com/clients/7-acme/astro/categoryHotTubs-bbb-222.webp",
+      },
+    ]);
+  });
+
   it("does not reuse a publication from a different website bucket", () => {
     const plan = planMediaSync({
       used: [localNav],
