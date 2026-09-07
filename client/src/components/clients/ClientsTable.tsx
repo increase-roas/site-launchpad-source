@@ -27,6 +27,11 @@ import {
   type ClientSortKey,
   type ClientStatusTone,
 } from "@/lib/clientBoard";
+import {
+  createRowClickSuppressor,
+  isClientBoardInteractiveTarget,
+  shouldOpenClientFromRowClick,
+} from "@/lib/clientRowActions";
 import { cn } from "@/lib/utils";
 import {
   clientDestinationRoute,
@@ -40,7 +45,7 @@ import {
   ExternalLink,
   MoreHorizontal,
 } from "lucide-react";
-import type { MouseEvent } from "react";
+import { useRef, type MouseEvent } from "react";
 import { Link } from "wouter";
 
 const PROGRESS_CLASSES: Record<ClientStatusTone, string> = {
@@ -90,12 +95,22 @@ export function ClientsTable({
   onDeleteRequest,
   clientHref,
 }: ClientsTableProps) {
+  const rowClickGate = useRef(createRowClickSuppressor()).current;
   const handleRowClick = (
     event: MouseEvent<HTMLTableRowElement>,
     clientId: number,
   ) => {
-    if (event.defaultPrevented) return;
-    if ((event.target as HTMLElement).closest("a, button")) return;
+    if (
+      !shouldOpenClientFromRowClick({
+        defaultPrevented: event.defaultPrevented,
+        isInteractiveTarget: isClientBoardInteractiveTarget(
+          event.target as HTMLElement,
+        ),
+        isSuppressed: rowClickGate.isSuppressed(),
+      })
+    ) {
+      return;
+    }
     if (window.getSelection()?.toString()) return;
     onOpen(clientId);
   };
@@ -288,7 +303,12 @@ export function ClientsTable({
                       </Link>
                     </Button>
 
-                    <DropdownMenu>
+                    <DropdownMenu
+                      modal={false}
+                      onOpenChange={open => {
+                        if (!open) rowClickGate.suppress();
+                      }}
+                    >
                       <DropdownMenuTrigger asChild>
                         <Button
                           type="button"
@@ -345,7 +365,12 @@ export function ClientsTable({
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           variant="destructive"
-                          onSelect={() => onDeleteRequest({ client, operationalSummary })}
+                          onSelect={() => {
+                            rowClickGate.suppress();
+                            window.setTimeout(() => {
+                              onDeleteRequest({ client, operationalSummary });
+                            }, 0);
+                          }}
                         >
                           Delete
                         </DropdownMenuItem>

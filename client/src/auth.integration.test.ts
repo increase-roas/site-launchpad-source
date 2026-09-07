@@ -76,8 +76,12 @@ describe("direct internal workspace access", () => {
   });
 
   it("deletes a client from the factory list after confirmation", () => {
-    expect(source("components/clients/ClientsTable.tsx")).toContain("onDeleteRequest");
-    expect(source("components/clients/ClientsTable.tsx")).toContain("Delete");
+    const table = source("components/clients/ClientsTable.tsx");
+    expect(table).toContain("onDeleteRequest");
+    expect(table).toContain("Delete");
+    expect(table).toContain("createRowClickSuppressor");
+    expect(table).toContain("rowClickGate.suppress()");
+    expect(table).toContain("modal={false}");
     const page = source("features/clients/ClientsPage.tsx");
     expect(page).toContain("clients.delete");
     expect(page).toContain("AlertDialog");
