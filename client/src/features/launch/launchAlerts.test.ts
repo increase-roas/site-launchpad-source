@@ -67,6 +67,20 @@ describe("previewEnvironmentAlerts", () => {
     expect(alerts.some(alert => alert.key === "preview-warnings")).toBe(false);
   });
 
+  it("explains a missing draft image as a storage-environment gap", () => {
+    const alerts = previewEnvironmentAlerts({
+      kind: "failed",
+      error:
+        "Draft image is missing: clients/8-the-hot-tub-store/astro/navLogo-abc.webp",
+      warningCount: 0,
+      hasPreviewUrl: false,
+      approved: false,
+    });
+
+    expect(alerts[0]?.detail).toContain("not in this environment's storage");
+    expect(alerts[0]?.detail).toContain("Re-upload \"navLogo-abc.webp\"");
+  });
+
   it("asks for approval when a ready preview has not been signed off", () => {
     expect(
       previewEnvironmentAlerts({

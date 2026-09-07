@@ -5,6 +5,8 @@ import {
   applyPublishedHomepageUrls,
   applyPublishedLibraryUrls,
   collectUsedDraftMedia,
+  describeMissingDraftImage,
+  explainPreviewMediaError,
   isDraftLocalAssetUrl,
   isPublicDeployAssetUrl,
   planMediaSync,
@@ -41,6 +43,15 @@ describe("draft vs public media URLs", () => {
     expect(isPublicDeployAssetUrl("http://127.0.0.1:3000/local-assets/clients/7/nav.webp")).toBe(false);
     expect(isPublicDeployAssetUrl("http://localhost:3000/local-assets/clients/7/nav.webp")).toBe(false);
     expect(isPublicDeployAssetUrl("http://evil.example/nav.webp")).toBe(false);
+  });
+
+  it("explains a missing draft as a local-vs-Vercel storage gap", () => {
+    expect(describeMissingDraftImage(localNav.storageKey)).toContain(
+      "not in this environment's storage",
+    );
+    expect(explainPreviewMediaError(`Draft image is missing: ${localNav.storageKey}`)).toContain(
+      "Re-upload \"navLogo-aaa-111.webp\"",
+    );
   });
 
   it("builds a public object URL from the website bucket origin", () => {

@@ -5,6 +5,7 @@ import {
   applyPublishedHomepageUrls,
   applyPublishedLibraryUrls,
   collectUsedDraftMedia,
+  describeMissingDraftImage,
   planMediaSync,
   publicObjectUrl,
   type MediaPublication,
@@ -107,7 +108,7 @@ export async function executePublishedMediaSync(
   for (const media of plan.upload) {
     const draft = await dependencies.readDraft(media.storageKey);
     if (!draft) {
-      throw new Error(`Draft image is missing: ${media.storageKey}`);
+      throw new Error(describeMissingDraftImage(media.storageKey));
     }
     await dependencies.putObject({
       key: media.storageKey,

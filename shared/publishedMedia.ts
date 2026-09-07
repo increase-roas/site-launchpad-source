@@ -49,6 +49,25 @@ export function isDraftLocalAssetUrl(value: string): boolean {
   return value.startsWith("/local-assets") || draftStorageKeyFromUrl(value) !== null;
 }
 
+const MISSING_DRAFT_IMAGE_PREFIX = "Draft image is missing:";
+
+export function describeMissingDraftImage(storageKey: string): string {
+  const filename = storageKey.split("/").pop() || storageKey;
+  return [
+    "Launchpad has this photo in Media, but the file is not in this environment's storage.",
+    `Images uploaded on a local computer stay on that computer. Re-upload "${filename}" in Media, then generate preview again.`,
+    `${MISSING_DRAFT_IMAGE_PREFIX} ${storageKey}`,
+  ].join(" ");
+}
+
+export function explainPreviewMediaError(error: string | null | undefined): string | null {
+  if (!error) return null;
+  const index = error.lastIndexOf(MISSING_DRAFT_IMAGE_PREFIX);
+  if (index === -1) return error;
+  const storageKey = error.slice(index + MISSING_DRAFT_IMAGE_PREFIX.length).trim();
+  return storageKey ? describeMissingDraftImage(storageKey) : error;
+}
+
 /** Worker-reachable assets only. Launchpad drafts stay on `/local-assets`. */
 export function isPublicDeployAssetUrl(value: string | undefined): value is string {
   if (!value || isDraftLocalAssetUrl(value)) return false;

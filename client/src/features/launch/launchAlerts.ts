@@ -1,3 +1,4 @@
+import { explainPreviewMediaError } from "@shared/publishedMedia";
 import type { LaunchCheck } from "./launchChecks";
 import type {
   PreviewEnvironmentKind,
@@ -74,7 +75,9 @@ export function previewEnvironmentAlerts({
         key: "preview-failed",
         tone: "danger",
         title: "Preview failed",
-        detail: error ?? "The last preview job did not finish. Retry after reviewing the error.",
+        detail:
+          explainPreviewMediaError(error) ??
+          "The last preview job did not finish. Retry after reviewing the error.",
       });
       break;
     case "idle":
