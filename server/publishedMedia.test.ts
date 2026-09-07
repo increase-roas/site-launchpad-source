@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { executePublishedMediaSync, readDraftAssetObject } from "./publishedMedia";
+import {
+  executePublishedMediaSync,
+  readDraftAssetFromPublicUrl,
+  readDraftAssetObject,
+} from "./publishedMedia";
 
 const draft = {
   mediaItemId: 11,
@@ -111,5 +115,27 @@ describe("readDraftAssetObject", () => {
       contentType: "image/webp",
     });
     expect(readLocal).not.toHaveBeenCalled();
+  });
+
+  it("downloads production drafts from the public HTTPS asset URL", async () => {
+    const fetchFn = vi.fn(async (url: string) => {
+      expect(url).toBe("https://assets.example.com/clients/7/astro/nav.webp");
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: (name: string) => (name === "content-type" ? "image/webp" : null) },
+        arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+      };
+    });
+
+    await expect(
+      readDraftAssetFromPublicUrl("clients/7/astro/nav.webp", {
+        publicAssetBaseUrl: "https://assets.example.com",
+        fetchFn: fetchFn as never,
+      }),
+    ).resolves.toEqual({
+      body: Buffer.from([1, 2, 3]),
+      contentType: "image/webp",
+    });
   });
 });

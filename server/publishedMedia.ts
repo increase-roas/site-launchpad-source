@@ -14,7 +14,7 @@ import { getDevelopmentAssetStore } from "./developmentAssetStore";
 import { contentTypeForStorageKey } from "./localAssetStore";
 import { createCloudflareApiClient } from "./publisher/cloudflareApi";
 import { getCloudflarePublisherEnvironment } from "./publisher/publisherEnv";
-import { createR2ObjectStore, readR2Configuration } from "./r2";
+import { readR2Configuration } from "./r2";
 import {
   listMediaPublications,
   removeMediaPublication,
@@ -59,12 +59,27 @@ async function readLocalDraftAsset(key: string): Promise<DraftAsset | null> {
 }
 
 async function readRemoteDraftAsset(key: string): Promise<DraftAsset | null> {
-  const store = createR2ObjectStore(readR2Configuration());
-  const head = await store.headObject(key);
-  if (!head) return null;
+  return readDraftAssetFromPublicUrl(key, {
+    publicAssetBaseUrl: readR2Configuration().publicAssetBaseUrl,
+  });
+}
+
+export async function readDraftAssetFromPublicUrl(
+  key: string,
+  deps: {
+    publicAssetBaseUrl: string;
+    fetchFn?: typeof fetch;
+  },
+): Promise<DraftAsset | null> {
+  const url = publicObjectUrl(deps.publicAssetBaseUrl, key);
+  const response = await (deps.fetchFn ?? fetch)(url);
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`Draft image download failed (${response.status}).`);
+  }
   return {
-    body: await store.getObjectBuffer(key, head.contentLength),
-    contentType: contentTypeForStorageKey(key),
+    body: Buffer.from(await response.arrayBuffer()),
+    contentType: response.headers.get("content-type") || contentTypeForStorageKey(key),
   };
 }
 
