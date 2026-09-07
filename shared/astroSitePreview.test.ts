@@ -129,7 +129,7 @@ describe("preview presentation", () => {
     expect(previewIsStale({ currentRevision: 28, previewRevision: null })).toBe(false);
   });
 
-  it("pins previews to the approved factory SHA", () => {
+  it("records a template SHA on new preview jobs", () => {
     expect(pinnedPreviewTemplateSha()).toBe(ASTRO_SITE_APPROVED_SOURCE_SHA);
   });
 });

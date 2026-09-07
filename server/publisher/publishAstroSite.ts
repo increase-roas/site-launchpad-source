@@ -1,9 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { AstroSitePublish } from "../../drizzle/schema";
-import {
-  ASTRO_SITE_APPROVED_SOURCE_SHA,
-  ASTRO_SITE_MANIFEST,
-} from "../../shared/astroSiteContract";
+import { ASTRO_SITE_MANIFEST } from "../../shared/astroSiteContract";
 import {
   astroSitePublishProgress,
   astroSitePublishResourceNames,
@@ -569,18 +566,6 @@ function createRuntimeExternal(): AstroSitePublishExternal {
 
   return {
     async ensureRepository(input) {
-      if (input.allowCreate) {
-        const templateHead = await github.getBranchHeadSha({
-          ...template,
-          branch: ASTRO_SITE_MANIFEST.defaultBranch,
-          signal: input.signal,
-        });
-        if (templateHead !== ASTRO_SITE_APPROVED_SOURCE_SHA) {
-          throw new PublisherManualAttentionError(
-            "The canonical Astro template changed after review; approve the new source before creating repositories.",
-          );
-        }
-      }
       const repository = await reconcilePublicTemplateRepository({
         github,
         owner: githubEnvironment.owner,

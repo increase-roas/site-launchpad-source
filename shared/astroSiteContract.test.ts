@@ -7,13 +7,17 @@ import {
   ASTRO_SITE_REQUIRED_RUNTIME_SECRETS,
   astroSiteManifestSchema,
   getAstroSiteRuntimeSecrets,
+  templateHeadBlocksRepositoryCreate,
 } from "./astroSiteContract";
 
 describe("Astro website template contract", () => {
-  it("pins an exact reviewed canonical source commit", () => {
-    expect(ASTRO_SITE_APPROVED_SOURCE_SHA).toBe(
-      "54558ce23c681cb47fcd36a36331b9073acc1fd3",
-    );
+  it("lets new repositories follow the live template main commit", () => {
+    expect(
+      templateHeadBlocksRepositoryCreate(
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ASTRO_SITE_APPROVED_SOURCE_SHA,
+      ),
+    ).toBe(false);
   });
   it("models the exact canonical repository, config, workflow, and bindings", () => {
     const raw = JSON.parse(
