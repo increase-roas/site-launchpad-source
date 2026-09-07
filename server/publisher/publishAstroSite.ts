@@ -238,10 +238,9 @@ async function bounded<T>(
 
 function assertWorkflow(result: { displayTitle: string; headSha: string }, job: AstroSitePublishJob): void {
   const sourceSha = requireValue(job.commitSha, "Published source commit is missing.");
-  if (
-    result.displayTitle !== expectedWorkflowDisplayTitle(job.id, sourceSha) ||
-    result.headSha !== sourceSha
-  ) {
+  // workflow_dispatch head_sha is the branch tip at dispatch time. The run
+  // name carries the exact job id and source SHA; checkout uses that input.
+  if (result.displayTitle !== expectedWorkflowDisplayTitle(job.id, sourceSha)) {
     throw new PublisherManualAttentionError(
       "Workflow run does not match the website publish job and source commit; manual attention is required.",
     );
@@ -609,7 +608,7 @@ function createRuntimeExternal(): AstroSitePublishExternal {
     },
     async commitSource(input) {
       const repository = splitFullName(input.repositoryFullName);
-      const message = `chore: configure Astro website ${input.publishJobId}`;
+      const message = `chore: configure Astro website ${input.publishJobId} ${input.d1DatabaseId}`;
       return commitAstroSiteGeneratedSource({
         github,
         ...repository,
