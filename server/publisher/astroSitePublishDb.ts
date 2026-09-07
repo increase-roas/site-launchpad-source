@@ -6,6 +6,7 @@ import {
   type AstroSitePublish,
   type InsertAstroSitePublish,
 } from "../../drizzle/schema";
+import { astroSitePublishContractConflicts } from "../../shared/astroSitePublish";
 import { isWorkersDevUrl } from "../../shared/liveSiteHostname";
 import { getDb } from "../db";
 import type {
@@ -59,23 +60,27 @@ async function startWithDb(
     .returning();
   const job = inserted[0] ?? (await getWithDb(db, input.clientId));
   if (!job) throw new Error("Website publish job could not be started.");
-  if (
-    job.templateKey !== input.templateKey ||
-    job.templateRepo !== input.templateRepo ||
-    job.contractVersion !== input.contractVersion
-  ) {
+  if (astroSitePublishContractConflicts(job, input)) {
     throw new Error(
       "Existing website publish job uses a different template contract; manual attention is required.",
     );
   }
-  if (job.status === "published" && isWorkersDevUrl(job.liveUrl)) {
+  const refreshTemplateRepo = job.templateRepo !== input.templateRepo;
+  const reopenForLiveDomain =
+    job.status === "published" && isWorkersDevUrl(job.liveUrl);
+  if (refreshTemplateRepo || reopenForLiveDomain) {
     const reopened = await db
       .update(astroSitePublishes)
       .set({
-        step: "attach_custom_domain",
-        status: "pending",
-        completedAt: null,
-        lastError: null,
+        ...(refreshTemplateRepo ? { templateRepo: input.templateRepo } : {}),
+        ...(reopenForLiveDomain
+          ? {
+              step: "attach_custom_domain" as const,
+              status: "pending" as const,
+              completedAt: null,
+              lastError: null,
+            }
+          : {}),
         updatedAt: input.now,
       })
       .where(eq(astroSitePublishes.id, job.id))

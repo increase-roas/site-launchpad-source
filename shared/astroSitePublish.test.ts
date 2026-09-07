@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  astroSitePublishContractConflicts,
   astroSitePublishProgress,
   astroSitePublishResourceNames,
 } from "./astroSitePublish";
@@ -32,5 +33,46 @@ describe("Astro site publish resource names", () => {
       completed: 9,
       total: 9,
     });
+  });
+});
+
+describe("Astro site publish contract", () => {
+  const current = {
+    templateKey: "htl-astro-website",
+    templateRepo: "increase-roas/32-htl-website-template-astrobuild",
+    contractVersion: 1,
+  };
+
+  it("treats a renamed GitHub owner as the same template", () => {
+    expect(
+      astroSitePublishContractConflicts(
+        {
+          ...current,
+          templateRepo: "increaseroasir/32-htl-website-template-astrobuild",
+        },
+        current,
+      ),
+    ).toBe(false);
+  });
+
+  it("still rejects a different template product", () => {
+    expect(
+      astroSitePublishContractConflicts(
+        { ...current, templateKey: "other-website" },
+        current,
+      ),
+    ).toBe(true);
+    expect(
+      astroSitePublishContractConflicts(
+        { ...current, templateRepo: "increase-roas/other-website-template" },
+        current,
+      ),
+    ).toBe(true);
+    expect(
+      astroSitePublishContractConflicts(
+        { ...current, contractVersion: 2 },
+        current,
+      ),
+    ).toBe(true);
   });
 });

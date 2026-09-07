@@ -70,6 +70,31 @@ export function astroSitePublishResourceNames(
   };
 }
 
+export type AstroSitePublishContract = {
+  templateKey: string;
+  templateRepo: string;
+  contractVersion: number;
+};
+
+function templateRepoName(repo: string): string {
+  const name = repo.trim().split("/").pop() ?? "";
+  return name.toLowerCase();
+}
+
+/**
+ * An existing publish job can keep going when only the GitHub owner changed.
+ * The generated Worker is the same template; a renamed org must not block
+ * connecting the live domain.
+ */
+export function astroSitePublishContractConflicts(
+  job: AstroSitePublishContract,
+  expected: AstroSitePublishContract,
+): boolean {
+  if (job.templateKey !== expected.templateKey) return true;
+  if (job.contractVersion !== expected.contractVersion) return true;
+  return templateRepoName(job.templateRepo) !== templateRepoName(expected.templateRepo);
+}
+
 export function astroSitePublishProgress(step: AstroSitePublishStep): {
   completed: number;
   total: number;
