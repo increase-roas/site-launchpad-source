@@ -23,6 +23,7 @@ describe("Cloudflare R2 configuration", () => {
     const options = createR2ClientOptions(config);
 
     expect(options.region).toBe("auto");
+    expect(options.forcePathStyle).toBe(true);
     expect(options.endpoint).toBe(
       "https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com",
     );
@@ -77,7 +78,10 @@ describe("R2 presigned uploads", () => {
       parsed.searchParams.get("X-Amz-SignedHeaders")?.split(";") ?? [];
 
     expect(parsed.hostname).toBe(
-      "site-launchpad-assets.0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com",
+      "0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com",
+    );
+    expect(parsed.pathname).toBe(
+      "/site-launchpad-assets/tmp/7/123e4567-e89b-12d3-a456-426614174000",
     );
     expect(parsed.searchParams.get("X-Amz-Expires")).toBe("600");
     expect(signedHeaders).toEqual(

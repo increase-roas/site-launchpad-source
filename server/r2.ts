@@ -23,6 +23,9 @@ export function createR2ClientOptions(config: R2Configuration): S3ClientConfig {
   return {
     region: "auto",
     endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
+    // Virtual-hosted URLs use bucket.account.r2.cloudflarestorage.com, which
+    // is not on the R2 certificate and fails TLS (SSL alert 40).
+    forcePathStyle: true,
     credentials: {
       accessKeyId: config.accessKeyId,
       secretAccessKey: config.secretAccessKey,
