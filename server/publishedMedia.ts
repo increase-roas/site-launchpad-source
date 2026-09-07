@@ -1,6 +1,8 @@
 import { generateAstroClientConfig, type AstroClientConfigInput } from "../shared/astroConfig";
 import {
   applyPublishedAssetUrls,
+  applyPublishedCategoryHeroUrls,
+  applyPublishedHomepageUrls,
   applyPublishedLibraryUrls,
   collectUsedDraftMedia,
   planMediaSync,
@@ -14,7 +16,7 @@ import { getDevelopmentAssetStore } from "./developmentAssetStore";
 import { contentTypeForStorageKey } from "./localAssetStore";
 import { createCloudflareApiClient } from "./publisher/cloudflareApi";
 import { getCloudflarePublisherEnvironment } from "./publisher/publisherEnv";
-import { readR2Configuration } from "./r2";
+import { readR2ObjectForServing } from "./r2";
 import {
   listMediaPublications,
   removeMediaPublication,
@@ -24,7 +26,6 @@ import {
 export type PublishedMediaSyncDependencies = {
   destinationBucket: string;
   publicBaseUrl: string;
-  draftPublicBaseUrl?: string;
   used: readonly UsedDraftMedia[];
   publications: readonly MediaPublication[];
   readDraft(key: string): Promise<{ body: Buffer; contentType: string } | null>;
@@ -60,9 +61,11 @@ async function readLocalDraftAsset(key: string): Promise<DraftAsset | null> {
 }
 
 async function readRemoteDraftAsset(key: string): Promise<DraftAsset | null> {
-  return readDraftAssetFromPublicUrl(key, {
-    publicAssetBaseUrl: readR2Configuration().publicAssetBaseUrl,
-  });
+  try {
+    return await readR2ObjectForServing(key);
+  } catch {
+    return null;
+  }
 }
 
 export async function readDraftAssetFromPublicUrl(
@@ -91,7 +94,6 @@ export async function executePublishedMediaSync(
     used: dependencies.used,
     publications: dependencies.publications,
     destinationBucket: dependencies.destinationBucket,
-    draftPublicBaseUrl: dependencies.draftPublicBaseUrl,
   });
   const urlByDraftKey: Record<string, string> = {};
 
@@ -184,7 +186,6 @@ export async function syncClientPublishedMedia(
   const { urlByDraftKey } = await executePublishedMediaSync({
     destinationBucket: input.destinationBucket,
     publicBaseUrl: input.publicBaseUrl,
-    draftPublicBaseUrl: readR2Configuration().publicAssetBaseUrl,
     used: usedMedia,
     publications,
     async readDraft(key) {
@@ -212,7 +213,11 @@ export async function syncClientPublishedMedia(
 
   return {
     generatedConfig: generateAstroClientConfig(
-      deployInput,
+      {
+        ...deployInput,
+        homepageSections: applyPublishedHomepageUrls(deployInput.homepageSections, urlByDraftKey),
+        categories: applyPublishedCategoryHeroUrls(deployInput.categories, urlByDraftKey),
+      },
       applyPublishedAssetUrls(deployAssets, urlByDraftKey),
       applyPublishedLibraryUrls(deployLibrary, urlByDraftKey),
     ),
@@ -238,6 +243,7 @@ export function usedDraftMediaFromView(view: {
     assets: view.assets,
     mediaItems: view.mediaItems,
     homepageSections: view.input.homepageSections,
+    categories: view.input.categories,
   });
 }
 

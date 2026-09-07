@@ -5,7 +5,9 @@ import {
   type AstroClientConfigInput,
 } from "@shared/astroConfig";
 import { ASSET_SLOT_VALUES } from "@shared/client";
+import type { MediaLibraryItemView } from "@shared/mediaLibrary";
 import {
+  applyLibrarySlotImages,
   astroSlotId,
   buildMediaBrowseEntries,
   buildMediaSlotCatalog,
@@ -94,6 +96,49 @@ describe("resolveMediaSlots", () => {
   it("carries the stored image through for previews", () => {
     const resolved = resolveMediaSlots(catalog, new Map([["favicon", image("icon.png")]]), new Map());
     expect(resolved.find(slot => slot.id === astroSlotId("favicon"))?.image?.filename).toBe("icon.png");
+  });
+});
+
+describe("applyLibrarySlotImages", () => {
+  function libraryItem(slot: string, filename: string): MediaLibraryItemView {
+    return {
+      id: 61,
+      storageUrl: `/local-assets/${filename}`,
+      alt: "Showroom soak",
+      description: "Filled spa on the floor",
+      filename,
+      originalFilename: filename,
+      mimeType: "image/webp",
+      byteSize: 4096,
+      width: 1600,
+      height: 900,
+      slots: [slot],
+      createdAt: "2026-09-07",
+    };
+  }
+
+  it("fills a missing marketing slot from its library assignment", () => {
+    const resolved = resolveMediaSlots(catalog, new Map(), new Map());
+    const filled = applyLibrarySlotImages(resolved, [libraryItem("logo", "logo.webp")]);
+    const logo = filled.find(slot => slot.id === clientSlotId("logo"));
+    expect(logo?.added).toBe(true);
+    expect(logo?.image?.storageUrl).toBe("/local-assets/logo.webp");
+    expect(logo?.image?.mediaItemId).toBe(61);
+    expect(logo?.image?.alt).toBe("Showroom soak");
+  });
+
+  it("keeps an already-resolved image URL and overlays library copy", () => {
+    const resolved = resolveMediaSlots(
+      catalog,
+      new Map(),
+      new Map([["logo", image("existing-logo.webp")]]),
+    );
+    const filled = applyLibrarySlotImages(resolved, [libraryItem("logo", "library-logo.webp")]);
+    const logo = filled.find(slot => slot.id === clientSlotId("logo"));
+    expect(logo?.image?.storageUrl).toBe("https://cdn.test/existing-logo.webp");
+    expect(logo?.image?.filename).toBe("existing-logo.webp");
+    expect(logo?.image?.alt).toBe("Showroom soak");
+    expect(logo?.image?.mediaItemId).toBe(61);
   });
 });
 

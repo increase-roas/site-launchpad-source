@@ -41,6 +41,7 @@ import {
 import { assetUploadPersistence } from "./assetUploadDb";
 import { deriveRuntimeMode, readAssetStorageDriver } from "./_core/env";
 import { getDevelopmentAssetStore } from "./developmentAssetStore";
+import { DEFAULT_LOCAL_ASSET_URL_PREFIX } from "./localAssetStore";
 import {
   MAX_PRESIGN_EXPIRY_SECONDS,
   createR2ObjectStore,
@@ -473,14 +474,15 @@ export function createAssetUploadService(dependencies: AssetUploadServiceDepende
 let defaultService: ReturnType<typeof createAssetUploadService> | undefined;
 
 function resolveObjectStorage(): { store: R2ObjectStore; publicAssetBaseUrl: string } {
+  // Launchpad always displays drafts from itself (`/local-assets/...`).
+  // Website R2 copies happen only on preview/publish, not on upload.
   if (readAssetStorageDriver(deriveRuntimeMode()) === "local") {
     const local = getDevelopmentAssetStore();
-    return { store: local.store, publicAssetBaseUrl: local.publicAssetBaseUrl };
+    return { store: local.store, publicAssetBaseUrl: DEFAULT_LOCAL_ASSET_URL_PREFIX };
   }
-  const config = readR2Configuration();
   return {
-    store: createR2ObjectStore(config),
-    publicAssetBaseUrl: config.publicAssetBaseUrl,
+    store: createR2ObjectStore(readR2Configuration()),
+    publicAssetBaseUrl: DEFAULT_LOCAL_ASSET_URL_PREFIX,
   };
 }
 

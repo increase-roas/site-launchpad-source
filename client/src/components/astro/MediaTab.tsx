@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { DevPlaceholderFillBar } from "./media/DevPlaceholderFillBar";
 import { MediaWorkspace } from "./media/MediaWorkspace";
 import {
+  applyLibrarySlotImages,
   astroSlotId,
   buildMediaSlotCatalog,
   clientSlotId,
@@ -74,26 +75,18 @@ export function MediaTab({
   const marketingUploadInFlightRef = useRef(false);
 
   const libraryItems = libraryQuery.data?.items ?? [];
-  const slots = useMemo(() => {
-    const resolved = resolveMediaSlots(
-      buildMediaSlotCatalog(value),
-      toImageMap(assets),
-      toImageMap(workspaceQuery.data?.assets ?? []),
-    );
-    return resolved.map(slot => {
-      const item = libraryItems.find(entry => entry.slots.includes(slot.slot));
-      if (!item || !slot.image) return slot;
-      return {
-        ...slot,
-        image: {
-          ...slot.image,
-          mediaItemId: item.id,
-          alt: item.alt,
-          description: item.description,
-        },
-      };
-    });
-  }, [assets, libraryItems, value, workspaceQuery.data]);
+  const slots = useMemo(
+    () =>
+      applyLibrarySlotImages(
+        resolveMediaSlots(
+          buildMediaSlotCatalog(value),
+          toImageMap(assets),
+          toImageMap(workspaceQuery.data?.assets ?? []),
+        ),
+        libraryItems,
+      ),
+    [assets, libraryItems, value, workspaceQuery.data],
+  );
 
   const busySlotId = uploadingSlot
     ? astroSlotId(uploadingSlot)

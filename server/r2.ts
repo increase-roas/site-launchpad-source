@@ -11,6 +11,7 @@ import {
   readR2Configuration,
   type R2Configuration,
 } from "./_core/env";
+import { contentTypeForStorageKey } from "./localAssetStore";
 
 export { readR2Configuration };
 export type { R2Configuration };
@@ -128,4 +129,27 @@ export function createR2ObjectStore(
       await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
     },
   };
+}
+
+export async function readR2ObjectForServing(
+  key: string,
+  config: R2Configuration = readR2Configuration(),
+  client: S3Client = createR2Client(config),
+): Promise<{ body: Buffer; contentType: string } | null> {
+  try {
+    const result = await client.send(
+      new GetObjectCommand({
+        Bucket: config.bucket,
+        Key: key,
+      }),
+    );
+    if (!result.Body) return null;
+    return {
+      body: Buffer.from(await result.Body.transformToByteArray()),
+      contentType: result.ContentType || contentTypeForStorageKey(key),
+    };
+  } catch (error) {
+    if (isMissingObjectError(error)) return null;
+    throw error;
+  }
 }

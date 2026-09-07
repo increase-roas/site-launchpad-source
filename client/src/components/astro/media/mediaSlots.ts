@@ -166,6 +166,33 @@ export function resolveMediaSlots(
   });
 }
 
+/**
+ * Library assignments are the source of truth for "this file belongs on this
+ * slot". Workspace/astro asset maps can lag or fail, so a placed library item
+ * still has to light up the slot preview.
+ */
+export function applyLibrarySlotImages(
+  slots: ResolvedMediaSlot[],
+  libraryItems: readonly MediaLibraryItemView[],
+): ResolvedMediaSlot[] {
+  return slots.map(slot => {
+    const item = libraryItems.find(entry => entry.slots.includes(slot.slot));
+    if (!item) return slot;
+    return {
+      ...slot,
+      added: true,
+      image: {
+        storageUrl: slot.image?.storageUrl ?? item.storageUrl,
+        filename: slot.image?.filename ?? item.filename,
+        byteSize: slot.image?.byteSize ?? item.byteSize,
+        mediaItemId: item.id,
+        alt: item.alt,
+        description: item.description,
+      },
+    };
+  });
+}
+
 /** Groups in catalog order, skipping any group that has no slots. */
 export function groupMediaSlots(
   slots: ResolvedMediaSlot[],

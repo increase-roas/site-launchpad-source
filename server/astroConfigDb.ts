@@ -310,7 +310,11 @@ export async function saveAstroConfig(clientId: number, input: AstroClientConfig
     applyAstroAssetUrls(input, assetUrls),
     undefined,
   );
-  const generatedConfig = generateAstroClientConfig(normalized, assetUrls, galleryLibrary);
+  const generatedConfig = generateAstroClientConfig(
+    normalized,
+    assetUrls,
+    galleryLibrary,
+  );
   const generatedAt = new Date();
 
   await db.transaction(async transaction => {

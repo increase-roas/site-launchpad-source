@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
-import { createDevelopmentAssetRoutes } from "./developmentAssetRoutes";
+import { createAssetGetRoutes, createDevelopmentAssetRoutes } from "./developmentAssetRoutes";
 import { createLocalAssetStore, parseUploadUrl, type LocalAssetStore } from "./localAssetStore";
 
 let local: LocalAssetStore;
@@ -140,5 +140,23 @@ describe("GET asset route", () => {
 
   it("returns 404 rather than escaping the root", async () => {
     await request(app).get("/local-assets/..%2F..%2Fsecrets").expect(404);
+  });
+});
+
+describe("GET asset route on the Vercel rewrite prefix", () => {
+  it("serves the same key from /api/local-assets", async () => {
+    const keyed = express();
+    keyed.use(
+      createAssetGetRoutes(async key => {
+        if (key !== "clients/8/astro/nav.webp") return null;
+        return { body: Buffer.from("nav-bytes"), contentType: "image/webp" };
+      }),
+    );
+
+    const response = await request(keyed)
+      .get("/api/local-assets/clients/8/astro/nav.webp")
+      .expect(200);
+    expect(response.headers["content-type"]).toContain("image/webp");
+    expect(response.body.toString()).toBe("nav-bytes");
   });
 });

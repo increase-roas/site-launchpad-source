@@ -21,6 +21,35 @@ function cacheControlFor(key: string): string {
   return key.startsWith("tmp/") ? "no-store" : IMMUTABLE_CACHE_CONTROL;
 }
 
+export type ServedAsset = { body: Buffer; contentType: string };
+
+/**
+ * GET `/local-assets/*` and `/api/local-assets/*` so the same stored path works
+ * on the local Express server and on the Vercel rewrite.
+ */
+export function createAssetGetRoutes(
+  readObject: (key: string) => Promise<ServedAsset | null>,
+  prefixes: readonly string[] = [
+    DEFAULT_LOCAL_ASSET_URL_PREFIX,
+    `/api${DEFAULT_LOCAL_ASSET_URL_PREFIX}`,
+  ],
+): Router {
+  const router = Router();
+  for (const prefix of prefixes) {
+    router.get(`${prefix}/*`, async (request, response) => {
+      const asset = await readObject(wildcardKey(request));
+      if (!asset) {
+        response.status(404).json({ error: "Not Found" });
+        return;
+      }
+      response.setHeader("Content-Type", asset.contentType);
+      response.setHeader("Cache-Control", cacheControlFor(wildcardKey(request)));
+      response.send(asset.body);
+    });
+  }
+  return router;
+}
+
 /**
  * Serves the local development asset store: signed PUTs stand in for R2
  * presigned uploads, and GETs stand in for the public asset CDN.
@@ -47,17 +76,7 @@ export function createDevelopmentAssetRoutes(local: LocalAssetStore): Router {
     },
   );
 
-  router.get(pattern, async (request, response) => {
-    const key = wildcardKey(request);
-    const asset = await local.readObjectForServing(key);
-    if (!asset) {
-      response.status(404).json({ error: "Not Found" });
-      return;
-    }
-    response.setHeader("Content-Type", asset.contentType);
-    response.setHeader("Cache-Control", cacheControlFor(key));
-    response.send(asset.body);
-  });
+  router.use(createAssetGetRoutes(key => local.readObjectForServing(key), [DEFAULT_LOCAL_ASSET_URL_PREFIX]));
 
   return router;
 }

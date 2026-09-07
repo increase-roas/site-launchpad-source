@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { serializeGalleryImages } from "./mediaLibrary";
 import {
   applyPublishedAssetUrls,
+  applyPublishedHomepageUrls,
   applyPublishedLibraryUrls,
   collectUsedDraftMedia,
   isDraftLocalAssetUrl,
@@ -36,6 +37,10 @@ describe("draft vs public media URLs", () => {
     expect(isPublicDeployAssetUrl("/local-assets/clients/7/nav.webp")).toBe(false);
     expect(isPublicDeployAssetUrl("https://pub.example/nav.webp")).toBe(true);
     expect(isPublicDeployAssetUrl("/brand/logo-nav.svg")).toBe(true);
+    expect(isDraftLocalAssetUrl("http://127.0.0.1:3000/local-assets/clients/7/nav.webp")).toBe(true);
+    expect(isPublicDeployAssetUrl("http://127.0.0.1:3000/local-assets/clients/7/nav.webp")).toBe(false);
+    expect(isPublicDeployAssetUrl("http://localhost:3000/local-assets/clients/7/nav.webp")).toBe(false);
+    expect(isPublicDeployAssetUrl("http://evil.example/nav.webp")).toBe(false);
   });
 
   it("builds a public object URL from the website bucket origin", () => {
@@ -72,6 +77,35 @@ describe("collectUsedDraftMedia", () => {
 
     expect(used).toEqual([localNav, localHero]);
   });
+
+  it("collects hero backgrounds and card images from homepage fields", () => {
+    const used = collectUsedDraftMedia({
+      assets: [],
+      mediaItems: [
+        { id: 12, storageKey: localHero.storageKey, storageUrl: localHero.storageUrl },
+      ],
+      homepageSections: [
+        {
+          enabled: true,
+          type: "hero",
+          fields: {
+            backgroundImage: localHero.storageUrl,
+          },
+        },
+        {
+          enabled: true,
+          type: "cards",
+          fields: {
+            items: `Hot Tubs | Deep seats | /hot-tubs | ${localNav.storageUrl}`,
+          },
+        },
+      ],
+    });
+
+    expect(used.map(item => item.storageKey).sort()).toEqual(
+      [localHero.storageKey, localNav.storageKey].sort(),
+    );
+  });
 });
 
 describe("planMediaSync", () => {
@@ -101,53 +135,6 @@ describe("planMediaSync", () => {
     expect(plan.reuse.map(item => item.media.storageKey)).toEqual([localNav.storageKey]);
     expect(plan.keepPublic.map(item => item.storageKey)).toEqual([alreadyPublic.storageKey]);
     expect(plan.delete).toEqual([leftover]);
-  });
-
-  it("rewrites local drafts to the public draft origin instead of uploading them", () => {
-    const plan = planMediaSync({
-      used: [localNav, localHero],
-      publications: [],
-      destinationBucket: "website-7-images",
-      draftPublicBaseUrl: "https://assets.example.com",
-    });
-
-    expect(plan.upload).toEqual([]);
-    expect(plan.keepPublic).toEqual([
-      {
-        ...localNav,
-        storageUrl: "https://assets.example.com/clients/7-acme/astro/navLogo-aaa-111.webp",
-      },
-      {
-        ...localHero,
-        storageUrl: "https://assets.example.com/clients/7-acme/astro/categoryHotTubs-bbb-222.webp",
-      },
-    ]);
-  });
-
-  it("still reuses a copy already on the website bucket when a draft public origin is set", () => {
-    const existing: MediaPublication = {
-      mediaItemId: 11,
-      draftStorageKey: localNav.storageKey,
-      publishedKey: localNav.storageKey,
-      publishedUrl: "https://pub.example/clients/7-acme/astro/navLogo-aaa-111.webp",
-      destinationBucket: "website-7-images",
-    };
-
-    const plan = planMediaSync({
-      used: [localNav, localHero],
-      publications: [existing],
-      destinationBucket: "website-7-images",
-      draftPublicBaseUrl: "https://assets.example.com",
-    });
-
-    expect(plan.reuse.map(item => item.media.storageKey)).toEqual([localNav.storageKey]);
-    expect(plan.upload).toEqual([]);
-    expect(plan.keepPublic).toEqual([
-      {
-        ...localHero,
-        storageUrl: "https://assets.example.com/clients/7-acme/astro/categoryHotTubs-bbb-222.webp",
-      },
-    ]);
   });
 
   it("does not reuse a publication from a different website bucket", () => {
@@ -183,5 +170,17 @@ describe("apply published URLs", () => {
     )).toEqual([
       { id: 11, storageUrl: "https://pub.example/nav.webp", alt: "Logo", description: "" },
     ]);
+  });
+
+  it("rewrites draft paths inside homepage fields", () => {
+    const rewritten = applyPublishedHomepageUrls(
+      [{
+        enabled: true,
+        type: "hero",
+        fields: { backgroundImage: localNav.storageUrl },
+      }],
+      { [localNav.storageKey]: "https://pub.example/nav.webp" },
+    );
+    expect(rewritten[0]?.fields.backgroundImage).toBe("https://pub.example/nav.webp");
   });
 });

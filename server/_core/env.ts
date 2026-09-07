@@ -201,6 +201,29 @@ export function readR2Configuration(
   };
 }
 
+function isPlaceholderR2Configuration(config: R2Configuration): boolean {
+  const host = new URL(config.publicAssetBaseUrl).hostname.toLowerCase();
+  const accessKey = config.accessKeyId.toLowerCase();
+  return (
+    host === "example.com" ||
+    host.endsWith(".example.com") ||
+    accessKey.includes("your-r2") ||
+    accessKey.includes("example")
+  );
+}
+
+/** Real object storage only. Placeholder .env values must not be treated as a CDN. */
+export function tryUsableR2Configuration(
+  environment: NodeJS.ProcessEnv = process.env,
+): R2Configuration | undefined {
+  try {
+    const config = readR2Configuration(environment);
+    return isPlaceholderR2Configuration(config) ? undefined : config;
+  } catch {
+    return undefined;
+  }
+}
+
 export function readSupabaseAuthConfiguration(
   environment: NodeJS.ProcessEnv = process.env,
 ): SupabaseAuthConfiguration {

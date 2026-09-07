@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readAssetStorageDriver, validateRuntimeEnv } from "./env";
+import { readAssetStorageDriver, tryUsableR2Configuration, validateRuntimeEnv } from "./env";
 
 const validDevelopmentEnv: NodeJS.ProcessEnv = {
   VITE_SUPABASE_URL: "https://project-ref.supabase.co",
@@ -169,5 +169,19 @@ describe("asset storage driver", () => {
   it("still requires R2 credentials under the default driver", () => {
     const { R2_BUCKET: _omitted, ...withoutBucket } = validDevelopmentEnv;
     expect(() => validateRuntimeEnv("development", withoutBucket)).toThrow(/R2_BUCKET/);
+  });
+});
+
+describe("usable R2 configuration", () => {
+  it("ignores placeholder example.com public origins", () => {
+    expect(tryUsableR2Configuration(validDevelopmentEnv)).toBeUndefined();
+  });
+
+  it("accepts a real public HTTPS origin", () => {
+    const config = tryUsableR2Configuration({
+      ...validDevelopmentEnv,
+      R2_PUBLIC_ASSET_BASE_URL: "https://media.increaseroas.com",
+    });
+    expect(config?.publicAssetBaseUrl).toBe("https://media.increaseroas.com");
   });
 });

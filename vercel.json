@@ -11,6 +11,10 @@
   },
   "rewrites": [
     {
+      "source": "/local-assets/(.*)",
+      "destination": "/api/local-assets/$1"
+    },
+    {
       "source": "/((?!api$|api/).*)",
       "destination": "/index.html"
     }

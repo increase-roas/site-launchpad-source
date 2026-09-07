@@ -264,5 +264,10 @@ describe("Vercel production-equivalent routing", () => {
       pathname: "/assets/index-CATk06fW.css",
     });
     expect(routeVercelRequest("/api/trpc/system.health").kind).not.toBe("spa");
+    expect(routeVercelRequest("/local-assets/clients/8/astro/nav.webp")).toEqual({
+      kind: "function",
+      file: "api/[...path].js",
+      url: "/api/local-assets/clients/8/astro/nav.webp",
+    });
   });
 });

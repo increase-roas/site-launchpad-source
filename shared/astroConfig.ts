@@ -669,6 +669,10 @@ function isPublicDeployAsset(value: string | undefined): value is string {
   return isPublicDeployAssetUrl(value);
 }
 
+function publishableAssetUrl(value: string | undefined): string | undefined {
+  return isPublicDeployAsset(value) ? value : undefined;
+}
+
 export const CLIENT_DEPLOY_REQUIRED_ASSETS = [
   "navLogo",
   "footerLogo",
@@ -756,11 +760,13 @@ function toActions(
     }));
 }
 
-function parseImageCards(value: string): Array<{ title: string; body: string | null; image: string | null; href: string }> {
+function parseImageCards(
+  value: string,
+): Array<{ title: string; body: string | null; image: string | null; href: string }> {
   return splitConfiguredLines(value, 3).map(([title, body, href, image]) => ({
     title,
     body: nullIfEmpty(body ?? ""),
-    image: isAbsoluteAsset(image) ? image : null,
+    image: publishableAssetUrl(image) ?? null,
     href: rewriteTemplateHref(href),
   }));
 }
@@ -775,6 +781,7 @@ function toCanonicalHomepageSection(
 ): Record<string, unknown> | null {
   if (!section.enabled) return null;
   const field = (name: string) => section.fields[name]?.trim() ?? "";
+  const assetUrl = (value: string | undefined) => publishableAssetUrl(value);
   const actions = toActions(
     { label: field("ctaLabel"), href: field("ctaHref"), style: "primary" },
     { label: field("ctaLabel2"), href: field("ctaHref2"), style: "secondary" },
@@ -801,7 +808,7 @@ function toCanonicalHomepageSection(
           .filter(Boolean),
         subhead: nullIfEmpty(field("subheadline")),
         bullets: toClaims(field("bullets")),
-        backgroundImage: isPublicDeployAsset(field("backgroundImage")) ? field("backgroundImage") : null,
+        backgroundImage: assetUrl(field("backgroundImage")) ?? null,
         image: null,
         promo: nullIfEmpty(field("promo")),
         actions,
@@ -871,7 +878,7 @@ function toCanonicalHomepageSection(
       const items = splitConfiguredLines(field("items"), 2).map(([title, body, icon]) => ({
         title,
         body,
-        icon: isAbsoluteAsset(icon) ? icon : null,
+        icon: assetUrl(icon) ?? null,
       }));
       return items.length > 0
         ? { type: "benefits", heading: nullIfEmpty(field("heading")), items }
@@ -920,7 +927,8 @@ function toCanonicalHomepageSection(
     }
     case "gallery": {
       const images = resolveGalleryImages(field("images"), galleryLibrary, field("heading"))
-        .filter(image => isPublicDeployAsset(image.src));
+        .map(image => ({ ...image, src: assetUrl(image.src) ?? "" }))
+        .filter(image => image.src);
       return images.length > 0
         ? { type: "gallery", heading: nullIfEmpty(field("heading")), images }
         : null;
@@ -1089,7 +1097,7 @@ export function toCanonicalAstroClientConfig(
       enabled: true,
       label: configured.label,
       blurb: configured.description,
-      heroImage: isPublicDeployAsset(asset) ? asset : null,
+      heroImage: publishableAssetUrl(asset) ?? null,
       sortOrder: index,
     }];
   }));
@@ -1180,11 +1188,11 @@ export function toCanonicalAstroClientConfig(
         googleFontsHref: nullIfEmpty(input.brand.fonts.googleFontsUrl),
       },
       logos: {
-        nav: isPublicDeployAsset(assets.navLogo) ? assets.navLogo : "/brand/logo-nav.svg",
-        footer: isPublicDeployAsset(assets.footerLogo) ? assets.footerLogo : "/brand/logo-footer.svg",
-        inventory: isPublicDeployAsset(assets.inventoryLogo) ? assets.inventoryLogo : null,
-        favicon: isPublicDeployAsset(assets.favicon) ? assets.favicon : "/brand/favicon.svg",
-        ogImage: isPublicDeployAsset(assets.ogImage) ? assets.ogImage : "/brand/og-default.png",
+        nav: publishableAssetUrl(assets.navLogo) ?? "/brand/logo-nav.svg",
+        footer: publishableAssetUrl(assets.footerLogo) ?? "/brand/logo-footer.svg",
+        inventory: publishableAssetUrl(assets.inventoryLogo) ?? null,
+        favicon: publishableAssetUrl(assets.favicon) ?? "/brand/favicon.svg",
+        ogImage: publishableAssetUrl(assets.ogImage) ?? "/brand/og-default.png",
       },
       radius: CANONICAL_BRAND_RADIUS,
     },

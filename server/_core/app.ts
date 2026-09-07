@@ -3,8 +3,9 @@ import express, { type ErrorRequestHandler, type Express } from "express";
 import type { Server } from "node:http";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
-import { createDevelopmentAssetRoutes } from "../developmentAssetRoutes";
+import { createAssetGetRoutes, createDevelopmentAssetRoutes } from "../developmentAssetRoutes";
 import { getDevelopmentAssetStore } from "../developmentAssetStore";
+import { readR2ObjectForServing } from "../r2";
 import {
   deriveRuntimeMode,
   readAssetStorageDriver,
@@ -63,14 +64,29 @@ export async function createApp(
     }),
   );
 
+  // Must precede the `/api` 404 and the Vite/SPA fallback.
+  // Vercel rewrites `/local-assets` to `/api/local-assets`; both prefixes serve
+  // the same stored key so local and production Launchpad share one URL shape.
+  const storageDriver = readAssetStorageDriver(mode);
+  app.use(
+    createAssetGetRoutes(async key => {
+      if (storageDriver === "local") {
+        return getDevelopmentAssetStore().readObjectForServing(key);
+      }
+      try {
+        return await readR2ObjectForServing(key);
+      } catch {
+        return null;
+      }
+    }),
+  );
+  if (storageDriver === "local") {
+    app.use(createDevelopmentAssetRoutes(getDevelopmentAssetStore()));
+  }
+
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "Not Found" });
   });
-
-  // Must precede the dev server, which otherwise claims every remaining route.
-  if (readAssetStorageDriver(mode) === "local") {
-    app.use(createDevelopmentAssetRoutes(getDevelopmentAssetStore()));
-  }
 
   if (mode === "development") {
     if (!options.developmentServer) {
