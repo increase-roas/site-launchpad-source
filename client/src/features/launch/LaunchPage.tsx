@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { clientDeployGaps, summarizeHomepageSections } from "@shared/astroConfig";
 import type { AstroSitePreviewStatusView } from "@shared/astroSitePreview";
 import type { AstroSitePublishStatusView } from "@shared/astroSitePublish";
+import { isWorkersDevUrl } from "@shared/liveSiteHostname";
 import {
   AlertTriangle,
   Check,
@@ -179,6 +180,7 @@ export default function LaunchPage({ clientId }: { clientId: number }) {
     approved: Boolean(preview?.approvedSha),
     blockers,
     liveUrlIsPreview,
+    liveUrlIsWorkersDev: isWorkersDevUrl(liveUrl),
   });
   const pageAlerts = [...previewAlerts, ...productionAlerts];
   const next = nextLaunchAction({
@@ -521,6 +523,7 @@ function ProductionEnvironment({
     approved,
     blockers,
     liveUrlIsPreview,
+    liveUrlIsWorkersDev: isWorkersDevUrl(liveUrl),
   });
 
   return (
@@ -531,9 +534,11 @@ function ProductionEnvironment({
       host={host}
       href={liveUrl}
       meta={
-        publish
-          ? `${publishStepLabel(publish.step)} · ${formatClientUpdatedAt(publish.updatedAt)}`
-          : "Publish the approved preview to the live Worker."
+        publish === undefined
+          ? "Checking production status."
+          : publish
+            ? `${publishStepLabel(publish.step)} · ${formatClientUpdatedAt(publish.updatedAt)}`
+            : "Publish the approved preview to the live Worker."
       }
       jobKind={jobKind}
       currentPhase={currentPhase}
@@ -586,7 +591,11 @@ function ProductionEnvironment({
               ) : (
                 <Rocket className="h-4 w-4" aria-hidden="true" />
               )}
-              {publish ? "Publish again" : "Publish"}
+              {publish && isWorkersDevUrl(publish.liveUrl)
+                ? "Connect live domain"
+                : publish
+                  ? "Publish again"
+                  : "Publish"}
             </Button>
           )}
         </>
@@ -944,6 +953,8 @@ function previewStatus(kind: PreviewEnvironmentKind): {
   label: string;
 } {
   switch (kind) {
+    case "unknown":
+      return { tone: "info", label: "Checking" };
     case "idle":
       return { tone: "neutral", label: "Not generated" };
     case "active":
@@ -966,6 +977,8 @@ function publishStatus(kind: PublishEnvironmentKind): {
   label: string;
 } {
   switch (kind) {
+    case "unknown":
+      return { tone: "info", label: "Checking" };
     case "idle":
       return { tone: "neutral", label: "Not published" };
     case "active":
@@ -994,6 +1007,8 @@ function productionTitle(
     case "idle":
     case "live":
       return "Not published yet";
+    case "unknown":
+      return "Checking production";
     default: {
       const exhaustive: never = kind;
       return exhaustive;
@@ -1016,6 +1031,8 @@ function environmentTitle(
     case "ready":
     case "stale":
       return "No preview URL yet";
+    case "unknown":
+      return "Checking preview";
     default: {
       const exhaustive: never = kind;
       return exhaustive;
@@ -1024,6 +1041,9 @@ function environmentTitle(
 }
 
 function previewMeta(preview: AstroSitePreviewStatusView | null | undefined): string {
+  if (preview === undefined) {
+    return "Checking the latest preview job.";
+  }
   if (!preview) {
     return "Generate a Cloudflare preview from the saved website configuration. Optional setup becomes warnings, not blockers.";
   }
@@ -1076,6 +1096,12 @@ function nextLaunchAction({
     };
   }
   switch (previewKind) {
+    case "unknown":
+      return {
+        kind: "preview",
+        label: "Checking preview",
+        detail: "Preview status is still loading.",
+      };
     case "idle":
       return {
         kind: "preview",
@@ -1115,6 +1141,12 @@ function nextLaunchAction({
     };
   }
   switch (publishKind) {
+    case "unknown":
+      return {
+        kind: "publish",
+        label: "Checking production",
+        detail: "Publish status is still loading.",
+      };
     case "idle":
       return {
         kind: "publish",

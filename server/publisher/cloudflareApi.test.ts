@@ -428,4 +428,126 @@ describe("Cloudflare publisher client", () => {
     ).rejects.toMatchObject({ name: "AbortError" });
     expect(requests).toHaveLength(1);
   });
+
+  it("attaches a Site URL hostname to the production Worker", async () => {
+    const { fetchFn, requests } = createMockFetch([
+      successEnvelope([]),
+      successEnvelope([]),
+      successEnvelope([{ id: "zone-theclient", name: "theclient.com" }]),
+      successEnvelope({
+        hostname: "www.theclient.com",
+        service: "website-north-star-5",
+        environment: "production",
+      }),
+    ]);
+
+    const result = await createClient(fetchFn).attachWorkerCustomDomain({
+      scriptName: "website-north-star-5",
+      hostname: "www.theclient.com",
+      signal: activeSignal(),
+    });
+
+    expect(result).toEqual({
+      hostname: "www.theclient.com",
+      liveUrl: "https://www.theclient.com",
+    });
+    expect(requests[0]?.url).toContain("/workers/domains?hostname=www.theclient.com");
+    expect(requests[1]?.url).toContain("/zones?name=www.theclient.com");
+    expect(requests[2]?.url).toContain("/zones?name=theclient.com");
+    expect(requests[2]?.url).toContain("account.id=0123456789abcdef0123456789abcdef");
+    expect(requests[3]?.url).toContain("/workers/domains");
+    expect(requests[3]?.init?.method).toBe("PUT");
+    expect(parseRequestBody(requests[3])).toEqual({
+      hostname: "www.theclient.com",
+      service: "website-north-star-5",
+      environment: "production",
+      zone_id: "zone-theclient",
+    });
+  });
+
+  it("reuses a custom domain already attached to the same Worker", async () => {
+    const { fetchFn, requests } = createMockFetch([
+      successEnvelope([
+        { hostname: "www.theclient.com", service: "website-north-star-5" },
+      ]),
+    ]);
+
+    await expect(
+      createClient(fetchFn).attachWorkerCustomDomain({
+        scriptName: "website-north-star-5",
+        hostname: "www.theclient.com",
+        signal: activeSignal(),
+      }),
+    ).resolves.toEqual({
+      hostname: "www.theclient.com",
+      liveUrl: "https://www.theclient.com",
+    });
+    expect(requests).toHaveLength(1);
+  });
+
+  it("refuses a hostname already attached to another Worker", async () => {
+    const { fetchFn, requests } = createMockFetch([
+      successEnvelope([
+        { hostname: "www.theclient.com", service: "someone-else" },
+      ]),
+    ]);
+
+    await expect(
+      createClient(fetchFn).attachWorkerCustomDomain({
+        scriptName: "website-north-star-5",
+        hostname: "www.theclient.com",
+        signal: activeSignal(),
+      }),
+    ).rejects.toThrow("already attached to another Worker");
+    expect(requests).toHaveLength(1);
+  });
+
+  it("does not attach after cancellation during zone lookup", async () => {
+    const controller = new AbortController();
+    const requests: RecordedRequest[] = [];
+    const fetchFn: FetchFunction = async (input, init) => {
+      requests.push({ url: String(input), init });
+      if (requests.length === 2) {
+        controller.abort(new DOMException("cancelled", "AbortError"));
+      }
+      return successEnvelope([]);
+    };
+
+    await expect(
+      createClient(fetchFn).attachWorkerCustomDomain({
+        scriptName: "website-north-star-5",
+        hostname: "www.theclient.com",
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(requests).toHaveLength(2);
+  });
+
+  it("uploads and deletes website media objects on the public R2 bucket", async () => {
+    const { fetchFn, requests } = createMockFetch([
+      new Response(null, { status: 200 }),
+      new Response(null, { status: 200 }),
+    ]);
+    const client = createClient(fetchFn);
+    const body = Buffer.from("webp-bytes");
+
+    await client.putR2Object({
+      bucket: "website-7-images",
+      key: "clients/7-acme/astro/nav.webp",
+      body,
+      contentType: "image/webp",
+      signal: activeSignal(),
+    });
+    await client.deleteR2Object({
+      bucket: "website-7-images",
+      key: "clients/7-acme/astro/old.webp",
+      signal: activeSignal(),
+    });
+
+    expect(requests[0]?.url).toContain(
+      "/r2/buckets/website-7-images/objects/clients/7-acme/astro/nav.webp",
+    );
+    expect(requests[0]?.init?.method).toBe("PUT");
+    expect(requests[1]?.init?.method).toBe("DELETE");
+  });
 });

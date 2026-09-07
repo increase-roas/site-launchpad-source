@@ -39,6 +39,7 @@ import {
   readPreviewMaterialSnapshot,
 } from "./previewMaterial";
 import { getAstroConfigView } from "../astroConfigDb";
+import { syncClientPublishedMedia, type SyncClientPublishedMediaInput } from "../publishedMedia";
 
 export type AstroSitePreviewJob = AstroSitePreview;
 
@@ -202,6 +203,9 @@ export type AstroSitePreviewDependencies = {
   createLeaseToken: () => string;
   leaseDurationMs: number;
   externalTimeoutMs: number;
+  syncPublishedMedia?: (
+    input: SyncClientPublishedMediaInput,
+  ) => Promise<{ generatedConfig: string }>;
 };
 
 const RECONCILIATION_WINDOW_MS = 60_000;
@@ -374,6 +378,28 @@ async function execute(
     }
     case "commit_source": {
       const material = loadSnapshot(job);
+      let generatedConfig = material.generatedConfig;
+      if (
+        deps.syncPublishedMedia &&
+        material.deployInput &&
+        material.deployAssets &&
+        material.deployLibrary &&
+        material.usedMedia
+      ) {
+        const synced = await bounded(Math.max(deps.externalTimeoutMs, 60_000), signal =>
+          deps.syncPublishedMedia!({
+            clientId: job.clientId,
+            destinationBucket: job.r2BucketName,
+            publicBaseUrl: requireValue(job.r2PublicUrl, "Preview R2 public URL is missing."),
+            usedMedia: material.usedMedia ?? [],
+            deployInput: material.deployInput,
+            deployAssets: material.deployAssets,
+            deployLibrary: material.deployLibrary,
+            signal,
+          }),
+        );
+        generatedConfig = synced.generatedConfig;
+      }
       const kv = await bounded(deps.externalTimeoutMs, signal =>
         deps.external.ensureKvNamespace({
           title: astroSiteSessionKvTitle(job.workerName),
@@ -392,7 +418,7 @@ async function execute(
           d1DatabaseId: requireValue(job.d1DatabaseId, "Preview D1 database is missing."),
           r2BucketName: job.r2BucketName,
           sessionKvNamespaceId: kv.kvNamespaceId,
-          generatedConfig: material.generatedConfig,
+          generatedConfig,
           signal,
         }),
       );
@@ -741,6 +767,7 @@ function runtimeDependencies(): AstroSitePreviewDependencies {
     createLeaseToken: randomUUID,
     leaseDurationMs: 30_000,
     externalTimeoutMs: 15_000,
+    syncPublishedMedia: syncClientPublishedMedia,
   };
 }
 

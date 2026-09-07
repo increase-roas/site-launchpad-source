@@ -2,6 +2,7 @@ import { z } from "zod";
 import { BUSINESS_DAY_VALUES, businessHourSchema } from "./client";
 import { siteFontStylesheetHref } from "./astroFontCatalog";
 import { resolveGalleryImages, type MediaLibraryItemRef } from "./mediaLibrary";
+import { isPublicDeployAssetUrl } from "./publishedMedia";
 
 const DEFAULT_FONTS = { display: "Manrope", body: "Manrope", mono: "JetBrains Mono" } as const;
 
@@ -665,7 +666,7 @@ function isAbsoluteAsset(value: string | undefined): value is string {
 
 /** Launchpad `/local-assets` URLs are not reachable on the deployed Worker. */
 function isPublicDeployAsset(value: string | undefined): value is string {
-  return isAbsoluteAsset(value) && !value.startsWith("/local-assets");
+  return isPublicDeployAssetUrl(value);
 }
 
 export const CLIENT_DEPLOY_REQUIRED_ASSETS = [
@@ -800,7 +801,7 @@ function toCanonicalHomepageSection(
           .filter(Boolean),
         subhead: nullIfEmpty(field("subheadline")),
         bullets: toClaims(field("bullets")),
-        backgroundImage: isAbsoluteAsset(field("backgroundImage")) ? field("backgroundImage") : null,
+        backgroundImage: isPublicDeployAsset(field("backgroundImage")) ? field("backgroundImage") : null,
         image: null,
         promo: nullIfEmpty(field("promo")),
         actions,
@@ -918,7 +919,8 @@ function toCanonicalHomepageSection(
         : null;
     }
     case "gallery": {
-      const images = resolveGalleryImages(field("images"), galleryLibrary, field("heading"));
+      const images = resolveGalleryImages(field("images"), galleryLibrary, field("heading"))
+        .filter(image => isPublicDeployAsset(image.src));
       return images.length > 0
         ? { type: "gallery", heading: nullIfEmpty(field("heading")), images }
         : null;

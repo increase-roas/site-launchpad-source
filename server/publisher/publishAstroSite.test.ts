@@ -71,6 +71,7 @@ function inMemoryDependencies(initial: AstroSitePublishJob) {
       generatedConfig: "export const rawClientConfig = {};",
       runtimeSecrets: {},
     }),
+    loadLiveHostname: vi.fn().mockResolvedValue("www.theclient.com"),
     external: {
       ensureRepository: unused,
       ensureD1Database: unused,
@@ -83,6 +84,7 @@ function inMemoryDependencies(initial: AstroSitePublishJob) {
       getWorkflowRun,
       patchRuntimeSecrets: unused,
       getWorkersDevStatus: unused,
+      attachWorkerCustomDomain: unused,
     },
     store: {
       start: vi.fn(),
@@ -180,5 +182,97 @@ describe("Astro website workflow Retry", () => {
     expect(harness.deps.external.ensureR2Bucket).not.toHaveBeenCalled();
     expect(harness.deps.external.commitSource).not.toHaveBeenCalled();
     expect(harness.current().commitSha).toBe("source-sha");
+  });
+
+  it("commits public R2 URLs after syncing changed draft photos", async () => {
+    const initial = jobFixture();
+    initial.step = "commit_source";
+    const harness = inMemoryDependencies(initial);
+    harness.deps.external.ensureKvNamespace = vi.fn().mockResolvedValue({
+      kvNamespaceId: "kv-id",
+    });
+    harness.deps.external.commitSource = vi.fn().mockResolvedValue({ commitSha: "commit-sha" });
+    harness.deps.syncPublishedMedia = vi.fn().mockResolvedValue({
+      generatedConfig: "export const rawClientConfig = { public: true };",
+    });
+
+    const advanced = await advanceAstroSitePublish({ clientId: 5 }, harness.deps);
+
+    expect(harness.deps.syncPublishedMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        destinationBucket: "website-north-star-5-images",
+        publicBaseUrl: "https://pub-example.r2.dev",
+      }),
+    );
+    expect(harness.deps.external.commitSource).toHaveBeenCalledWith(
+      expect.objectContaining({
+        generatedConfig: "export const rawClientConfig = { public: true };",
+      }),
+    );
+    expect(advanced).toMatchObject({ step: "dispatch_workflow" });
+    expect(harness.current().commitSha).toBe("commit-sha");
+  });
+});
+
+describe("Astro website custom domain", () => {
+  it("moves from workers.dev lookup to custom-domain attach", async () => {
+    const initial = jobFixture();
+    initial.step = "get_live_url";
+    const harness = inMemoryDependencies(initial);
+    harness.deps.external.getWorkersDevStatus = vi.fn().mockResolvedValue({
+      liveUrl: "https://website-north-star-5.increase-roas.workers.dev",
+    });
+
+    const advanced = await advanceAstroSitePublish({ clientId: 5 }, harness.deps);
+
+    expect(advanced).toMatchObject({
+      status: "pending",
+      step: "attach_custom_domain",
+      liveUrl: "https://website-north-star-5.increase-roas.workers.dev",
+    });
+    expect(harness.deps.external.attachWorkerCustomDomain).not.toHaveBeenCalled();
+  });
+
+  it("publishes the Site URL after attaching it to the production Worker", async () => {
+    const initial = jobFixture();
+    initial.step = "attach_custom_domain";
+    initial.liveUrl = "https://website-north-star-5.increase-roas.workers.dev";
+    const harness = inMemoryDependencies(initial);
+    harness.deps.external.attachWorkerCustomDomain = vi.fn().mockResolvedValue({
+      liveUrl: "https://www.theclient.com",
+    });
+
+    const advanced = await advanceAstroSitePublish({ clientId: 5 }, harness.deps);
+
+    expect(harness.deps.loadLiveHostname).toHaveBeenCalledWith(5);
+    expect(harness.deps.external.attachWorkerCustomDomain).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workerName: "website-north-star-5",
+        hostname: "www.theclient.com",
+      }),
+    );
+    expect(advanced).toMatchObject({
+      status: "published",
+      step: "published",
+      liveUrl: "https://www.theclient.com",
+    });
+  });
+
+  it("keeps a readable attach error so the operator can fix DNS and retry", async () => {
+    const initial = jobFixture();
+    initial.step = "attach_custom_domain";
+    const harness = inMemoryDependencies(initial);
+    harness.deps.external.attachWorkerCustomDomain = vi.fn().mockRejectedValue(
+      new Error("No Cloudflare zone matches www.theclient.com. Add that domain to this Cloudflare account first."),
+    );
+
+    const failed = await advanceAstroSitePublish({ clientId: 5 }, harness.deps);
+
+    expect(failed).toMatchObject({
+      status: "failed",
+      step: "attach_custom_domain",
+      error:
+        "No Cloudflare zone matches www.theclient.com. Add that domain to this Cloudflare account first.",
+    });
   });
 });

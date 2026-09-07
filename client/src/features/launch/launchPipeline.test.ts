@@ -94,13 +94,15 @@ describe("publishPipelinePhase", () => {
     expect(publishPipelinePhase("commit_source")).toBe("prepare");
     expect(publishPipelinePhase("monitor_workflow")).toBe("build");
     expect(publishPipelinePhase("get_live_url")).toBe("deploy");
+    expect(publishPipelinePhase("attach_custom_domain")).toBe("deploy");
     expect(publishPipelinePhase("published")).toBe("complete");
   });
 });
 
 describe("environment kinds", () => {
   it("treats a stale ready preview as stale, not ready", () => {
-    expect(previewEnvironmentKind(undefined)).toBe("idle");
+    expect(previewEnvironmentKind(undefined)).toBe("unknown");
+    expect(previewEnvironmentKind(null)).toBe("idle");
     expect(previewEnvironmentKind(preview({ status: "running" }))).toBe("active");
     expect(previewEnvironmentKind(preview({ status: "failed" }))).toBe("failed");
     expect(previewEnvironmentKind(preview({ status: "ready", stale: false }))).toBe(
@@ -112,13 +114,15 @@ describe("environment kinds", () => {
   });
 
   it("maps publish jobs onto idle / active / failed / live", () => {
-    expect(publishEnvironmentKind(undefined)).toBe("idle");
+    expect(publishEnvironmentKind(undefined)).toBe("unknown");
+    expect(publishEnvironmentKind(null)).toBe("idle");
     expect(publishEnvironmentKind(publish({ status: "pending" }))).toBe("active");
     expect(publishEnvironmentKind(publish({ status: "failed" }))).toBe("failed");
     expect(publishEnvironmentKind(publish({ status: "published" }))).toBe("live");
   });
 
   it("collapses ready and stale previews into a complete pipeline", () => {
+    expect(previewPipelineJobKind("unknown")).toBe("idle");
     expect(previewPipelineJobKind("ready")).toBe("complete");
     expect(previewPipelineJobKind("stale")).toBe("complete");
     expect(publishPipelineJobKind("live")).toBe("complete");

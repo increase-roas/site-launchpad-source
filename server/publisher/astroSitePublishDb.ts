@@ -6,6 +6,7 @@ import {
   type AstroSitePublish,
   type InsertAstroSitePublish,
 } from "../../drizzle/schema";
+import { isWorkersDevUrl } from "../../shared/liveSiteHostname";
 import { getDb } from "../db";
 import type {
   AstroSitePublishStepValues,
@@ -13,7 +14,7 @@ import type {
 } from "./publishAstroSite";
 
 type ReadClient = Pick<PostgresJsDatabase, "select">;
-type InsertClient = Pick<PostgresJsDatabase, "insert" | "select">;
+type InsertClient = Pick<PostgresJsDatabase, "insert" | "select" | "update">;
 type UpdateClient = Pick<PostgresJsDatabase, "update">;
 
 async function requireDb() {
@@ -66,6 +67,20 @@ async function startWithDb(
     throw new Error(
       "Existing website publish job uses a different template contract; manual attention is required.",
     );
+  }
+  if (job.status === "published" && isWorkersDevUrl(job.liveUrl)) {
+    const reopened = await db
+      .update(astroSitePublishes)
+      .set({
+        step: "attach_custom_domain",
+        status: "pending",
+        completedAt: null,
+        lastError: null,
+        updatedAt: input.now,
+      })
+      .where(eq(astroSitePublishes.id, job.id))
+      .returning();
+    return reopened[0] ?? job;
   }
   return job;
 }

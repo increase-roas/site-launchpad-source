@@ -57,6 +57,7 @@ export function publishPipelinePhase(step: AstroSitePublishStep): LaunchPipeline
       return "build";
     case "patch_runtime_secrets":
     case "get_live_url":
+    case "attach_custom_domain":
       return "deploy";
     case "published":
       return "complete";
@@ -75,14 +76,21 @@ export type PipelineJobKind = "idle" | "active" | "failed" | "complete";
 
 export type PipelinePhaseVisualState = "done" | "current" | "todo" | "failed";
 
-export type PreviewEnvironmentKind = "idle" | "active" | "failed" | "ready" | "stale";
+export type PreviewEnvironmentKind =
+  | "unknown"
+  | "idle"
+  | "active"
+  | "failed"
+  | "ready"
+  | "stale";
 
-export type PublishEnvironmentKind = "idle" | "active" | "failed" | "live";
+export type PublishEnvironmentKind = "unknown" | "idle" | "active" | "failed" | "live";
 
 export function previewEnvironmentKind(
   preview: AstroSitePreviewStatusView | null | undefined,
 ): PreviewEnvironmentKind {
-  if (!preview) return "idle";
+  if (preview === undefined) return "unknown";
+  if (preview === null) return "idle";
   switch (preview.status) {
     case "pending":
     case "running":
@@ -101,7 +109,8 @@ export function previewEnvironmentKind(
 export function publishEnvironmentKind(
   publish: AstroSitePublishStatusView | null | undefined,
 ): PublishEnvironmentKind {
-  if (!publish) return "idle";
+  if (publish === undefined) return "unknown";
+  if (publish === null) return "idle";
   switch (publish.status) {
     case "pending":
     case "running":
@@ -121,6 +130,7 @@ export function previewPipelineJobKind(
   kind: PreviewEnvironmentKind,
 ): PipelineJobKind {
   switch (kind) {
+    case "unknown":
     case "idle":
       return "idle";
     case "active":
@@ -141,6 +151,7 @@ export function publishPipelineJobKind(
   kind: PublishEnvironmentKind,
 ): PipelineJobKind {
   switch (kind) {
+    case "unknown":
     case "idle":
       return "idle";
     case "active":

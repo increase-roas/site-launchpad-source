@@ -1,8 +1,8 @@
 import { uploadAssetDirectly, type AssetUploadResult } from "@/lib/assetUpload";
 import { trpc } from "@/lib/trpc";
 import {
-  isSupportedImageMimeType,
-  MAX_RAW_UPLOAD_BYTES,
+  imageUploadRejectionMessage,
+  photosAddedToLibraryToast,
 } from "@shared/assetUpload";
 import type { AstroAssetSlot, AstroClientConfigInput } from "@shared/astroConfig";
 import type { AssetSlot } from "@shared/client";
@@ -150,10 +150,10 @@ export function MediaTab({
     file: File,
     options?: UploadOptions,
   ): Promise<AssetUploadResult> => {
-    if (!isSupportedImageMimeType(file.type) || file.size <= 0 || file.size > MAX_RAW_UPLOAD_BYTES) {
-      const message = "Choose an image file smaller than 20 MB.";
-      if (!options?.quiet) toast.error(message);
-      return Promise.resolve({ ok: false, message });
+    const rejection = imageUploadRejectionMessage(file);
+    if (rejection) {
+      if (!options?.quiet) toast.error(rejection);
+      return Promise.resolve({ ok: false, message: rejection });
     }
     switch (target.kind) {
       case "astro":
@@ -180,32 +180,38 @@ export function MediaTab({
     if (files.length === 0) return;
     setLibraryBusy(true);
     try {
+      let uploaded = 0;
       for (const file of files) {
-        if (!isSupportedImageMimeType(file.type) || file.size <= 0 || file.size > MAX_RAW_UPLOAD_BYTES) {
-          toast.error("Choose an image file smaller than 20 MB.");
+        const rejection = imageUploadRejectionMessage(file);
+        if (rejection) {
+          toast.error(rejection);
           continue;
         }
-        await uploadAssetDirectly(
-          file,
-          { clientId, assetKind: "library", slot: LIBRARY_UPLOAD_SLOT },
-          {
-            requestUpload: input => requestUploadMutation.mutateAsync({
-              clientId: input.clientId,
-              assetKind: "library",
-              slot: LIBRARY_UPLOAD_SLOT,
-              originalFilename: input.originalFilename,
-              mimeType: input.mimeType,
-              sizeBytes: input.sizeBytes,
-            }),
-            completeUpload: input => completeUploadMutation.mutateAsync(input),
-            fetchFn: (input, init) => fetch(input, init),
-          },
-        );
+        try {
+          await uploadAssetDirectly(
+            file,
+            { clientId, assetKind: "library", slot: LIBRARY_UPLOAD_SLOT },
+            {
+              requestUpload: input => requestUploadMutation.mutateAsync({
+                clientId: input.clientId,
+                assetKind: "library",
+                slot: LIBRARY_UPLOAD_SLOT,
+                originalFilename: input.originalFilename,
+                mimeType: input.mimeType,
+                sizeBytes: input.sizeBytes,
+              }),
+              completeUpload: input => completeUploadMutation.mutateAsync(input),
+              fetchFn: (input, init) => fetch(input, init),
+            },
+          );
+          uploaded += 1;
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "That photo could not be uploaded.");
+        }
       }
       await refreshLibrary();
-      toast.success(files.length === 1 ? "Photo added to the library." : "Photos added to the library.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "That photo could not be uploaded.");
+      const added = photosAddedToLibraryToast(uploaded);
+      if (added) toast.success(added);
     } finally {
       setLibraryBusy(false);
     }

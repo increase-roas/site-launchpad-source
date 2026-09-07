@@ -26,11 +26,11 @@ describe("Astro site publish resource names", () => {
   it("reports progress without counting the terminal marker", () => {
     expect(astroSitePublishProgress("create_repository")).toEqual({
       completed: 0,
-      total: 8,
+      total: 9,
     });
     expect(astroSitePublishProgress("published")).toEqual({
-      completed: 8,
-      total: 8,
+      completed: 9,
+      total: 9,
     });
   });
 });

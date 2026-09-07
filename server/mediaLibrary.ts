@@ -8,6 +8,7 @@ import { normalizeMediaItemMetadata } from "../shared/mediaLibrary";
 
 export type MediaLibraryItemDto = {
   id: number;
+  storageKey: string;
   storageUrl: string;
   filename: string;
   originalFilename: string;
@@ -59,6 +60,7 @@ export function mediaLibraryAssignmentError(
 export function toMediaLibraryItemDto(
   item: {
     id: number;
+    storageKey: string;
     storageUrl: string;
     filename: string;
     originalFilename: string;
@@ -75,6 +77,7 @@ export function toMediaLibraryItemDto(
   const copy = normalizeMediaItemMetadata(item);
   return {
     id: item.id,
+    storageKey: item.storageKey,
     storageUrl: item.storageUrl,
     filename: item.filename,
     originalFilename: item.originalFilename,

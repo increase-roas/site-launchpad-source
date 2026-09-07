@@ -10,8 +10,10 @@ import {
   type AstroSitePublishStatusView,
   type AstroSitePublishStep,
 } from "../../shared/astroSitePublish";
+import { liveHostnameFromSiteUrl } from "../../shared/liveSiteHostname";
 import { getAstroSitePublishMaterial } from "../astroConfigDb";
 import { getClientById } from "../db";
+import { syncClientPublishedMedia, type SyncClientPublishedMediaInput } from "../publishedMedia";
 import { createCloudflareApiClient } from "./cloudflareApi";
 import {
   createGitHubApiClient,
@@ -168,12 +170,21 @@ export interface AstroSitePublishExternal {
     signal: AbortSignal;
   }): Promise<void>;
   getWorkersDevStatus(input: { workerName: string; signal: AbortSignal }): Promise<{ liveUrl: string }>;
+  attachWorkerCustomDomain(input: {
+    workerName: string;
+    hostname: string;
+    signal: AbortSignal;
+  }): Promise<{ liveUrl: string }>;
 }
 
 export type AstroSitePublishDependencies = {
   store: AstroSitePublishStore;
   external: AstroSitePublishExternal;
   loadMaterial(clientId: number): Promise<{ generatedConfig: string; runtimeSecrets: Record<string, string> }>;
+  loadLiveHostname(clientId: number): Promise<string>;
+  syncPublishedMedia?: (
+    input: SyncClientPublishedMediaInput,
+  ) => Promise<{ generatedConfig: string }>;
   now: () => Date;
   createLeaseToken: () => string;
   leaseDurationMs: number;
@@ -186,6 +197,24 @@ const RECONCILIATION_WINDOW_MS = 60_000;
 function requireValue(value: string | null, message: string): string {
   if (!value) throw new Error(message);
   return value;
+}
+
+async function loadPublishedLiveHostname(clientId: number): Promise<string> {
+  const client = await getClientById(clientId);
+  if (!client?.websiteUrl) {
+    throw new PublisherManualAttentionError(
+      "Set a HTTPS Site URL before attaching the live domain.",
+    );
+  }
+  try {
+    return liveHostnameFromSiteUrl(client.websiteUrl);
+  } catch (error) {
+    throw new PublisherManualAttentionError(
+      error instanceof Error
+        ? error.message
+        : "Site URL is not a valid live domain.",
+    );
+  }
 }
 
 function splitFullName(value: string): { owner: string; repository: string } {
@@ -305,6 +334,18 @@ async function execute(
     }
     case "commit_source": {
       const material = await deps.loadMaterial(input.clientId);
+      let generatedConfig = material.generatedConfig;
+      if (deps.syncPublishedMedia) {
+        const synced = await bounded(Math.max(deps.externalTimeoutMs, 60_000), signal =>
+          deps.syncPublishedMedia!({
+            clientId: input.clientId,
+            destinationBucket: job.r2BucketName,
+            publicBaseUrl: requireValue(job.r2PublicUrl, "R2 public URL is missing."),
+            signal,
+          }),
+        );
+        generatedConfig = synced.generatedConfig;
+      }
       const kv = await bounded(deps.externalTimeoutMs, signal =>
         deps.external.ensureKvNamespace({
           title: astroSiteSessionKvTitle(job.workerName),
@@ -321,7 +362,7 @@ async function execute(
           d1DatabaseId: requireValue(job.d1DatabaseId, "D1 database is missing."),
           r2BucketName: job.r2BucketName,
           sessionKvNamespaceId: kv.kvNamespaceId,
-          generatedConfig: material.generatedConfig,
+          generatedConfig,
           signal,
         }),
       );
@@ -443,7 +484,31 @@ async function execute(
       if (url.protocol !== "https:" || !url.hostname.endsWith(".workers.dev")) {
         throw new Error("A workers.dev deployment URL is required.");
       }
-      return complete(input, job, leaseToken, { nextStep: "published", values: { liveUrl: result.liveUrl } }, deps);
+      return complete(input, job, leaseToken, { nextStep: "attach_custom_domain", values: { liveUrl: result.liveUrl } }, deps);
+    }
+    case "attach_custom_domain": {
+      const hostname = await deps.loadLiveHostname(input.clientId);
+      try {
+        const result = await bounded(deps.externalTimeoutMs, signal =>
+          deps.external.attachWorkerCustomDomain({
+            workerName: job.workerName,
+            hostname,
+            signal,
+          }),
+        );
+        const url = new URL(result.liveUrl);
+        if (url.protocol !== "https:" || url.hostname.toLowerCase() !== hostname) {
+          throw new Error("The attached live domain did not match the Site URL.");
+        }
+        return complete(input, job, leaseToken, { nextStep: "published", values: { liveUrl: result.liveUrl } }, deps);
+      } catch (error) {
+        if (error instanceof PublisherManualAttentionError) throw error;
+        throw new PublisherManualAttentionError(
+          error instanceof Error
+            ? error.message
+            : `Could not attach ${hostname} to the production Worker.`,
+        );
+      }
     }
     case "published":
       return toAstroSitePublishStatus(job);
@@ -620,6 +685,14 @@ function createRuntimeExternal(): AstroSitePublishExternal {
       if (!status.enabled || !status.url) throw new Error("workers.dev is not enabled for the website Worker.");
       return { liveUrl: status.url };
     },
+    async attachWorkerCustomDomain(input) {
+      const attached = await cloudflare.attachWorkerCustomDomain({
+        scriptName: input.workerName,
+        hostname: input.hostname,
+        signal: input.signal,
+      });
+      return { liveUrl: attached.liveUrl };
+    },
   };
 }
 
@@ -633,6 +706,8 @@ function runtimeDependencies(): AstroSitePublishDependencies {
     store: astroSitePublishStore,
     external: configuredExternal ?? createRuntimeExternal(),
     loadMaterial: getAstroSitePublishMaterial,
+    loadLiveHostname: loadPublishedLiveHostname,
+    syncPublishedMedia: syncClientPublishedMedia,
     now: () => new Date(),
     createLeaseToken: randomUUID,
     leaseDurationMs: 30_000,

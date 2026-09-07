@@ -79,6 +79,18 @@ describe("previewEnvironmentAlerts", () => {
     ).toEqual(["preview-unapproved"]);
   });
 
+  it("stays quiet until preview status has loaded", () => {
+    expect(
+      previewEnvironmentAlerts({
+        kind: "unknown",
+        error: null,
+        warningCount: 2,
+        hasPreviewUrl: false,
+        approved: false,
+      }),
+    ).toEqual([]);
+  });
+
   it("stays quiet while a job is running and nothing else is missing", () => {
     expect(
       previewEnvironmentAlerts({
@@ -144,6 +156,32 @@ describe("productionEnvironmentAlerts", () => {
     );
   });
 
+  it("does not claim production is unpublished while publish status is loading", () => {
+    expect(
+      productionEnvironmentAlerts({
+        kind: "unknown",
+        error: null,
+        hasLiveUrl: false,
+        previewKind: "unknown",
+        approved: false,
+        blockers: [{ label: "Required runtime secrets" }],
+      }),
+    ).toEqual([]);
+  });
+
+  it("does not ask for a preview while preview status is still loading", () => {
+    expect(
+      productionEnvironmentAlerts({
+        kind: "live",
+        error: null,
+        hasLiveUrl: true,
+        previewKind: "unknown",
+        approved: false,
+        blockers: [],
+      }),
+    ).toEqual([]);
+  });
+
   it("does not nag about preview while production is publishing", () => {
     expect(
       productionEnvironmentAlerts({
@@ -155,6 +193,20 @@ describe("productionEnvironmentAlerts", () => {
         blockers: [{ label: "Website setup" }],
       }),
     ).toEqual([]);
+  });
+
+  it("warns when production is live only on workers.dev", () => {
+    expect(
+      productionEnvironmentAlerts({
+        kind: "live",
+        error: null,
+        hasLiveUrl: true,
+        previewKind: "unknown",
+        approved: false,
+        blockers: [],
+        liveUrlIsWorkersDev: true,
+      }).map(alert => alert.key),
+    ).toEqual(["production-workers-dev"]);
   });
 
   it("warns when live production is sitting on an unapproved preview", () => {

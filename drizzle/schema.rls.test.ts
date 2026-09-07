@@ -9,6 +9,7 @@ import {
   astroSitePublishes,
   clientAssets,
   clientMediaItems,
+  clientMediaPublications,
   clientLeadIntegrations,
   clientSecretSetups,
   clientIntegrationProfiles,
@@ -53,6 +54,10 @@ const applicationTables = {
   },
   clientAssets: { table: clientAssets, databaseName: "clientAssets" },
   clientMediaItems: { table: clientMediaItems, databaseName: "clientMediaItems" },
+  clientMediaPublications: {
+    table: clientMediaPublications,
+    databaseName: "clientMediaPublications",
+  },
   clientLeadIntegrations: {
     table: clientLeadIntegrations,
     databaseName: "clientLeadIntegrations",
@@ -140,7 +145,7 @@ describe("PostgreSQL application-table RLS", () => {
       .sort((left, right) => left.exportName.localeCompare(right.exportName));
 
     expect(discovered).toEqual(expected);
-    expect(discovered).toHaveLength(29);
+    expect(discovered).toHaveLength(30);
   });
 
   it("enables RLS without schema policies on every application table", () => {

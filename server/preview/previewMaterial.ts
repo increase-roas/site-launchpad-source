@@ -12,12 +12,32 @@ import {
 } from "../clientIntegrations";
 import { planAstroSitePublishFromProfile } from "../studio/website/publishProfile";
 import { presentProfileKeys } from "../../shared/clientIntegrationProfile";
+import type { AstroClientConfigInput } from "../../shared/astroConfig";
+import { collectUsedDraftMedia, type UsedDraftMedia } from "../../shared/publishedMedia";
+
+export type PreviewDeployAsset = {
+  slot: string;
+  storageKey: string;
+  storageUrl: string;
+};
+
+export type PreviewDeployLibraryItem = {
+  id: number;
+  storageKey: string;
+  storageUrl: string;
+  alt: string;
+  description: string;
+};
 
 export type AstroSitePreviewMaterialSnapshot = {
   generatedConfig: string;
   runtimeSecrets: Record<string, string>;
   clientRevision: number;
   warnings: PreviewValidationIssue[];
+  usedMedia?: UsedDraftMedia[];
+  deployInput?: AstroClientConfigInput;
+  deployAssets?: PreviewDeployAsset[];
+  deployLibrary?: PreviewDeployLibraryItem[];
 };
 
 function previewAdminSecret(): string {
@@ -59,6 +79,12 @@ export function readPreviewMaterialSnapshot(
     runtimeSecrets: record.runtimeSecrets,
     clientRevision,
     warnings: record.warnings,
+    ...(Array.isArray(record.usedMedia) ? { usedMedia: record.usedMedia as UsedDraftMedia[] } : {}),
+    ...(record.deployInput && typeof record.deployInput === "object"
+      ? { deployInput: record.deployInput as AstroClientConfigInput }
+      : {}),
+    ...(Array.isArray(record.deployAssets) ? { deployAssets: record.deployAssets as PreviewDeployAsset[] } : {}),
+    ...(Array.isArray(record.deployLibrary) ? { deployLibrary: record.deployLibrary as PreviewDeployLibraryItem[] } : {}),
   };
 }
 
@@ -124,6 +150,24 @@ export async function buildAstroSitePreviewSnapshot(clientId: number): Promise<{
       runtimeSecrets,
       clientRevision: view.websiteRevision,
       warnings: validation.warnings,
+      usedMedia: collectUsedDraftMedia({
+        assets: view.assets,
+        mediaItems: view.mediaItems,
+        homepageSections: view.input.homepageSections,
+      }),
+      deployInput: view.input,
+      deployAssets: view.assets.map(asset => ({
+        slot: asset.slot,
+        storageKey: asset.storageKey,
+        storageUrl: asset.storageUrl,
+      })),
+      deployLibrary: view.mediaItems.map(item => ({
+        id: item.id,
+        storageKey: item.storageKey,
+        storageUrl: item.storageUrl,
+        alt: item.alt,
+        description: item.description,
+      })),
     },
   };
 }

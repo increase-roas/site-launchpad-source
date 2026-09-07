@@ -7,6 +7,7 @@ export const astroSitePublishStepValues = [
   "monitor_workflow",
   "patch_runtime_secrets",
   "get_live_url",
+  "attach_custom_domain",
   "published",
 ] as const;
 

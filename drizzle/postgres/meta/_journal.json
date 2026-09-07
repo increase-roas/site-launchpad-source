@@ -127,6 +127,20 @@
       "when": 1787104800000,
       "tag": "0017_astro_service_areas",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787108400000,
+      "tag": "0018_client_media_publications",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1787112000000,
+      "tag": "0019_astro_site_custom_domain",
+      "breakpoints": true
     }
   ]
 }

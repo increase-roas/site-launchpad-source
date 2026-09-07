@@ -318,6 +318,41 @@ export const clientAssets = pgTable(
 export type ClientAsset = typeof clientAssets.$inferSelect;
 export type InsertClientAsset = typeof clientAssets.$inferInsert;
 
+export const clientMediaPublications = pgTable(
+  "clientMediaPublications",
+  {
+    id: serial("id").primaryKey(),
+    clientId: integer("clientId")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    mediaItemId: integer("mediaItemId").references(() => clientMediaItems.id, {
+      onDelete: "set null",
+    }),
+    destinationBucket: varchar("destinationBucket", { length: 120 }).notNull(),
+    draftStorageKey: varchar("draftStorageKey", { length: 800 }).notNull(),
+    publishedKey: varchar("publishedKey", { length: 800 }).notNull(),
+    publishedUrl: varchar("publishedUrl", { length: 1000 }).notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  table => [
+    uniqueIndex("client_media_publications_destination_draft_unique").on(
+      table.clientId,
+      table.destinationBucket,
+      table.draftStorageKey,
+    ),
+    index("client_media_publications_client_idx").on(table.clientId),
+    index("client_media_publications_media_item_idx").on(table.mediaItemId),
+  ],
+).enableRLS();
+
+export type ClientMediaPublication = typeof clientMediaPublications.$inferSelect;
+export type InsertClientMediaPublication = typeof clientMediaPublications.$inferInsert;
+
 export const assetUploadKindEnum = pgEnum("asset_upload_kind", [
   "client",
   "astro",

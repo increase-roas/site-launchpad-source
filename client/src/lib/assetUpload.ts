@@ -1,5 +1,6 @@
 import {
   isSupportedImageMimeType,
+  imageUploadRejectionMessage,
   type AssetKind,
   type SupportedImageMimeType,
 } from "@shared/assetUpload";
@@ -38,8 +39,9 @@ export async function uploadAssetDirectly<Result>(
   target: UploadTarget,
   dependencies: DirectUploadDependencies<Result>,
 ): Promise<Result> {
-  if (!isSupportedImageMimeType(file.type)) {
-    throw new Error("Choose a supported image file.");
+  const rejection = imageUploadRejectionMessage(file);
+  if (rejection || !isSupportedImageMimeType(file.type)) {
+    throw new Error(rejection ?? "Choose a JPEG, PNG, or WebP image.");
   }
   const session = await dependencies.requestUpload({
     ...target,

@@ -175,6 +175,50 @@ describe("Astro website preview pipeline", () => {
     });
   });
 
+  it("commits public R2 URLs for frozen draft photos instead of local Launchpad paths", async () => {
+    const initial = jobFixture();
+    process.env.SECRETS_ENCRYPTION_KEY = "test-only-preview-pipeline-key";
+    initial.materialSnapshotEncrypted = protectPreviewMaterialSnapshot({
+      generatedConfig: 'export const rawClientConfig = {"brand":{"logos":{"nav":"/brand/logo-nav.svg"}}};',
+      runtimeSecrets: { ENVIRONMENT: "preview" },
+      clientRevision: 27,
+      warnings: [],
+      usedMedia: [{
+        mediaItemId: 11,
+        storageKey: "clients/5/astro/nav.webp",
+        storageUrl: "/local-assets/clients/5/astro/nav.webp",
+      }],
+      deployInput: { identity: { businessName: "Frozen ABC" } } as never,
+      deployAssets: [{
+        slot: "navLogo",
+        storageKey: "clients/5/astro/nav.webp",
+        storageUrl: "/local-assets/clients/5/astro/nav.webp",
+      }],
+      deployLibrary: [],
+    });
+    const harness = inMemoryDependencies(initial);
+    harness.deps.external.ensureKvNamespace = vi.fn().mockResolvedValue({
+      kvNamespaceId: "8d78d85f7f7a4e07bccce07a141ec6ac",
+    });
+    harness.deps.syncPublishedMedia = vi.fn().mockResolvedValue({
+      generatedConfig: 'export const rawClientConfig = {"brand":{"logos":{"nav":"https://pub.example/nav.webp"}}};',
+    });
+
+    await advanceAstroSitePreview({ jobId: initial.id }, harness.deps);
+
+    expect(harness.deps.syncPublishedMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        destinationBucket: "website-abc-hot-tubs-5-images",
+        publicBaseUrl: "https://pub-example.r2.dev",
+      }),
+    );
+    expect(harness.commitSource).toHaveBeenCalledWith(
+      expect.objectContaining({
+        generatedConfig: 'export const rawClientConfig = {"brand":{"logos":{"nav":"https://pub.example/nav.webp"}}};',
+      }),
+    );
+  });
+
   it("marks ready only after the preview URL responds", async () => {
     const initial = jobFixture();
     initial.step = "verify_preview";

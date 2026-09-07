@@ -13,10 +13,7 @@ import {
   parseConfigurationSearch,
   tabForConfigSection,
 } from "@/lib/workspaceNavigation";
-import {
-  MAX_RAW_UPLOAD_BYTES,
-  isSupportedImageMimeType,
-} from "@shared/assetUpload";
+import { imageUploadRejectionMessage } from "@shared/assetUpload";
 import {
   astroClientConfigInputSchema,
   type AstroAssetSlot,
@@ -235,14 +232,10 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
     if (uploadInFlightRef.current) {
       return { ok: false, message: "Another upload is already running." };
     }
-    if (
-      !isSupportedImageMimeType(file.type) ||
-      file.size <= 0 ||
-      file.size > MAX_RAW_UPLOAD_BYTES
-    ) {
-      const message = "Choose an image file smaller than 20 MB.";
-      if (!options?.quiet) toast.error(message);
-      return { ok: false, message };
+    const rejection = imageUploadRejectionMessage(file);
+    if (rejection) {
+      if (!options?.quiet) toast.error(rejection);
+      return { ok: false, message: rejection };
     }
     try {
       uploadInFlightRef.current = true;

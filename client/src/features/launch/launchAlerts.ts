@@ -113,6 +113,7 @@ export function previewEnvironmentAlerts({
       }
       break;
     case "active":
+    case "unknown":
       break;
     default: {
       const exhaustive: never = kind;
@@ -120,7 +121,7 @@ export function previewEnvironmentAlerts({
     }
   }
 
-  if (warningCount > 0 && kind !== "failed") {
+  if (warningCount > 0 && kind !== "failed" && kind !== "unknown") {
     alerts.push({
       key: "preview-warnings",
       tone: "warning",
@@ -144,6 +145,7 @@ export function productionEnvironmentAlerts({
   approved,
   blockers,
   liveUrlIsPreview = false,
+  liveUrlIsWorkersDev = false,
 }: {
   kind: PublishEnvironmentKind;
   error: string | null;
@@ -152,6 +154,7 @@ export function productionEnvironmentAlerts({
   approved: boolean;
   blockers: readonly Pick<LaunchCheck, "label">[];
   liveUrlIsPreview?: boolean;
+  liveUrlIsWorkersDev?: boolean;
 }): LaunchAlert[] {
   const alerts: LaunchAlert[] = [];
 
@@ -190,14 +193,27 @@ export function productionEnvironmentAlerts({
           title: "Live URL is missing",
           detail: "The site is marked published, but no production address was recorded.",
         });
+      } else if (liveUrlIsWorkersDev) {
+        alerts.push({
+          key: "production-workers-dev",
+          tone: "warning",
+          title: "Site URL is not connected yet",
+          detail:
+            "Production is live on workers.dev. Publish again to attach the Site URL to this Worker.",
+        });
       }
       break;
     case "active":
+    case "unknown":
       break;
     default: {
       const exhaustive: never = kind;
       return exhaustive;
     }
+  }
+
+  if (kind === "unknown") {
+    return alerts;
   }
 
   if (kind !== "active" && kind !== "failed" && blockers.length > 0) {
@@ -257,6 +273,8 @@ export function productionEnvironmentAlerts({
           title: "Preview is still generating",
           detail: "Wait for the preview to finish before publishing production.",
         });
+        break;
+      case "unknown":
         break;
       default: {
         const exhaustive: never = previewKind;

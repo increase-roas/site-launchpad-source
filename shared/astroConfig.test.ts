@@ -238,6 +238,16 @@ describe("Astro client config schema", () => {
 
   it("does not publish Launchpad local-asset URLs to the generated Worker config", () => {
     const config = createDefaultAstroConfig(client);
+    const gallery = createAstroHomepageSection("gallery", "gallery-local");
+    gallery.enabled = true;
+    gallery.fields.heading = "Showroom";
+    gallery.fields.images = JSON.stringify([
+      { src: "/local-assets/clients/7-theme-matrix-qa/library/floor.webp", alt: "Floor", description: "" },
+    ]);
+    config.homepageSections = [
+      ...config.homepageSections.filter(section => section.type !== "gallery"),
+      gallery,
+    ];
     const generated = generateAstroClientConfig(config, {
       navLogo: "/local-assets/clients/7-theme-matrix-qa/astro/navLogo.webp",
       footerLogo: "/local-assets/clients/7-theme-matrix-qa/astro/footerLogo.webp",

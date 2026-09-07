@@ -1,4 +1,8 @@
 import {
+  liveUrlForHostname,
+  zoneNameCandidates,
+} from "../../shared/liveSiteHostname";
+import {
   RequestTimeoutError,
   fetchAwaitingCancellation,
   type FetchFunction,
@@ -47,6 +51,11 @@ export type WorkersDevStatus = {
   url: string | null;
 };
 
+export type AttachedWorkerCustomDomain = {
+  hostname: string;
+  liveUrl: string;
+};
+
 export type CloudflareApiClient = {
   ensureKvNamespace(
     title: string,
@@ -74,6 +83,23 @@ export type CloudflareApiClient = {
     scriptName: string;
     signal: AbortSignal;
   }): Promise<WorkersDevStatus>;
+  attachWorkerCustomDomain(input: {
+    scriptName: string;
+    hostname: string;
+    signal: AbortSignal;
+  }): Promise<AttachedWorkerCustomDomain>;
+  putR2Object(input: {
+    bucket: string;
+    key: string;
+    body: Buffer;
+    contentType: string;
+    signal: AbortSignal;
+  }): Promise<void>;
+  deleteR2Object(input: {
+    bucket: string;
+    key: string;
+    signal: AbortSignal;
+  }): Promise<void>;
 };
 
 export class CloudflareApiError extends Error {
@@ -248,8 +274,44 @@ function parseR2Bucket(value: unknown, operation: string): R2Bucket {
   return { name: requireString(record, "name", operation) };
 }
 
-function createRequest(options: {
+function createObjectRequest(options: {
   accountId: string;
+  apiToken: string;
+  fetchFn: FetchFunction;
+}) {
+  return async (
+    operation: string,
+    path: string,
+    init: RequestInit,
+  ): Promise<void> => {
+    init.signal?.throwIfAborted();
+    let response: Response;
+    try {
+      response = await fetchAwaitingCancellation(
+        options.fetchFn,
+        `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(options.accountId)}${path}`,
+        {
+          ...init,
+          headers: {
+            Authorization: `Bearer ${options.apiToken}`,
+            ...(init.headers ?? {}),
+          },
+        },
+        CLOUDFLARE_REQUEST_TIMEOUT_MS,
+      );
+    } catch (error) {
+      if (error instanceof RequestTimeoutError) throw error;
+      if (init.signal?.aborted) throw init.signal.reason ?? error;
+      throw new CloudflareApiError(operation);
+    }
+    if (!response.ok) {
+      throw new CloudflareApiError(operation, response.status);
+    }
+  };
+}
+
+function createRequest(options: {
+  baseUrl: string;
   apiToken: string;
   fetchFn: FetchFunction;
 }): CloudflareRequest {
@@ -259,7 +321,7 @@ function createRequest(options: {
     try {
       response = await fetchAwaitingCancellation(
         options.fetchFn,
-        `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(options.accountId)}${path}`,
+        `${options.baseUrl}${path}`,
         {
           ...init,
           headers: {
@@ -346,16 +408,50 @@ function provisionedQueue(queue: Queue, created: boolean): ProvisionedQueue {
 }
 
 const WORKER_NAME_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+const HOSTNAME_PATTERN =
+  /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
+
+type WorkerCustomDomain = {
+  hostname: string;
+  service: string;
+};
+
+function parseWorkerCustomDomain(
+  value: unknown,
+  operation: string,
+): WorkerCustomDomain {
+  const record = requireRecord(value, operation);
+  return {
+    hostname: requireString(record, "hostname", operation).toLowerCase(),
+    service: requireString(record, "service", operation),
+  };
+}
+
+function r2ObjectPath(bucket: string, key: string): string {
+  const encodedKey = key.split("/").map(encodeURIComponent).join("/");
+  return `/r2/buckets/${encodeURIComponent(bucket)}/objects/${encodedKey}`;
+}
 
 export function createCloudflareApiClient(options: {
   accountId: string;
   apiToken: string;
   fetchFn?: FetchFunction;
 }): CloudflareApiClient {
+  const fetchFn = options.fetchFn ?? globalThis.fetch;
   const request = createRequest({
+    baseUrl: `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(options.accountId)}`,
+    apiToken: options.apiToken,
+    fetchFn,
+  });
+  const platformRequest = createRequest({
+    baseUrl: "https://api.cloudflare.com/client/v4",
+    apiToken: options.apiToken,
+    fetchFn,
+  });
+  const objectRequest = createObjectRequest({
     accountId: options.accountId,
     apiToken: options.apiToken,
-    fetchFn: options.fetchFn ?? globalThis.fetch,
+    fetchFn,
   });
 
   return {
@@ -599,6 +695,108 @@ export function createCloudflareApiClient(options: {
         previewsEnabled: status.previews_enabled,
         url: `https://${input.scriptName}.${subdomain}.workers.dev`,
       };
+    },
+    async attachWorkerCustomDomain(input) {
+      if (!WORKER_NAME_PATTERN.test(input.scriptName)) {
+        throw new Error("Worker script name must be a valid workers.dev label.");
+      }
+      const hostname = input.hostname.trim().toLowerCase();
+      if (!HOSTNAME_PATTERN.test(hostname)) {
+        throw new Error("Site URL must be a real domain, such as www.theclient.com.");
+      }
+      const existingEnvelope = await request(
+        "Worker custom domain lookup",
+        `/workers/domains?hostname=${encodeURIComponent(hostname)}`,
+        { method: "GET", signal: input.signal },
+      );
+      const existingDomains = Array.isArray(existingEnvelope.result)
+        ? existingEnvelope.result.map(value =>
+            parseWorkerCustomDomain(value, "Worker custom domain lookup"),
+          )
+        : existingEnvelope.result === undefined || existingEnvelope.result === null
+          ? []
+          : [parseWorkerCustomDomain(existingEnvelope.result, "Worker custom domain lookup")];
+      const existing = existingDomains.find(domain => domain.hostname === hostname);
+      if (existing) {
+        if (existing.service !== input.scriptName) {
+          throw new Error(
+            `${hostname} is already attached to another Worker. Remove that custom domain first.`,
+          );
+        }
+        return { hostname, liveUrl: liveUrlForHostname(hostname) };
+      }
+      let zoneId: string | null = null;
+      for (const zoneName of zoneNameCandidates(hostname)) {
+        input.signal.throwIfAborted();
+        const zoneEnvelope = await platformRequest(
+          "zone lookup",
+          `/zones?name=${encodeURIComponent(zoneName)}&account.id=${encodeURIComponent(options.accountId)}&status=active`,
+          { method: "GET", signal: input.signal },
+        );
+        if (!Array.isArray(zoneEnvelope.result)) {
+          throw new CloudflareApiError("zone lookup response validation");
+        }
+        const zone = zoneEnvelope.result.find(value => {
+          if (!isRecord(value)) return false;
+          return value.name === zoneName && typeof value.id === "string" && value.id.length > 0;
+        });
+        if (zone && isRecord(zone) && typeof zone.id === "string") {
+          zoneId = zone.id;
+          break;
+        }
+      }
+      if (!zoneId) {
+        throw new Error(
+          `No Cloudflare zone matches ${hostname}. Add that domain to this Cloudflare account first.`,
+        );
+      }
+      input.signal.throwIfAborted();
+      const attachedEnvelope = await request(
+        "Worker custom domain attach",
+        "/workers/domains",
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            hostname,
+            service: input.scriptName,
+            environment: "production",
+            zone_id: zoneId,
+          }),
+          signal: input.signal,
+        },
+      );
+      const attached = parseWorkerCustomDomain(
+        parseResultRecord(attachedEnvelope, "Worker custom domain attach"),
+        "Worker custom domain attach",
+      );
+      if (attached.hostname !== hostname || attached.service !== input.scriptName) {
+        throw new CloudflareApiError("Worker custom domain attach response validation");
+      }
+      return { hostname, liveUrl: liveUrlForHostname(hostname) };
+    },
+    async putR2Object(input) {
+      await objectRequest(
+        "R2 object upload",
+        r2ObjectPath(input.bucket, input.key),
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": input.contentType,
+          },
+          body: new Uint8Array(input.body),
+          signal: input.signal,
+        },
+      );
+    },
+    async deleteR2Object(input) {
+      await objectRequest(
+        "R2 object deletion",
+        r2ObjectPath(input.bucket, input.key),
+        {
+          method: "DELETE",
+          signal: input.signal,
+        },
+      );
     },
   };
 }

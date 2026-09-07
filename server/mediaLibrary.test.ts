@@ -7,6 +7,7 @@ import {
 
 const landscape = {
   id: 12,
+  storageKey: "clients/7/library/showroom.webp",
   storageUrl: "https://cdn.example/showroom.webp",
   filename: "showroom.webp",
   originalFilename: "showroom.jpg",
