@@ -1,6 +1,16 @@
 import { ClientAvatar } from "@/app/ClientDirectory";
 import { EmptyPanelState } from "@/components/dashboard/PanelCard";
 import { StatusBadge, type BadgeTone } from "@/components/dashboard/StatusBadge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import {
@@ -26,7 +36,7 @@ import {
   Rocket,
   UsersRound,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import {
@@ -75,6 +85,11 @@ import {
   type PreviewEnvironmentKind,
   type PublishEnvironmentKind,
 } from "./launchPipeline";
+import {
+  liveDomainConnectDialog,
+  publishStartLabel,
+  type LiveDomainConnectDialog,
+} from "./liveDomainConnect";
 
 type PreviewJob = ReturnType<typeof useAstroPreviewJob>;
 
@@ -362,6 +377,7 @@ export default function LaunchPage({ clientId }: { clientId: number }) {
         />
         <ProductionEnvironment
           liveUrl={liveUrl}
+          siteUrl={config?.identity.siteUrl}
           publish={publish}
           publishing={publishing}
           previewKind={previewKind}
@@ -486,6 +502,7 @@ function PreviewEnvironment({
 
 function ProductionEnvironment({
   liveUrl,
+  siteUrl,
   publish,
   publishing,
   previewKind,
@@ -498,6 +515,7 @@ function ProductionEnvironment({
   onRetry,
 }: {
   liveUrl: string | null | undefined;
+  siteUrl: string | null | undefined;
   publish: AstroSitePublishStatusView | null | undefined;
   publishing: boolean;
   previewKind: PreviewEnvironmentKind;
@@ -509,6 +527,7 @@ function ProductionEnvironment({
   onStart: () => void;
   onRetry: () => void;
 }) {
+  const [connectOpen, setConnectOpen] = useState(false);
   const kind = publishEnvironmentKind(publish);
   const host = clientSiteHost(liveUrl);
   const jobKind = publishPipelineJobKind(kind);
@@ -525,84 +544,140 @@ function ProductionEnvironment({
     liveUrlIsPreview,
     liveUrlIsWorkersDev: isWorkersDevUrl(liveUrl),
   });
+  const startLabel = publishStartLabel(publish);
+  const connectingLiveDomain = startLabel === "Connect live domain";
+  const connectDialog = liveDomainConnectDialog({
+    siteUrl,
+    currentLiveUrl: publish?.liveUrl ?? liveUrl,
+  });
 
   return (
-    <EnvironmentCard
-      lane="production"
-      title={productionTitle(kind, host)}
-      status={publishStatus(kind)}
-      host={host}
-      href={liveUrl}
-      meta={
-        publish === undefined
-          ? "Checking production status."
-          : publish
-            ? `${publishStepLabel(publish.step)} · ${formatClientUpdatedAt(publish.updatedAt)}`
-            : "Publish the approved preview to the live Worker."
-      }
-      jobKind={jobKind}
-      currentPhase={currentPhase}
-      percent={publish ? publishPercent(publish.progress) : 0}
-      currentStep={publish ? publishStepLabel(publish.step) : null}
-      alerts={alerts}
-      warningMessages={[]}
-      actions={
-        <>
-          {liveUrl ? (
-            <Button
-              asChild
-              size="sm"
-              variant="outline"
-              className="h-9 gap-1.5 text-xs font-semibold"
-            >
-              <a href={liveUrl} target="_blank" rel="noreferrer">
-                <Globe className="h-4 w-4" aria-hidden="true" />
-                Open
-              </a>
-            </Button>
-          ) : null}
-          {kind === "failed" ? (
-            <Button
-              type="button"
-              size="sm"
-              disabled={retryPending}
-              onClick={onRetry}
-              className="h-9 gap-1.5 text-xs font-semibold"
-            >
-              {retryPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <Rocket className="h-4 w-4" aria-hidden="true" />
-              )}
-              Retry
-            </Button>
-          ) : publishing ? (
-            <StatusBadge tone="info" label="Publishing" dot />
-          ) : (
-            <Button
-              type="button"
-              size="sm"
-              disabled={startPending}
-              onClick={onStart}
-              className="h-9 gap-1.5 text-xs font-semibold"
-            >
-              {startPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <Rocket className="h-4 w-4" aria-hidden="true" />
-              )}
-              {publish && isWorkersDevUrl(publish.liveUrl)
-                ? "Connect live domain"
-                : publish
-                  ? "Publish again"
-                  : "Publish"}
-            </Button>
-          )}
-        </>
-      }
-      footer={publish?.repositoryUrl ? <RepoLink href={publish.repositoryUrl} /> : null}
-    />
+    <>
+      <EnvironmentCard
+        lane="production"
+        title={productionTitle(kind, host)}
+        status={publishStatus(kind)}
+        host={host}
+        href={liveUrl}
+        meta={
+          publish === undefined
+            ? "Checking production status."
+            : publish
+              ? `${publishStepLabel(publish.step)} · ${formatClientUpdatedAt(publish.updatedAt)}`
+              : "Publish the approved preview to the live Worker."
+        }
+        jobKind={jobKind}
+        currentPhase={currentPhase}
+        percent={publish ? publishPercent(publish.progress) : 0}
+        currentStep={publish ? publishStepLabel(publish.step) : null}
+        alerts={alerts}
+        warningMessages={[]}
+        actions={
+          <>
+            {liveUrl ? (
+              <Button
+                asChild
+                size="sm"
+                variant="outline"
+                className="h-9 gap-1.5 text-xs font-semibold"
+              >
+                <a href={liveUrl} target="_blank" rel="noreferrer">
+                  <Globe className="h-4 w-4" aria-hidden="true" />
+                  Open
+                </a>
+              </Button>
+            ) : null}
+            {kind === "failed" ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={retryPending}
+                onClick={onRetry}
+                className="h-9 gap-1.5 text-xs font-semibold"
+              >
+                {retryPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Rocket className="h-4 w-4" aria-hidden="true" />
+                )}
+                Retry
+              </Button>
+            ) : publishing ? (
+              <StatusBadge tone="info" label="Publishing" dot />
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                disabled={startPending}
+                onClick={() => {
+                  if (connectingLiveDomain) {
+                    setConnectOpen(true);
+                    return;
+                  }
+                  onStart();
+                }}
+                className="h-9 gap-1.5 text-xs font-semibold"
+              >
+                {startPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Rocket className="h-4 w-4" aria-hidden="true" />
+                )}
+                {startLabel}
+              </Button>
+            )}
+          </>
+        }
+        footer={publish?.repositoryUrl ? <RepoLink href={publish.repositoryUrl} /> : null}
+      />
+      <AlertDialog open={connectOpen} onOpenChange={setConnectOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{connectDialog.title}</AlertDialogTitle>
+            <AlertDialogDescription>{connectDialog.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            {connectDialogFooter(connectDialog, {
+              startPending,
+              onConfirm: () => {
+                onStart();
+                setConnectOpen(false);
+              },
+            })}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
+}
+
+function connectDialogFooter(
+  dialog: LiveDomainConnectDialog,
+  input: { startPending: boolean; onConfirm: () => void },
+) {
+  switch (dialog.kind) {
+    case "ready":
+      return (
+        <>
+          <AlertDialogCancel disabled={input.startPending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={input.startPending}
+            onClick={event => {
+              event.preventDefault();
+              input.onConfirm();
+            }}
+          >
+            {dialog.confirmLabel}
+          </AlertDialogAction>
+        </>
+      );
+    case "blocked":
+      return <AlertDialogCancel>Close</AlertDialogCancel>;
+    default: {
+      const exhaustive: never = dialog;
+      return exhaustive;
+    }
+  }
 }
 
 function EnvironmentCard({
