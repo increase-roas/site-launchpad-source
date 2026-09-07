@@ -43,6 +43,7 @@ type StepVisual = {
   tone: BadgeTone;
   chip: string;
   iconColor: string;
+  meter: string;
 };
 
 const STEP_VISUAL: Record<WizardStepState, StepVisual> = {
@@ -52,6 +53,7 @@ const STEP_VISUAL: Record<WizardStepState, StepVisual> = {
     tone: "success",
     chip: "bg-success/15 text-success",
     iconColor: "text-success",
+    meter: "bg-success/20 [&>[data-slot=progress-indicator]]:bg-success",
   },
   current: {
     icon: CircleDot,
@@ -59,6 +61,7 @@ const STEP_VISUAL: Record<WizardStepState, StepVisual> = {
     tone: "primary",
     chip: "bg-primary text-primary-foreground",
     iconColor: "text-primary",
+    meter: "bg-primary/20 [&>[data-slot=progress-indicator]]:bg-primary",
   },
   todo: {
     icon: AlertCircle,
@@ -66,6 +69,7 @@ const STEP_VISUAL: Record<WizardStepState, StepVisual> = {
     tone: "warning",
     chip: "bg-warning/15 text-warning",
     iconColor: "text-warning",
+    meter: "bg-warning/20 [&>[data-slot=progress-indicator]]:bg-warning",
   },
   unknown: {
     icon: CircleDashed,
@@ -73,6 +77,7 @@ const STEP_VISUAL: Record<WizardStepState, StepVisual> = {
     tone: "neutral",
     chip: "bg-muted text-muted-foreground",
     iconColor: "text-muted-foreground",
+    meter: "bg-muted [&>[data-slot=progress-indicator]]:bg-muted-foreground/50",
   },
 };
 
@@ -184,7 +189,7 @@ export function BuildPath({
             className="border-0"
           >
             <div className="flex gap-3">
-              <div className="flex w-6 shrink-0 flex-col items-center">
+              <div className="flex w-6 shrink-0 flex-col items-center pt-2">
                 <span
                   className={cn(
                     "grid h-6 w-6 place-items-center rounded-md text-[11px] font-semibold",
@@ -202,9 +207,9 @@ export function BuildPath({
               </div>
 
               <div className={cn("min-w-0 flex-1", last ? "pb-0" : "pb-3")}>
-                <AccordionTrigger className="items-center py-1.5 hover:no-underline">
-                  <span className="flex min-w-0 flex-1 flex-col gap-1.5 pr-2 sm:flex-row sm:items-center sm:gap-3">
-                    <span className="min-w-0">
+                <AccordionTrigger className="items-center gap-3 py-2 hover:no-underline [&>svg]:translate-y-0">
+                  <span className="flex min-w-0 flex-1 items-center gap-3">
+                    <span className="min-w-0 flex-1 text-left">
                       <span className="block truncate text-sm font-semibold leading-tight">
                         {step.label}
                       </span>
@@ -214,14 +219,20 @@ export function BuildPath({
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
                       <visual.icon
-                        className={cn("hidden h-3.5 w-3.5 sm:block", visual.iconColor)}
+                        className={cn(
+                          "hidden h-4 w-4 sm:block",
+                          visual.iconColor,
+                        )}
                         aria-hidden="true"
                       />
                       {percent !== undefined ? (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="hidden w-24 sm:block">
-                              <Progress value={percent} className="h-1.5" />
+                            <span className="hidden w-[5.5rem] sm:block">
+                              <Progress
+                                value={percent}
+                                className={cn("h-1.5", visual.meter)}
+                              />
                             </span>
                           </TooltipTrigger>
                           <TooltipContent>
@@ -230,10 +241,15 @@ export function BuildPath({
                               : `${percent}%`}
                           </TooltipContent>
                         </Tooltip>
-                      ) : null}
+                      ) : (
+                        <span
+                          className="hidden w-[5.5rem] sm:block"
+                          aria-hidden="true"
+                        />
+                      )}
                       <HoverCard>
                         <HoverCardTrigger asChild>
-                          <span>
+                          <span className="flex w-auto justify-end sm:w-[9.5rem]">
                             <StatusBadge
                               tone={visual.tone}
                               label={visual.label}
