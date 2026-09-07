@@ -159,4 +159,21 @@ describe("GET asset route on the Vercel rewrite prefix", () => {
     expect(response.headers["content-type"]).toContain("image/webp");
     expect(response.body.toString()).toBe("nav-bytes");
   });
+
+  it("serves the same key from /api?localAsset= so Vercel can avoid nested function paths", async () => {
+    const keyed = express();
+    keyed.use(
+      createAssetGetRoutes(async key => {
+        if (key !== "clients/8/astro/nav.webp") return null;
+        return { body: Buffer.from("nav-bytes"), contentType: "image/webp" };
+      }),
+    );
+
+    const response = await request(keyed)
+      .get("/api")
+      .query({ localAsset: "clients/8/astro/nav.webp" })
+      .expect(200);
+    expect(response.headers["content-type"]).toContain("image/webp");
+    expect(response.body.toString()).toBe("nav-bytes");
+  });
 });

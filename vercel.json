@@ -11,8 +11,8 @@
   },
   "rewrites": [
     {
-      "source": "/local-assets/(.*)",
-      "destination": "/api/local-assets/$1"
+      "source": "/local-assets/:path*",
+      "destination": "/api?localAsset=:path*"
     },
     {
       "source": "/((?!api$|api/).*)",

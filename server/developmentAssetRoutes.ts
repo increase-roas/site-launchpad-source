@@ -23,9 +23,32 @@ function cacheControlFor(key: string): string {
 
 export type ServedAsset = { body: Buffer; contentType: string };
 
+/** Vercel catch-alls only match one `/api` segment, so images rewrite here. */
+export const VERCEL_LOCAL_ASSET_QUERY = "localAsset";
+
+function queryAssetKey(request: Request): string | undefined {
+  const value = request.query[VERCEL_LOCAL_ASSET_QUERY];
+  return typeof value === "string" && value ? value : undefined;
+}
+
+async function sendStoredAsset(
+  response: express.Response,
+  readObject: (key: string) => Promise<ServedAsset | null>,
+  key: string,
+): Promise<void> {
+  const asset = await readObject(key);
+  if (!asset) {
+    response.status(404).json({ error: "Not Found" });
+    return;
+  }
+  response.setHeader("Content-Type", asset.contentType);
+  response.setHeader("Cache-Control", cacheControlFor(key));
+  response.send(asset.body);
+}
+
 /**
- * GET `/local-assets/*` and `/api/local-assets/*` so the same stored path works
- * on the local Express server and on the Vercel rewrite.
+ * GET `/local-assets/*` locally, plus the Vercel-safe `/api?localAsset=` entry.
+ * Nested `/api/local-assets/...` paths 404 on Vercel before Express runs.
  */
 export function createAssetGetRoutes(
   readObject: (key: string) => Promise<ServedAsset | null>,
@@ -35,16 +58,17 @@ export function createAssetGetRoutes(
   ],
 ): Router {
   const router = Router();
+  router.get("/api", async (request, response, next) => {
+    const key = queryAssetKey(request);
+    if (!key) {
+      next();
+      return;
+    }
+    await sendStoredAsset(response, readObject, key);
+  });
   for (const prefix of prefixes) {
     router.get(`${prefix}/*`, async (request, response) => {
-      const asset = await readObject(wildcardKey(request));
-      if (!asset) {
-        response.status(404).json({ error: "Not Found" });
-        return;
-      }
-      response.setHeader("Content-Type", asset.contentType);
-      response.setHeader("Cache-Control", cacheControlFor(wildcardKey(request)));
-      response.send(asset.body);
+      await sendStoredAsset(response, readObject, wildcardKey(request));
     });
   }
   return router;

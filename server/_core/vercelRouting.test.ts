@@ -59,7 +59,10 @@ function loadVercelConfig(): VercelConfig {
 }
 
 function vercelSourceToRegExp(source: string): RegExp {
-  return new RegExp(`^${source}$`);
+  const pattern = source
+    .replace(/:([A-Za-z0-9_]+)\*/g, "(?<$1>.*)")
+    .replace(/:([A-Za-z0-9_]+)/g, "(?<$1>[^/]+)");
+  return new RegExp(`^${pattern}$`);
 }
 
 function applyOfficialRewrite(
@@ -72,28 +75,39 @@ function applyOfficialRewrite(
     return null;
   }
 
-  let pathnameOut = rewrite.destination;
+  const replaceTokens = (template: string) => {
+    let out = template;
+    if (out.includes("$1") && matched[1] !== undefined) {
+      out = out.replace("$1", matched[1]);
+    }
+    for (const token of [...out.matchAll(/:([A-Za-z0-9_]+)\*?/g)].map(item => item[1])) {
+      const value = matched.groups?.[token] ?? matched[1] ?? "";
+      out = out.replace(new RegExp(`:${token}\\*?`), value);
+    }
+    return out;
+  };
+
+  const replaced = replaceTokens(rewrite.destination);
+  const queryIndex = replaced.indexOf("?");
+  const pathnameOut = queryIndex === -1 ? replaced : replaced.slice(0, queryIndex);
+  const destinationSearch = queryIndex === -1 ? "" : replaced.slice(queryIndex + 1);
   const namedTokens = [...rewrite.destination.matchAll(/:([A-Za-z0-9_]+)\*?/g)].map(
     token => token[1],
   );
   const sourceTokens = [...rewrite.source.matchAll(/:([A-Za-z0-9_]+)\*?/g)].map(token => token[1]);
-
-  if (rewrite.destination.includes("$1") && matched[1] !== undefined) {
-    pathnameOut = rewrite.destination.replace("$1", matched[1]);
-  }
-
-  for (const token of namedTokens) {
-    const value = matched.groups?.[token] ?? matched[1] ?? "";
-    pathnameOut = pathnameOut.replace(new RegExp(`:${token}\\*?`), value);
-  }
-
   const unusedTokens = sourceTokens.filter(token => !namedTokens.includes(token));
-  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const extra = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   if (unusedTokens.length > 0 && matched[1] !== undefined) {
-    params.set(unusedTokens[0] ?? "path", matched[1]);
+    extra.set(unusedTokens[0] ?? "path", matched[1]);
   }
-
-  const nextSearch = params.toString() ? `?${params.toString()}` : "";
+  const extraSearch = extra.toString();
+  const nextSearch = destinationSearch && extraSearch
+    ? `?${destinationSearch}&${extraSearch}`
+    : destinationSearch
+      ? `?${destinationSearch}`
+      : extraSearch
+        ? `?${extraSearch}`
+        : "";
   return { pathname: pathnameOut, search: nextSearch };
 }
 
@@ -266,8 +280,8 @@ describe("Vercel production-equivalent routing", () => {
     expect(routeVercelRequest("/api/trpc/system.health").kind).not.toBe("spa");
     expect(routeVercelRequest("/local-assets/clients/8/astro/nav.webp")).toEqual({
       kind: "function",
-      file: "api/[...path].js",
-      url: "/api/local-assets/clients/8/astro/nav.webp",
+      file: "api/index.js",
+      url: "/api?localAsset=clients/8/astro/nav.webp",
     });
   });
 });
