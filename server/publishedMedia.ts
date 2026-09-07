@@ -8,10 +8,13 @@ import {
   type MediaPublication,
   type UsedDraftMedia,
 } from "../shared/publishedMedia";
+import { deriveRuntimeMode, readAssetStorageDriver, type AssetStorageDriver } from "./_core/env";
 import { getAstroConfigView } from "./astroConfigDb";
 import { getDevelopmentAssetStore } from "./developmentAssetStore";
+import { contentTypeForStorageKey } from "./localAssetStore";
 import { createCloudflareApiClient } from "./publisher/cloudflareApi";
 import { getCloudflarePublisherEnvironment } from "./publisher/publisherEnv";
+import { createR2ObjectStore, readR2Configuration } from "./r2";
 import {
   listMediaPublications,
   removeMediaPublication,
@@ -29,6 +32,41 @@ export type PublishedMediaSyncDependencies = {
   savePublication(publication: MediaPublication): Promise<MediaPublication>;
   removePublication(publication: MediaPublication): Promise<void>;
 };
+
+type DraftAsset = { body: Buffer; contentType: string };
+
+export async function readDraftAssetObject(
+  key: string,
+  deps: {
+    driver?: AssetStorageDriver;
+    readLocal?: (key: string) => Promise<DraftAsset | null>;
+    readRemote?: (key: string) => Promise<DraftAsset | null>;
+  } = {},
+): Promise<DraftAsset | null> {
+  const driver = deps.driver ?? readAssetStorageDriver(deriveRuntimeMode());
+  if (driver === "local") {
+    return (deps.readLocal ?? readLocalDraftAsset)(key);
+  }
+  return (deps.readRemote ?? readRemoteDraftAsset)(key);
+}
+
+async function readLocalDraftAsset(key: string): Promise<DraftAsset | null> {
+  try {
+    return await getDevelopmentAssetStore().readObjectForServing(key);
+  } catch {
+    return null;
+  }
+}
+
+async function readRemoteDraftAsset(key: string): Promise<DraftAsset | null> {
+  const store = createR2ObjectStore(readR2Configuration());
+  const head = await store.headObject(key);
+  if (!head) return null;
+  return {
+    body: await store.getObjectBuffer(key, head.contentLength),
+    contentType: contentTypeForStorageKey(key),
+  };
+}
 
 export async function executePublishedMediaSync(
   dependencies: PublishedMediaSyncDependencies,
@@ -132,11 +170,7 @@ export async function syncClientPublishedMedia(
     used: usedMedia,
     publications,
     async readDraft(key) {
-      try {
-        return await getDevelopmentAssetStore().readObjectForServing(key);
-      } catch {
-        return null;
-      }
+      return readDraftAssetObject(key);
     },
     async putObject(object) {
       await cloudflare.putR2Object({

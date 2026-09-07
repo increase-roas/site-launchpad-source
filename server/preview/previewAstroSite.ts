@@ -597,7 +597,7 @@ export async function advanceAstroSitePreview(
       jobId: job.id,
       leaseToken,
       errorCode: errorCodeForStep(job.step),
-      message: error instanceof PublisherManualAttentionError
+      message: error instanceof Error
         ? error.message
         : PREVIEW_ERROR_MESSAGES[errorCodeForStep(job.step)],
       now: deps.now(),

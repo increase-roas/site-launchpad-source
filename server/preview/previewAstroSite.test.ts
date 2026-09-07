@@ -219,6 +219,25 @@ describe("Astro website preview pipeline", () => {
     );
   });
 
+  it("keeps the real commit error on the failed preview job", async () => {
+    const initial = jobFixture();
+    const harness = inMemoryDependencies(initial);
+    harness.deps.external.ensureKvNamespace = vi.fn().mockResolvedValue({
+      kvNamespaceId: "kv-id",
+    });
+    harness.commitSource.mockRejectedValueOnce(
+      new Error("Draft image is missing: clients/7/astro/nav.webp"),
+    );
+
+    const failed = await advanceAstroSitePreview({ jobId: initial.id }, harness.deps);
+
+    expect(failed).toMatchObject({
+      status: "failed",
+      step: "commit_source",
+      error: "Draft image is missing: clients/7/astro/nav.webp",
+    });
+  });
+
   it("marks ready only after the preview URL responds", async () => {
     const initial = jobFixture();
     initial.step = "verify_preview";

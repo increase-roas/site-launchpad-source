@@ -38,6 +38,10 @@ export async function removeLocalAssetPrefix(
   await rm(target, { recursive: true, force: true });
 }
 
+export function contentTypeForStorageKey(key: string): string {
+  return CONTENT_TYPE_BY_EXTENSION[path.extname(key).toLowerCase()] ?? "application/octet-stream";
+}
+
 export function isSafeStorageKey(key: string): boolean {
   if (!key || key.length > MAX_STORAGE_KEY_LENGTH) return false;
   if (key.includes("\\") || key.includes("\0")) return false;
@@ -164,9 +168,7 @@ export function createLocalAssetStore({
       }
       try {
         const body = await readFile(target);
-        const contentType =
-          CONTENT_TYPE_BY_EXTENSION[path.extname(target).toLowerCase()] ??
-          "application/octet-stream";
+        const contentType = contentTypeForStorageKey(target);
         return { body, contentType };
       } catch {
         return null;

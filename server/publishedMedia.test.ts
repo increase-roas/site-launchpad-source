@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { executePublishedMediaSync } from "./publishedMedia";
+import { executePublishedMediaSync, readDraftAssetObject } from "./publishedMedia";
 
 const draft = {
   mediaItemId: 11,
@@ -89,5 +89,27 @@ describe("executePublishedMediaSync", () => {
     expect(result.urlByDraftKey[draft.storageKey]).toBe(
       "https://pub.example/clients/7-acme/astro/navLogo-aaa-111.webp",
     );
+  });
+});
+
+describe("readDraftAssetObject", () => {
+  it("reads production drafts from R2 instead of the local asset folder", async () => {
+    const readLocal = vi.fn();
+    const readRemote = vi.fn().mockResolvedValue({
+      body: Buffer.from("r2-bytes"),
+      contentType: "image/webp",
+    });
+
+    await expect(
+      readDraftAssetObject("clients/7/astro/nav.webp", {
+        driver: "r2",
+        readLocal,
+        readRemote,
+      }),
+    ).resolves.toEqual({
+      body: Buffer.from("r2-bytes"),
+      contentType: "image/webp",
+    });
+    expect(readLocal).not.toHaveBeenCalled();
   });
 });
