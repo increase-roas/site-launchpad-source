@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  describeHostnameAttachedToOtherWorker,
+  explainPublishDomainError,
   isWorkersDevUrl,
   liveHostnameFromSiteUrl,
   liveUrlForHostname,
+  parseHostnameAttachedToOtherWorker,
   zoneNameCandidates,
 } from "./liveSiteHostname";
 
@@ -37,6 +40,38 @@ describe("zoneNameCandidates", () => {
       "www.theclient.com",
       "theclient.com",
     ]);
+  });
+});
+
+describe("custom domain ownership conflicts", () => {
+  it("names the other Worker and tells the operator not to retry blindly", () => {
+    const message = describeHostnameAttachedToOtherWorker(
+      "increaseroasai.com",
+      "website-old-demo-3",
+    );
+    expect(message).toContain('Worker "website-old-demo-3"');
+    expect(message).toContain("until you confirm");
+    expect(message).toContain("review Site URL");
+  });
+
+  it("rewrites a stored attach conflict for the Launch page", () => {
+    expect(
+      explainPublishDomainError(
+        "increaseroasai.com is already attached to another Worker. Remove that custom domain first.",
+      ),
+    ).toContain("until you confirm");
+  });
+
+  it("parses the other Worker from a stored attach conflict", () => {
+    expect(
+      parseHostnameAttachedToOtherWorker(
+        'increaseroasai.com is already attached to Worker "website-old-demo-3".',
+      ),
+    ).toEqual({
+      hostname: "increaseroasai.com",
+      otherWorkerName: "website-old-demo-3",
+    });
+    expect(parseHostnameAttachedToOtherWorker("Website build failed.")).toBeNull();
   });
 });
 

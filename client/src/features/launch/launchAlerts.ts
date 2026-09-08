@@ -1,3 +1,4 @@
+import { explainPublishDomainError } from "@shared/liveSiteHostname";
 import { explainPreviewMediaError } from "@shared/publishedMedia";
 import type { LaunchCheck } from "./launchChecks";
 import type {
@@ -167,7 +168,9 @@ export function productionEnvironmentAlerts({
         key: "production-failed",
         tone: "danger",
         title: "Publish failed",
-        detail: error ?? "The last production job did not finish. Review the error, then retry.",
+        detail:
+          explainPublishDomainError(error) ??
+          "The last production job did not finish. Review the error, then retry.",
       });
       break;
     case "idle":

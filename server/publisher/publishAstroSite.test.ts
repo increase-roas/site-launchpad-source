@@ -249,6 +249,7 @@ describe("Astro website custom domain", () => {
       expect.objectContaining({
         workerName: "website-north-star-5",
         hostname: "www.theclient.com",
+        reassign: false,
       }),
     );
     expect(advanced).toMatchObject({
@@ -274,5 +275,27 @@ describe("Astro website custom domain", () => {
       error:
         "No Cloudflare zone matches www.theclient.com. Add that domain to this Cloudflare account first.",
     });
+  });
+
+  it("asks Cloudflare to move the hostname after the operator confirms", async () => {
+    const initial = jobFixture();
+    initial.step = "attach_custom_domain";
+    initial.status = "failed";
+    const harness = inMemoryDependencies(initial);
+    harness.deps.external.attachWorkerCustomDomain = vi.fn().mockResolvedValue({
+      liveUrl: "https://www.theclient.com",
+    });
+
+    await advanceAstroSitePublish(
+      { clientId: 5, retryFailed: true, reassignCustomDomain: true },
+      harness.deps,
+    );
+
+    expect(harness.deps.external.attachWorkerCustomDomain).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hostname: "www.theclient.com",
+        reassign: true,
+      }),
+    );
   });
 });

@@ -237,10 +237,20 @@ describe("authenticated Astro config procedures", () => {
     const status = await caller.publishStatus({ clientId: 5 });
 
     expect(mocks.startPublish).toHaveBeenCalledWith(5);
-    expect(mocks.advancePublish).toHaveBeenCalledWith(5, true);
+    expect(mocks.advancePublish).toHaveBeenCalledWith(5, true, false);
     expect(mocks.publishStatus).toHaveBeenCalledWith(5);
     expect(retried.workflowRunId).toBe("100");
     expect(status).toEqual(publishView);
+  });
+
+  it("forwards a confirmed custom-domain move on retry", async () => {
+    const caller = astroConfigRouter.createCaller(context());
+    await caller.advancePublish({
+      clientId: 5,
+      retryFailed: true,
+      reassignCustomDomain: true,
+    });
+    expect(mocks.advancePublish).toHaveBeenCalledWith(5, true, true);
   });
 
   it("rejects unauthenticated website publish mutations", async () => {

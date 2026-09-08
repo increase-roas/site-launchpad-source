@@ -3,6 +3,7 @@ import {
   executePublishedMediaSync,
   readDraftAssetFromPublicUrl,
   readDraftAssetObject,
+  readDraftForPublishedSync,
 } from "./publishedMedia";
 
 const draft = {
@@ -135,6 +136,26 @@ describe("readDraftAssetObject", () => {
       body: Buffer.from("r2-bytes"),
       contentType: "image/webp",
     });
+  });
+
+  it("recovers a missing Launchpad draft from the website bucket", async () => {
+    const readLaunchpad = vi.fn().mockResolvedValue(null);
+    const readPublished = vi.fn().mockResolvedValue({
+      body: Buffer.from("published-bytes"),
+      contentType: "image/webp",
+    });
+
+    await expect(
+      readDraftForPublishedSync("clients/8/astro/nav.webp", {
+        readLaunchpad,
+        readPublished,
+      }),
+    ).resolves.toEqual({
+      body: Buffer.from("published-bytes"),
+      contentType: "image/webp",
+    });
+    expect(readLaunchpad).toHaveBeenCalledWith("clients/8/astro/nav.webp");
+    expect(readPublished).toHaveBeenCalledWith("clients/8/astro/nav.webp");
   });
 
   it("downloads production drafts from the public HTTPS asset URL", async () => {

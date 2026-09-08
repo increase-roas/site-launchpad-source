@@ -235,4 +235,22 @@ describe("productionEnvironmentAlerts", () => {
       }).map(alert => alert.key),
     ).toEqual(["production-preview-unapproved"]);
   });
+
+  it("explains a custom domain owned by another Worker", () => {
+    const [alert] = productionEnvironmentAlerts({
+      kind: "failed",
+      error:
+        "increaseroasai.com is already attached to another Worker. Remove that custom domain first.",
+      hasLiveUrl: false,
+      previewKind: "ready",
+      approved: true,
+      blockers: [],
+    });
+    expect(alert).toMatchObject({
+      key: "production-failed",
+      title: "Publish failed",
+    });
+    expect(alert?.detail).toContain("until you confirm");
+    expect(alert?.detail).toContain("increaseroasai.com");
+  });
 });

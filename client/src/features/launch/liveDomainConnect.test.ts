@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { liveDomainConnectDialog, publishStartLabel } from "./liveDomainConnect";
+import {
+  customDomainConflictDialog,
+  liveDomainConnectDialog,
+  publishStartLabel,
+} from "./liveDomainConnect";
 
 describe("publishStartLabel", () => {
   it("asks to connect the live domain after a workers.dev publish", () => {
@@ -66,5 +70,27 @@ describe("liveDomainConnectDialog", () => {
         currentLiveUrl: "https://website-north-star-5.increase-roas.workers.dev",
       }).description,
     ).toMatch(/https:\/\//);
+  });
+});
+
+describe("customDomainConflictDialog", () => {
+  it("asks the operator to move the domain or review Site URL", () => {
+    expect(
+      customDomainConflictDialog(
+        'increaseroasai.com is already attached to Worker "website-old-demo-3".',
+      ),
+    ).toEqual({
+      hostname: "increaseroasai.com",
+      otherWorkerName: "website-old-demo-3",
+      title: "This domain is already live on another Worker",
+      description:
+        'increaseroasai.com is attached to Worker "website-old-demo-3". Moving it here takes that hostname off the other site. If this client\'s Site URL is wrong, review Basic Info instead.',
+      reviewLabel: "Review Site URL",
+      confirmLabel: "Move domain and continue",
+    });
+  });
+
+  it("ignores publish errors that are not a domain ownership conflict", () => {
+    expect(customDomainConflictDialog("Website build failed.")).toBeNull();
   });
 });

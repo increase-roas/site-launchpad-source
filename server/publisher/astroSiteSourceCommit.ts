@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { ASTRO_SITE_MANIFEST } from "../../shared/astroSiteContract";
 import {
   renderAstroSiteWranglerToml,
@@ -5,6 +7,18 @@ import {
 } from "./astroSiteWranglerConfig";
 import { patchAstroSiteWorkerRuntimeFiles } from "./astroSiteWorkerRuntimePatch";
 import type { GitHubApiClient } from "./githubApi";
+
+function localTemplateFieldManifest(): string | undefined {
+  if (process.env.NODE_ENV === "test") return undefined;
+  const roots = [
+    process.env.ASTRO_TEMPLATE_DIR?.trim(),
+    path.resolve(process.cwd(), "../32-htl-website-template-astrobuild"),
+  ].filter((root): root is string => Boolean(root));
+  for (const root of roots) {
+    const file = path.join(root, "intake", "field-manifest.json");
+    if (existsSync(file)) return readFileSync(file, "utf8");
+  }
+}
 
 export function astroSiteSessionKvTitle(workerName: string): string {
   return `${workerName}-session`;
@@ -43,10 +57,17 @@ export async function commitAstroSiteGeneratedSource(input: {
     ref: input.branch,
     signal: input.signal,
   });
-  const fieldManifestJson = await input.github.getFileText({
+  const fieldManifestJson = localTemplateFieldManifest() ?? await input.github.getFileText({
     owner: input.owner,
     repository: input.repository,
     path: "intake/field-manifest.json",
+    ref: input.branch,
+    signal: input.signal,
+  });
+  const sectionsSchemaTs = await input.github.getFileText({
+    owner: input.owner,
+    repository: input.repository,
+    path: "src/config/sections.schema.ts",
     ref: input.branch,
     signal: input.signal,
   });
@@ -59,6 +80,7 @@ export async function commitAstroSiteGeneratedSource(input: {
     schemaTs,
     indexTs,
     fieldManifestJson,
+    sectionsSchemaTs: sectionsSchemaTs ?? undefined,
   });
   if (!patched.fieldManifestJson) {
     throw new Error("Intake field-manifest could not be patched for Workers.");

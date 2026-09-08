@@ -16,17 +16,48 @@ const IDENTITY_GETTERS = `  // Identity — getters so Workers Date-freeze at mo
     return \`© \${new Date().getFullYear()} \${site.identity.name}. All rights reserved.\`;
   },`;
 
+export function homepageSectionVariantsFromSource(source: string): string[] {
+  const union = source.match(/z\.discriminatedUnion\(\s*['"]type['"]\s*,\s*\[([^\]]+)\]/s);
+  if (!union?.[1]) return [];
+  const variants: string[] = [];
+  for (const schemaName of union[1].match(/[A-Za-z][A-Za-z0-9]*/g) ?? []) {
+    const declared = source.match(
+      new RegExp(
+        `(?:const|export const) ${schemaName} = z\\.object\\(\\{[\\s\\S]*?type:\\s*z\\.literal\\('([a-z]+)'\\)`,
+      ),
+    );
+    if (declared?.[1]) variants.push(declared[1]);
+  }
+  return variants;
+}
+
 export function patchAstroSiteWorkerRuntimeFiles(input: {
   schemaTs: string;
   indexTs: string;
   fieldManifestJson?: string;
+  sectionsSchemaTs?: string;
 }): { schemaTs: string; indexTs: string; fieldManifestJson?: string } {
+  const schemaTs = patchFoundedYearMax(input.schemaTs);
+  let fieldManifestJson = input.fieldManifestJson;
+  if (fieldManifestJson !== undefined) {
+    if (schemaTs.includes(FOUNDED_YEAR_WORKER_SAFE_MAX)) {
+      const year = new Date().getFullYear();
+      fieldManifestJson = patchFoundedYearManifestMax(
+        fieldManifestJson,
+        year >= 2000 ? year : 2100,
+      );
+    }
+    const variants = input.sectionsSchemaTs
+      ? homepageSectionVariantsFromSource(input.sectionsSchemaTs)
+      : [];
+    if (variants.length > 0) {
+      fieldManifestJson = syncHomepageSectionVariants(fieldManifestJson, variants);
+    }
+  }
   return {
-    schemaTs: patchFoundedYearMax(input.schemaTs),
+    schemaTs,
     indexTs: patchDerivedDateFields(input.indexTs),
-    ...(input.fieldManifestJson === undefined
-      ? {}
-      : { fieldManifestJson: patchFoundedYearManifestMax(input.fieldManifestJson) }),
+    ...(fieldManifestJson === undefined ? {} : { fieldManifestJson }),
   };
 }
 
@@ -51,18 +82,29 @@ function patchFoundedYearMax(schemaTs: string): string {
 const FOUNDED_YEAR_MANIFEST =
   /("path"\s*:\s*"identity\.foundedYear"[\s\S]*?"max"\s*:\s*)\d+/;
 
-function patchFoundedYearManifestMax(fieldManifestJson: string): string {
+function patchFoundedYearManifestMax(fieldManifestJson: string, max: number): string {
   if (!FOUNDED_YEAR_MANIFEST.test(fieldManifestJson)) {
-    throw new Error(
-      "intake/field-manifest.json does not contain identity.foundedYear max that can be patched for Workers.",
-    );
+    return fieldManifestJson;
   }
-  const year = new Date().getFullYear();
-  const walkedMax = year >= 2000 ? year : 2100;
   return fieldManifestJson.replace(
     FOUNDED_YEAR_MANIFEST,
-    (_match, prefix: string) => `${prefix}${walkedMax}`,
+    (_match, prefix: string) => `${prefix}${max}`,
   );
+}
+
+function syncHomepageSectionVariants(
+  fieldManifestJson: string,
+  variants: readonly string[],
+): string {
+  const block = fieldManifestJson.match(
+    /("path": "homepage\.sections"[\s\S]*?"variants": \[)([\s\S]*?)(\n\s*\])/,
+  );
+  if (!block || block.index === undefined) return fieldManifestJson;
+  const rendered = variants.map(variant => `\n          "${variant}"`).join(",");
+  const next = `${block[1]}${rendered}${block[3]}`;
+  const previous = `${block[1]}${block[2]}${block[3]}`;
+  if (previous === next) return fieldManifestJson;
+  return `${fieldManifestJson.slice(0, block.index)}${next}${fieldManifestJson.slice(block.index + block[0].length)}`;
 }
 
 function patchDerivedDateFields(indexTs: string): string {

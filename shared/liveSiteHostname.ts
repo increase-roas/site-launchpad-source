@@ -46,3 +46,47 @@ export function isWorkersDevUrl(url: string | null | undefined): boolean {
 export function liveUrlForHostname(hostname: string): string {
   return `https://${hostname}`;
 }
+
+const ATTACHED_TO_OTHER_WORKER_PATTERN =
+  /^(\S+) is already attached to another Worker/;
+
+export function describeHostnameAttachedToOtherWorker(
+  hostname: string,
+  otherWorkerName: string,
+): string {
+  const owner = otherWorkerName.trim() || "another Worker";
+  return [
+    `${hostname} is already attached to Worker "${owner}".`,
+    "Launchpad will not move a live domain off another site until you confirm.",
+    "Retry to move it here, or review Site URL if this client should use a different domain.",
+  ].join(" ");
+}
+
+export function parseHostnameAttachedToOtherWorker(
+  error: string | null | undefined,
+): { hostname: string; otherWorkerName: string } | null {
+  if (!error) return null;
+  const named = error.match(
+    /^(\S+) is already attached to Worker "([^"]+)"/,
+  );
+  if (named?.[1] && named[2]) {
+    return { hostname: named[1], otherWorkerName: named[2] };
+  }
+  const legacy = error.match(ATTACHED_TO_OTHER_WORKER_PATTERN);
+  if (!legacy?.[1]) return null;
+  return { hostname: legacy[1], otherWorkerName: "another Worker" };
+}
+
+export function explainPublishDomainError(
+  error: string | null | undefined,
+): string | null {
+  if (!error) return null;
+  const conflict = parseHostnameAttachedToOtherWorker(error);
+  if (conflict) {
+    return describeHostnameAttachedToOtherWorker(
+      conflict.hostname,
+      conflict.otherWorkerName,
+    );
+  }
+  return error;
+}

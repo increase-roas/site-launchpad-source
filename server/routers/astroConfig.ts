@@ -127,10 +127,19 @@ export const astroConfigRouter = router({
   }),
 
   advancePublish: protectedProcedure
-    .input(clientIdInput.extend({ retryFailed: z.boolean().optional() }))
+    .input(
+      clientIdInput.extend({
+        retryFailed: z.boolean().optional(),
+        reassignCustomDomain: z.boolean().optional(),
+      }),
+    )
     .mutation(async ({ input }) => {
       try {
-        return await advancePublish(input.clientId, input.retryFailed === true);
+        return await advancePublish(
+          input.clientId,
+          input.retryFailed === true,
+          input.reassignCustomDomain === true,
+        );
       } catch (error) {
         throw mapRouterError(error, "Website publishing could not be advanced.");
       }

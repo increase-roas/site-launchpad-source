@@ -71,6 +71,16 @@ async function readRemoteDraftAsset(key: string): Promise<DraftAsset | null> {
   }
 }
 
+export async function readDraftForPublishedSync(
+  key: string,
+  deps: {
+    readLaunchpad(key: string): Promise<DraftAsset | null>;
+    readPublished(key: string): Promise<DraftAsset | null>;
+  },
+): Promise<DraftAsset | null> {
+  return (await deps.readLaunchpad(key)) ?? deps.readPublished(key);
+}
+
 export async function readDraftAssetFromPublicUrl(
   key: string,
   deps: {
@@ -192,7 +202,20 @@ export async function syncClientPublishedMedia(
     used: usedMedia,
     publications,
     async readDraft(key) {
-      return readDraftAssetObject(key);
+      return readDraftForPublishedSync(key, {
+        readLaunchpad: readDraftAssetObject,
+        async readPublished(storageKey) {
+          const fromBucket = await cloudflare.getR2Object({
+            bucket: input.destinationBucket,
+            key: storageKey,
+            signal,
+          });
+          if (fromBucket) return fromBucket;
+          return readDraftAssetFromPublicUrl(storageKey, {
+            publicAssetBaseUrl: input.publicBaseUrl,
+          });
+        },
+      });
     },
     async putObject(object) {
       await cloudflare.putR2Object({

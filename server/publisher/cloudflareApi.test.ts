@@ -498,7 +498,60 @@ describe("Cloudflare publisher client", () => {
         hostname: "www.theclient.com",
         signal: activeSignal(),
       }),
-    ).rejects.toThrow("already attached to another Worker");
+    ).rejects.toThrow('already attached to Worker "someone-else"');
+    expect(requests).toHaveLength(1);
+  });
+
+  it("moves a hostname after the operator confirms reassignment", async () => {
+    const { fetchFn, requests } = createMockFetch([
+      successEnvelope([
+        {
+          id: "domain-99",
+          hostname: "www.theclient.com",
+          service: "someone-else",
+        },
+      ]),
+      successEnvelope(null),
+      successEnvelope([]),
+      successEnvelope([{ id: "zone-theclient", name: "theclient.com" }]),
+      successEnvelope({
+        hostname: "www.theclient.com",
+        service: "website-north-star-5",
+        environment: "production",
+      }),
+    ]);
+
+    await expect(
+      createClient(fetchFn).attachWorkerCustomDomain({
+        scriptName: "website-north-star-5",
+        hostname: "www.theclient.com",
+        reassign: true,
+        signal: activeSignal(),
+      }),
+    ).resolves.toEqual({
+      hostname: "www.theclient.com",
+      liveUrl: "https://www.theclient.com",
+    });
+    expect(requests[1]?.url).toContain("/workers/domains/domain-99");
+    expect(requests[1]?.init?.method).toBe("DELETE");
+    expect(requests[4]?.init?.method).toBe("PUT");
+  });
+
+  it("cannot reassign when Cloudflare omitted the domain id", async () => {
+    const { fetchFn, requests } = createMockFetch([
+      successEnvelope([
+        { hostname: "www.theclient.com", service: "someone-else" },
+      ]),
+    ]);
+
+    await expect(
+      createClient(fetchFn).attachWorkerCustomDomain({
+        scriptName: "website-north-star-5",
+        hostname: "www.theclient.com",
+        reassign: true,
+        signal: activeSignal(),
+      }),
+    ).rejects.toThrow("did not return a domain id");
     expect(requests).toHaveLength(1);
   });
 
@@ -549,5 +602,34 @@ describe("Cloudflare publisher client", () => {
     );
     expect(requests[0]?.init?.method).toBe("PUT");
     expect(requests[1]?.init?.method).toBe("DELETE");
+  });
+
+  it("downloads a website media object and treats 404 as missing", async () => {
+    const found = new Response(new Uint8Array([1, 2, 3]), {
+      status: 200,
+      headers: { "content-type": "image/webp" },
+    });
+    const missing = new Response(null, { status: 404 });
+    const { fetchFn, requests } = createMockFetch([found, missing]);
+    const client = createClient(fetchFn);
+
+    await expect(
+      client.getR2Object({
+        bucket: "website-7-images",
+        key: "clients/7-acme/astro/nav.webp",
+        signal: activeSignal(),
+      }),
+    ).resolves.toEqual({
+      body: Buffer.from([1, 2, 3]),
+      contentType: "image/webp",
+    });
+    await expect(
+      client.getR2Object({
+        bucket: "website-7-images",
+        key: "clients/7-acme/astro/missing.webp",
+        signal: activeSignal(),
+      }),
+    ).resolves.toBeNull();
+    expect(requests[0]?.init?.method).toBe("GET");
   });
 });

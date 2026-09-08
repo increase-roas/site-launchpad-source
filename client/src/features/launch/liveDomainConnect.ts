@@ -1,5 +1,9 @@
 import { clientSiteHost } from "@/lib/clientBoard";
-import { isWorkersDevUrl, liveHostnameFromSiteUrl } from "@shared/liveSiteHostname";
+import {
+  isWorkersDevUrl,
+  liveHostnameFromSiteUrl,
+  parseHostnameAttachedToOtherWorker,
+} from "@shared/liveSiteHostname";
 
 export type LiveDomainConnectDialog =
   | {
@@ -59,5 +63,27 @@ export function liveDomainConnectDialog(input: {
       ? `Attach ${hostname} to this production Worker? Production is currently on ${currentHost}.`
       : `Attach ${hostname} to this production Worker?`,
     confirmLabel: `Connect ${hostname}`,
+  };
+}
+
+export function customDomainConflictDialog(error: string | null | undefined): {
+  hostname: string;
+  otherWorkerName: string;
+  title: string;
+  description: string;
+  reviewLabel: string;
+  confirmLabel: string;
+} | null {
+  const conflict = parseHostnameAttachedToOtherWorker(error);
+  if (!conflict) return null;
+  return {
+    ...conflict,
+    title: "This domain is already live on another Worker",
+    description:
+      `${conflict.hostname} is attached to Worker "${conflict.otherWorkerName}". ` +
+      "Moving it here takes that hostname off the other site. " +
+      "If this client's Site URL is wrong, review Basic Info instead.",
+    reviewLabel: "Review Site URL",
+    confirmLabel: "Move domain and continue",
   };
 }

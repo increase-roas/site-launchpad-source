@@ -19,6 +19,7 @@ import {
   formatClientUpdatedAt,
 } from "@/lib/clientBoard";
 import { trpc } from "@/lib/trpc";
+import { configurationRoute } from "@/lib/workspaceNavigation";
 import { cn } from "@/lib/utils";
 import { clientDeployGaps, summarizeHomepageSections } from "@shared/astroConfig";
 import type { AstroSitePreviewStatusView } from "@shared/astroSitePreview";
@@ -86,6 +87,7 @@ import {
   type PublishEnvironmentKind,
 } from "./launchPipeline";
 import {
+  customDomainConflictDialog,
   liveDomainConnectDialog,
   publishStartLabel,
   type LiveDomainConnectDialog,
@@ -376,6 +378,7 @@ export default function LaunchPage({ clientId }: { clientId: number }) {
           approvePreview={approvePreview}
         />
         <ProductionEnvironment
+          clientId={clientId}
           liveUrl={liveUrl}
           siteUrl={config?.identity.siteUrl}
           publish={publish}
@@ -387,10 +390,14 @@ export default function LaunchPage({ clientId }: { clientId: number }) {
           startPending={startPublishMutation.isPending}
           retryPending={advancePublishMutation.isPending}
           onStart={() => startPublishMutation.mutate({ clientId })}
-          onRetry={() => {
+          onRetry={reassignCustomDomain => {
             if (advanceInFlightRef.current) return;
             advanceInFlightRef.current = true;
-            advancePublish({ clientId, retryFailed: true });
+            advancePublish({
+              clientId,
+              retryFailed: true,
+              reassignCustomDomain,
+            });
           }}
         />
       </div>
@@ -501,6 +508,7 @@ function PreviewEnvironment({
 }
 
 function ProductionEnvironment({
+  clientId,
   liveUrl,
   siteUrl,
   publish,
@@ -514,6 +522,7 @@ function ProductionEnvironment({
   onStart,
   onRetry,
 }: {
+  clientId: number;
   liveUrl: string | null | undefined;
   siteUrl: string | null | undefined;
   publish: AstroSitePublishStatusView | null | undefined;
@@ -525,9 +534,11 @@ function ProductionEnvironment({
   startPending: boolean;
   retryPending: boolean;
   onStart: () => void;
-  onRetry: () => void;
+  onRetry: (reassignCustomDomain?: boolean) => void;
 }) {
   const [connectOpen, setConnectOpen] = useState(false);
+  const [conflictOpen, setConflictOpen] = useState(false);
+  const conflictDialog = customDomainConflictDialog(publish?.error);
   const kind = publishEnvironmentKind(publish);
   const host = clientSiteHost(liveUrl);
   const jobKind = publishPipelineJobKind(kind);
@@ -592,7 +603,13 @@ function ProductionEnvironment({
                 type="button"
                 size="sm"
                 disabled={retryPending}
-                onClick={onRetry}
+                onClick={() => {
+                  if (conflictDialog) {
+                    setConflictOpen(true);
+                    return;
+                  }
+                  onRetry();
+                }}
                 className="h-9 gap-1.5 text-xs font-semibold"
               >
                 {retryPending ? (
@@ -647,6 +664,33 @@ function ProductionEnvironment({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {conflictDialog ? (
+        <AlertDialog open={conflictOpen} onOpenChange={setConflictOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{conflictDialog.title}</AlertDialogTitle>
+              <AlertDialogDescription>{conflictDialog.description}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel asChild>
+                <Link href={configurationRoute(clientId, "basic")}>
+                  {conflictDialog.reviewLabel}
+                </Link>
+              </AlertDialogCancel>
+              <AlertDialogAction
+                disabled={retryPending}
+                onClick={event => {
+                  event.preventDefault();
+                  onRetry(true);
+                  setConflictOpen(false);
+                }}
+              >
+                {conflictDialog.confirmLabel}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      ) : null}
     </>
   );
 }

@@ -170,6 +170,7 @@ export interface AstroSitePublishExternal {
   attachWorkerCustomDomain(input: {
     workerName: string;
     hostname: string;
+    reassign?: boolean;
     signal: AbortSignal;
   }): Promise<{ liveUrl: string }>;
 }
@@ -188,7 +189,11 @@ export type AstroSitePublishDependencies = {
   externalTimeoutMs: number;
 };
 
-type OwnerInput = { clientId: number; retryFailed?: boolean };
+type OwnerInput = {
+  clientId: number;
+  retryFailed?: boolean;
+  reassignCustomDomain?: boolean;
+};
 const RECONCILIATION_WINDOW_MS = 60_000;
 
 function requireValue(value: string | null, message: string): string {
@@ -489,6 +494,7 @@ async function execute(
           deps.external.attachWorkerCustomDomain({
             workerName: job.workerName,
             hostname,
+            reassign: input.reassignCustomDomain === true,
             signal,
           }),
         );
@@ -673,6 +679,7 @@ function createRuntimeExternal(): AstroSitePublishExternal {
       const attached = await cloudflare.attachWorkerCustomDomain({
         scriptName: input.workerName,
         hostname: input.hostname,
+        reassign: input.reassign === true,
         signal: input.signal,
       });
       return { liveUrl: attached.liveUrl };
@@ -708,8 +715,15 @@ export async function startPublish(clientId: number): Promise<AstroSitePublishSt
   return startAstroSitePublish({ clientId, clientShortName: client.shortName }, runtimeDependencies());
 }
 
-export async function advancePublish(clientId: number, retryFailed = false): Promise<AstroSitePublishStatusView> {
-  return advanceAstroSitePublish({ clientId, retryFailed }, runtimeDependencies());
+export async function advancePublish(
+  clientId: number,
+  retryFailed = false,
+  reassignCustomDomain = false,
+): Promise<AstroSitePublishStatusView> {
+  return advanceAstroSitePublish(
+    { clientId, retryFailed, reassignCustomDomain },
+    runtimeDependencies(),
+  );
 }
 
 export async function publishStatus(clientId: number): Promise<AstroSitePublishStatusView | null> {
