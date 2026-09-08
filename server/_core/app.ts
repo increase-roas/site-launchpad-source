@@ -5,7 +5,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { createAssetGetRoutes, createDevelopmentAssetRoutes } from "../developmentAssetRoutes";
 import { getDevelopmentAssetStore } from "../developmentAssetStore";
-import { readR2ObjectForServing } from "../r2";
+import { readDraftAssetForServing } from "../publishedMedia";
 import {
   deriveRuntimeMode,
   readAssetStorageDriver,
@@ -65,21 +65,12 @@ export async function createApp(
   );
 
   // Must precede the `/api` 404 and the Vite/SPA fallback.
-  // Vercel rewrites `/local-assets` to `/api/local-assets`; both prefixes serve
-  // the same stored key so local and production Launchpad share one URL shape.
+  // Vercel rewrites `/local-assets` to `/api?localAsset=`; both prefixes serve
+  // the same stored key. Missing Launchpad drafts fall back to the website
+  // bucket copy so the Vercel editor can show already-published media.
   const storageDriver = readAssetStorageDriver(mode);
   app.use(
-    createAssetGetRoutes(async key => {
-      if (storageDriver === "local") {
-        const local = await getDevelopmentAssetStore().readObjectForServing(key);
-        if (local) return local;
-      }
-      try {
-        return await readR2ObjectForServing(key);
-      } catch {
-        return null;
-      }
-    }),
+    createAssetGetRoutes(key => readDraftAssetForServing(key)),
   );
   if (storageDriver === "local") {
     app.use(createDevelopmentAssetRoutes(getDevelopmentAssetStore()));

@@ -4,6 +4,7 @@ import {
   applyPublishedCategoryHeroUrls,
   applyPublishedHomepageUrls,
   applyPublishedLibraryUrls,
+  clientIdFromDraftStorageKey,
   collectUsedDraftMedia,
   describeMissingDraftImage,
   planMediaSync,
@@ -11,18 +12,27 @@ import {
   type MediaPublication,
   type UsedDraftMedia,
 } from "../shared/publishedMedia";
-import { deriveRuntimeMode, readAssetStorageDriver, type AssetStorageDriver } from "./_core/env";
+import {
+  deriveRuntimeMode,
+  readAssetStorageDriver,
+  tryUsableR2Configuration,
+  type AssetStorageDriver,
+} from "./_core/env";
 import { getAstroConfigView } from "./astroConfigDb";
 import { getDevelopmentAssetStore } from "./developmentAssetStore";
 import { contentTypeForStorageKey } from "./localAssetStore";
+import { findPublishedAssetBaseUrls } from "./publishedAssetOrigins";
 import { createCloudflareApiClient } from "./publisher/cloudflareApi";
 import { getCloudflarePublisherEnvironment } from "./publisher/publisherEnv";
-import { readR2ObjectForServing } from "./r2";
+import { createR2ObjectStore, readR2ObjectForServing } from "./r2";
 import {
+  findLatestMediaPublicationByDraftKey,
   listMediaPublications,
   removeMediaPublication,
   saveMediaPublication,
 } from "./publishedMediaDb";
+
+const RECOVERED_DRAFT_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
 export type PublishedMediaSyncDependencies = {
   destinationBucket: string;
@@ -88,8 +98,15 @@ export async function readDraftAssetFromPublicUrl(
     fetchFn?: typeof fetch;
   },
 ): Promise<DraftAsset | null> {
-  const url = publicObjectUrl(deps.publicAssetBaseUrl, key);
-  const response = await (deps.fetchFn ?? fetch)(url);
+  return readPublishedAssetUrl(publicObjectUrl(deps.publicAssetBaseUrl, key), key, deps.fetchFn);
+}
+
+async function readPublishedAssetUrl(
+  url: string,
+  key: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<DraftAsset | null> {
+  const response = await fetchFn(url);
   if (response.status === 404) return null;
   if (!response.ok) {
     throw new Error(`Draft image download failed (${response.status}).`);
@@ -98,6 +115,112 @@ export async function readDraftAssetFromPublicUrl(
     body: Buffer.from(await response.arrayBuffer()),
     contentType: response.headers.get("content-type") || contentTypeForStorageKey(key),
   };
+}
+
+async function recoverPublishedDraftAsset(
+  key: string,
+  deps: {
+    findPublication(key: string): Promise<MediaPublication | null>;
+    findPublishedBaseUrls(clientId: number): Promise<string[]>;
+    readPublishedUrl(url: string, key: string): Promise<DraftAsset | null>;
+  },
+): Promise<DraftAsset | null> {
+  const publication = await deps.findPublication(key);
+  if (publication) {
+    try {
+      const fromPublication = await deps.readPublishedUrl(publication.publishedUrl, key);
+      if (fromPublication) return fromPublication;
+    } catch {
+      // Try the client's other published origins next.
+    }
+  }
+  const clientId = clientIdFromDraftStorageKey(key);
+  if (!clientId) return null;
+  for (const baseUrl of await deps.findPublishedBaseUrls(clientId)) {
+    try {
+      const fromOrigin = await deps.readPublishedUrl(publicObjectUrl(baseUrl, key), key);
+      if (fromOrigin) return fromOrigin;
+    } catch {
+      // Keep looking at remaining preview/publish origins.
+    }
+  }
+  return null;
+}
+
+async function writeRecoveredDraftAsset(key: string, asset: DraftAsset): Promise<void> {
+  const remote = tryUsableR2Configuration();
+  if (remote) {
+    await createR2ObjectStore(remote).putObject({
+      key,
+      body: asset.body,
+      contentType: asset.contentType,
+      cacheControl: RECOVERED_DRAFT_CACHE_CONTROL,
+    });
+  }
+  if (readAssetStorageDriver(deriveRuntimeMode()) === "local") {
+    await getDevelopmentAssetStore().store.putObject({
+      key,
+      body: asset.body,
+      contentType: asset.contentType,
+      cacheControl: RECOVERED_DRAFT_CACHE_CONTROL,
+    });
+  }
+}
+
+/**
+ * Editor GET `/local-assets` uses the same draft store as uploads, then the
+ * website-bucket copy already published for preview/production.
+ */
+export async function readDraftAssetForServing(
+  key: string,
+  deps: {
+    readDraft?: (key: string) => Promise<DraftAsset | null>;
+    findPublication?: (key: string) => Promise<MediaPublication | null>;
+    findPublishedBaseUrls?: (clientId: number) => Promise<string[]>;
+    readPublishedUrl?: (url: string, key: string) => Promise<DraftAsset | null>;
+    writeDraft?: (key: string, asset: DraftAsset) => Promise<void>;
+  } = {},
+): Promise<DraftAsset | null> {
+  const readDraft = deps.readDraft ?? readDraftAssetObject;
+  const draft = await readDraft(key);
+  if (draft || key.startsWith("tmp/")) return draft;
+
+  let recovered: DraftAsset | null = null;
+  try {
+    recovered = await recoverPublishedDraftAsset(key, {
+      findPublication:
+        deps.findPublication ??
+        (async storageKey => {
+          try {
+            return await findLatestMediaPublicationByDraftKey(storageKey);
+          } catch {
+            return null;
+          }
+        }),
+      findPublishedBaseUrls:
+        deps.findPublishedBaseUrls ??
+        (async clientId => {
+          try {
+            return await findPublishedAssetBaseUrls(clientId);
+          } catch {
+            return [];
+          }
+        }),
+      readPublishedUrl:
+        deps.readPublishedUrl ??
+        ((url, storageKey) => readPublishedAssetUrl(url, storageKey)),
+    });
+  } catch {
+    return null;
+  }
+  if (!recovered) return null;
+
+  try {
+    await (deps.writeDraft ?? writeRecoveredDraftAsset)(key, recovered);
+  } catch {
+    // Serving still succeeds when the draft store cannot accept a write-through.
+  }
+  return recovered;
 }
 
 export async function executePublishedMediaSync(

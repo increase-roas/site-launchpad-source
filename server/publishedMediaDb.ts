@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { clientMediaPublications } from "../drizzle/schema";
 import type { MediaPublication } from "../shared/publishedMedia";
 import { getDb } from "./db";
@@ -18,6 +18,19 @@ function toPublication(row: typeof clientMediaPublications.$inferSelect): MediaP
     publishedUrl: row.publishedUrl,
     destinationBucket: row.destinationBucket,
   };
+}
+
+export async function findLatestMediaPublicationByDraftKey(
+  draftStorageKey: string,
+): Promise<MediaPublication | null> {
+  const database = await requireDb();
+  const rows = await database
+    .select()
+    .from(clientMediaPublications)
+    .where(eq(clientMediaPublications.draftStorageKey, draftStorageKey))
+    .orderBy(desc(clientMediaPublications.updatedAt))
+    .limit(1);
+  return rows[0] ? toPublication(rows[0]) : null;
 }
 
 export async function listMediaPublications(

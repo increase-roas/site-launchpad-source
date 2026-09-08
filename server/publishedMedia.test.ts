@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   executePublishedMediaSync,
+  readDraftAssetForServing,
   readDraftAssetFromPublicUrl,
   readDraftAssetObject,
   readDraftForPublishedSync,
@@ -156,6 +157,102 @@ describe("readDraftAssetObject", () => {
     });
     expect(readLaunchpad).toHaveBeenCalledWith("clients/8/astro/nav.webp");
     expect(readPublished).toHaveBeenCalledWith("clients/8/astro/nav.webp");
+  });
+
+  it("serves a published website copy when the Launchpad draft is missing", async () => {
+    const writeDraft = vi.fn(async () => undefined);
+    const readPublishedUrl = vi.fn().mockResolvedValue({
+      body: Buffer.from("published-bytes"),
+      contentType: "image/webp",
+    });
+
+    await expect(
+      readDraftAssetForServing("clients/8-the-hot-tub-store/astro/nav.webp", {
+        readDraft: vi.fn().mockResolvedValue(null),
+        findPublication: vi.fn().mockResolvedValue({
+          mediaItemId: 11,
+          draftStorageKey: "clients/8-the-hot-tub-store/astro/nav.webp",
+          publishedKey: "clients/8-the-hot-tub-store/astro/nav.webp",
+          publishedUrl: "https://pub.example/clients/8-the-hot-tub-store/astro/nav.webp",
+          destinationBucket: "website-hot-tub-store-8-images",
+        }),
+        findPublishedBaseUrls: vi.fn(),
+        readPublishedUrl,
+        writeDraft,
+      }),
+    ).resolves.toEqual({
+      body: Buffer.from("published-bytes"),
+      contentType: "image/webp",
+    });
+    expect(readPublishedUrl).toHaveBeenCalledWith(
+      "https://pub.example/clients/8-the-hot-tub-store/astro/nav.webp",
+      "clients/8-the-hot-tub-store/astro/nav.webp",
+    );
+    expect(writeDraft).toHaveBeenCalledWith(
+      "clients/8-the-hot-tub-store/astro/nav.webp",
+      {
+        body: Buffer.from("published-bytes"),
+        contentType: "image/webp",
+      },
+    );
+  });
+
+  it("serves a published origin when no publication row exists yet", async () => {
+    const readPublishedUrl = vi.fn().mockResolvedValue({
+      body: Buffer.from("preview-bytes"),
+      contentType: "image/webp",
+    });
+
+    await expect(
+      readDraftAssetForServing("clients/8-the-hot-tub-store/astro/product.webp", {
+        readDraft: vi.fn().mockResolvedValue(null),
+        findPublication: vi.fn().mockResolvedValue(null),
+        findPublishedBaseUrls: vi.fn().mockResolvedValue(["https://pub.example"]),
+        readPublishedUrl,
+        writeDraft: vi.fn(),
+      }),
+    ).resolves.toEqual({
+      body: Buffer.from("preview-bytes"),
+      contentType: "image/webp",
+    });
+    expect(readPublishedUrl).toHaveBeenCalledWith(
+      "https://pub.example/clients/8-the-hot-tub-store/astro/product.webp",
+      "clients/8-the-hot-tub-store/astro/product.webp",
+    );
+  });
+
+  it("does not recover staging uploads from the website bucket", async () => {
+    const findPublication = vi.fn();
+    await expect(
+      readDraftAssetForServing("tmp/8/upload.webp", {
+        readDraft: vi.fn().mockResolvedValue(null),
+        findPublication,
+        findPublishedBaseUrls: vi.fn(),
+        readPublishedUrl: vi.fn(),
+        writeDraft: vi.fn(),
+      }),
+    ).resolves.toBeNull();
+    expect(findPublication).not.toHaveBeenCalled();
+  });
+
+  it("keeps an existing Launchpad draft without touching the website bucket", async () => {
+    const findPublication = vi.fn();
+    const writeDraft = vi.fn();
+    await expect(
+      readDraftAssetForServing("clients/8/astro/nav.webp", {
+        readDraft: vi.fn().mockResolvedValue({
+          body: Buffer.from("draft-bytes"),
+          contentType: "image/webp",
+        }),
+        findPublication,
+        writeDraft,
+      }),
+    ).resolves.toEqual({
+      body: Buffer.from("draft-bytes"),
+      contentType: "image/webp",
+    });
+    expect(findPublication).not.toHaveBeenCalled();
+    expect(writeDraft).not.toHaveBeenCalled();
   });
 
   it("downloads production drafts from the public HTTPS asset URL", async () => {

@@ -25,6 +25,13 @@ const LOCAL_ASSET_PATH_PREFIX = "/local-assets/";
 const DRAFT_ASSET_URL_PATTERN =
   /(?:https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?)?\/local-assets\/[A-Za-z0-9._\-\/]+/g;
 
+export function clientIdFromDraftStorageKey(key: string): number | null {
+  const match = key.match(/^clients\/(\d+)(?:-|\/)/);
+  if (!match?.[1]) return null;
+  const clientId = Number(match[1]);
+  return Number.isInteger(clientId) && clientId > 0 ? clientId : null;
+}
+
 export function draftStorageKeyFromUrl(value: string): string | null {
   const trimmed = value.trim();
   if (trimmed.startsWith(LOCAL_ASSET_PATH_PREFIX)) {

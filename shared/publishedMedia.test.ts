@@ -4,6 +4,7 @@ import {
   applyPublishedAssetUrls,
   applyPublishedHomepageUrls,
   applyPublishedLibraryUrls,
+  clientIdFromDraftStorageKey,
   collectUsedDraftMedia,
   describeMissingDraftImage,
   explainPreviewMediaError,
@@ -34,6 +35,12 @@ const alreadyPublic: UsedDraftMedia = {
 };
 
 describe("draft vs public media URLs", () => {
+  it("reads the client id from a draft storage key", () => {
+    expect(clientIdFromDraftStorageKey("clients/8-the-hot-tub-store/astro/nav.webp")).toBe(8);
+    expect(clientIdFromDraftStorageKey("clients/7/library/showroom.webp")).toBe(7);
+    expect(clientIdFromDraftStorageKey("tmp/8/upload.webp")).toBeNull();
+  });
+
   it("treats Launchpad local paths as drafts, not public Worker URLs", () => {
     expect(isDraftLocalAssetUrl("/local-assets/clients/7/nav.webp")).toBe(true);
     expect(isPublicDeployAssetUrl("/local-assets/clients/7/nav.webp")).toBe(false);
