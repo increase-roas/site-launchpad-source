@@ -10,6 +10,12 @@ export type SupportedImageMimeType = (typeof SUPPORTED_IMAGE_MIME_TYPES)[number]
 
 export const MAX_RAW_UPLOAD_BYTES = 20 * 1024 * 1024;
 
+/** File name only. Never a laptop path — Vercel cannot open those. */
+export function draftOriginalFilename(value: string): string {
+  const base = value.trim().replace(/\\/g, "/").split("/").pop() ?? "";
+  return base.replace(/^[.]+/, "").trim().slice(0, 255);
+}
+
 export function isSupportedImageMimeType(value: string): value is SupportedImageMimeType {
   return (SUPPORTED_IMAGE_MIME_TYPES as readonly string[]).includes(value);
 }

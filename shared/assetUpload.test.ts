@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   MAX_RAW_UPLOAD_BYTES,
+  draftOriginalFilename,
   imageUploadRejectionMessage,
   photosAddedToLibraryToast,
 } from "./assetUpload";
@@ -31,6 +32,20 @@ describe("imageUploadRejectionMessage", () => {
     expect(
       imageUploadRejectionMessage({ type: "image/webp", size: 12 }),
     ).toBeNull();
+  });
+});
+
+describe("draftOriginalFilename", () => {
+  it("keeps a normal file name and drops laptop paths", () => {
+    expect(draftOriginalFilename("hero.png")).toBe("hero.png");
+    expect(draftOriginalFilename("C:\\Users\\sky\\Downloads\\hero.png")).toBe("hero.png");
+    expect(draftOriginalFilename("C:\\fakepath\\spa photo.png")).toBe("spa photo.png");
+    expect(draftOriginalFilename("/Users/sky/Pictures/hero.png")).toBe("hero.png");
+  });
+
+  it("rejects empty or path-only values", () => {
+    expect(draftOriginalFilename("   ")).toBe("");
+    expect(draftOriginalFilename("C:\\Users\\sky\\")).toBe("");
   });
 });
 

@@ -47,10 +47,12 @@ export async function readDraftAssetObject(
   } = {},
 ): Promise<DraftAsset | null> {
   const driver = deps.driver ?? readAssetStorageDriver(deriveRuntimeMode());
+  const readLocal = deps.readLocal ?? readLocalDraftAsset;
+  const readRemote = deps.readRemote ?? readRemoteDraftAsset;
   if (driver === "local") {
-    return (deps.readLocal ?? readLocalDraftAsset)(key);
+    return (await readLocal(key)) ?? readRemote(key);
   }
-  return (deps.readRemote ?? readRemoteDraftAsset)(key);
+  return readRemote(key);
 }
 
 async function readLocalDraftAsset(key: string): Promise<DraftAsset | null> {

@@ -1,4 +1,5 @@
 import {
+  draftOriginalFilename,
   isSupportedImageMimeType,
   imageUploadRejectionMessage,
   type AssetKind,
@@ -45,7 +46,7 @@ export async function uploadAssetDirectly<Result>(
   }
   const session = await dependencies.requestUpload({
     ...target,
-    originalFilename: file.name,
+    originalFilename: draftOriginalFilename(file.name),
     mimeType: file.type,
     sizeBytes: file.size,
   });

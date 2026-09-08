@@ -9,6 +9,7 @@ import type {
 import {
   ASSET_KIND_VALUES,
   MAX_RAW_UPLOAD_BYTES,
+  draftOriginalFilename,
   isSupportedImageMimeType,
   type AssetKind,
   type SupportedImageMimeType,
@@ -39,7 +40,7 @@ import {
   type ProcessedImage,
 } from "./imageProcessing";
 import { assetUploadPersistence } from "./assetUploadDb";
-import { deriveRuntimeMode, readAssetStorageDriver } from "./_core/env";
+import { deriveRuntimeMode, readAssetStorageDriver, tryUsableR2Configuration } from "./_core/env";
 import { getDevelopmentAssetStore } from "./developmentAssetStore";
 import { DEFAULT_LOCAL_ASSET_URL_PREFIX } from "./localAssetStore";
 import {
@@ -183,8 +184,8 @@ function validateRequest(input: RequestAssetUploadInput): {
   if (!isValidSlot(input.assetKind, input.slot)) {
     throw new AssetUploadError("Choose a valid image slot for this asset type.", "BAD_REQUEST");
   }
-  const originalFilename = input.originalFilename.trim();
-  if (!originalFilename || originalFilename.length > 500) {
+  const originalFilename = draftOriginalFilename(input.originalFilename);
+  if (!originalFilename) {
     throw new AssetUploadError("Choose an image with a valid filename.", "BAD_REQUEST");
   }
   const mimeType = input.mimeType.trim().toLowerCase();
@@ -473,12 +474,35 @@ export function createAssetUploadService(dependencies: AssetUploadServiceDepende
 
 let defaultService: ReturnType<typeof createAssetUploadService> | undefined;
 
+/** Disk is the local editor cache. Launchpad R2 is the shared draft store. */
+export function mirrorPermanentPuts(
+  primary: R2ObjectStore,
+  replica: R2ObjectStore,
+): R2ObjectStore {
+  return {
+    ...primary,
+    async putObject(input) {
+      await primary.putObject(input);
+      if (!input.key.startsWith("tmp/")) {
+        await replica.putObject(input);
+      }
+    },
+  };
+}
+
 function resolveObjectStorage(): { store: R2ObjectStore; publicAssetBaseUrl: string } {
-  // Launchpad always displays drafts from itself (`/local-assets/...`).
-  // Website R2 copies happen only on preview/publish, not on upload.
+  // Display URL is always `/local-assets/...` (Launchpad serves it).
+  // When real R2 exists, that bucket is the shared draft store (Vercel + local).
+  // Disk is only a cache. Website R2 is filled on preview/publish, not here.
   if (readAssetStorageDriver(deriveRuntimeMode()) === "local") {
     const local = getDevelopmentAssetStore();
-    return { store: local.store, publicAssetBaseUrl: DEFAULT_LOCAL_ASSET_URL_PREFIX };
+    const remote = tryUsableR2Configuration();
+    return {
+      store: remote
+        ? mirrorPermanentPuts(createR2ObjectStore(remote), local.store)
+        : local.store,
+      publicAssetBaseUrl: DEFAULT_LOCAL_ASSET_URL_PREFIX,
+    };
   }
   return {
     store: createR2ObjectStore(readR2Configuration()),

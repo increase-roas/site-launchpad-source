@@ -71,7 +71,8 @@ export async function createApp(
   app.use(
     createAssetGetRoutes(async key => {
       if (storageDriver === "local") {
-        return getDevelopmentAssetStore().readObjectForServing(key);
+        const local = await getDevelopmentAssetStore().readObjectForServing(key);
+        if (local) return local;
       }
       try {
         return await readR2ObjectForServing(key);

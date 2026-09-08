@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   MAX_RAW_UPLOAD_BYTES,
   createAssetUploadService,
+  mirrorPermanentPuts,
   type AssetUploadServiceDependencies,
   type AssetUploadSessionRecord,
 } from "./assetUploads";
@@ -143,6 +144,22 @@ describe("asset upload requests", () => {
 
     expect(deps.createUploadSession).toHaveBeenCalledWith(
       expect.objectContaining({ assetKind: "library", slot: "library" }),
+    );
+  });
+
+  it("stores only the file name, never a laptop path", async () => {
+    const deps = makeDependencies();
+    await createAssetUploadService(deps).requestUpload({
+      clientId: 7,
+      assetKind: "client",
+      slot: "hero",
+      originalFilename: "C:\\Users\\sky\\Downloads\\spa photo.png",
+      mimeType: "image/png",
+      sizeBytes: 1024,
+    });
+
+    expect(deps.createUploadSession).toHaveBeenCalledWith(
+      expect.objectContaining({ originalFilename: "spa photo.png" }),
     );
   });
 
@@ -414,5 +431,33 @@ describe("asset upload completion", () => {
       asset: null,
       mediaItem: expect.objectContaining({ alt: "spa photo" }),
     }));
+  });
+});
+
+describe("mirrorPermanentPuts", () => {
+  it("writes permanent objects to the replica and leaves temp uploads local", async () => {
+    const primaryPut = vi.fn(async () => undefined);
+    const replicaPut = vi.fn(async () => undefined);
+    const store = mirrorPermanentPuts(
+      { putObject: primaryPut } as never,
+      { putObject: replicaPut } as never,
+    );
+
+    await store.putObject({
+      key: "tmp/7/upload",
+      body: Buffer.from("temp"),
+      contentType: "image/webp",
+      cacheControl: "no-store",
+    });
+    await store.putObject({
+      key: "clients/8/astro/nav.webp",
+      body: Buffer.from("nav"),
+      contentType: "image/webp",
+      cacheControl: "public",
+    });
+
+    expect(primaryPut).toHaveBeenCalledTimes(2);
+    expect(replicaPut).toHaveBeenCalledTimes(1);
+    expect(replicaPut.mock.calls[0]?.[0].key).toBe("clients/8/astro/nav.webp");
   });
 });

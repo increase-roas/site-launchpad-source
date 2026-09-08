@@ -1,3 +1,5 @@
+import { draftOriginalFilename } from "./assetUpload";
+
 export const MEDIA_ITEM_ALT_MAX = 240;
 export const MEDIA_ITEM_DESCRIPTION_MAX = 2000;
 export const LIBRARY_UPLOAD_SLOT = "library" as const;
@@ -28,7 +30,7 @@ export type GalleryImage = {
 };
 
 export function defaultAltFromFilename(filename: string): string {
-  return filename
+  return draftOriginalFilename(filename)
     .replace(/\.[^.]+$/, "")
     .replace(/[-_]+/g, " ")
     .replace(/\s+/g, " ")

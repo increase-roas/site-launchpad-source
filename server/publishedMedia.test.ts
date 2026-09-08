@@ -118,6 +118,25 @@ describe("readDraftAssetObject", () => {
     expect(readLocal).not.toHaveBeenCalled();
   });
 
+  it("falls back to the shared draft store when the local file is missing", async () => {
+    const readLocal = vi.fn().mockResolvedValue(null);
+    const readRemote = vi.fn().mockResolvedValue({
+      body: Buffer.from("r2-bytes"),
+      contentType: "image/webp",
+    });
+
+    await expect(
+      readDraftAssetObject("clients/8/astro/nav.webp", {
+        driver: "local",
+        readLocal,
+        readRemote,
+      }),
+    ).resolves.toEqual({
+      body: Buffer.from("r2-bytes"),
+      contentType: "image/webp",
+    });
+  });
+
   it("downloads production drafts from the public HTTPS asset URL", async () => {
     const fetchFn = vi.fn(async (url: string) => {
       expect(url).toBe("https://assets.example.com/clients/7/astro/nav.webp");

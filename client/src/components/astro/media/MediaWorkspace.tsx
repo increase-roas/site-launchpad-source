@@ -6,6 +6,7 @@ import { validateImageMetadata } from "@shared/mediaSpecifications";
 import { ImagePlus, Loader2, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MediaCopyFields } from "./MediaCopyFields";
+import { MediaDraftImage } from "./MediaDraftImage";
 import { MediaSlotDetail } from "./MediaSlotDetail";
 import {
   MEDIA_FILTER_LABELS,
@@ -233,7 +234,7 @@ function BrowseCard({
     >
       <span className="relative block aspect-[4/3] bg-muted">
         {imageUrl ? (
-          <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+          <MediaDraftImage src={imageUrl} alt="" className="h-full w-full object-cover" />
         ) : (
           <span className="grid h-full place-items-center text-[10px] font-semibold text-muted-foreground">
             {busy ? "…" : "Empty"}
@@ -289,7 +290,7 @@ function LibraryInspector({
         </span>
       </div>
       <div className="mx-3 overflow-hidden rounded-lg border border-border bg-muted">
-        <img
+        <MediaDraftImage
           src={item.storageUrl}
           alt={item.alt || item.filename}
           className="mx-auto max-h-48 w-full object-contain p-2"

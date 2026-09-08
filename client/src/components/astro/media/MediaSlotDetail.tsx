@@ -5,6 +5,7 @@ import { validateImageMetadata } from "@shared/mediaSpecifications";
 import { ArrowRight, Camera, ImagePlus, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { MediaCopyFields } from "./MediaCopyFields";
+import { MediaDraftImage } from "./MediaDraftImage";
 import { MEDIA_GROUP_DESCRIPTIONS, type ResolvedMediaSlot } from "./mediaSlots";
 
 function readImageDimensions(file: File): Promise<{ width: number; height: number } | null> {
@@ -139,7 +140,7 @@ export function MediaSlotDetail({
         }}
       >
         {slot.image ? (
-          <img
+          <MediaDraftImage
             src={slot.image.storageUrl}
             alt={`${slot.label} preview`}
             className="mx-auto max-h-48 w-full object-contain p-2"
@@ -241,7 +242,7 @@ export function MediaSlotDetail({
                 className="shrink-0 overflow-hidden rounded-md border border-border"
                 title={item.alt || item.filename}
               >
-                <img
+                <MediaDraftImage
                   src={item.storageUrl}
                   alt={item.alt || item.filename}
                   className="h-14 w-20 object-cover"
