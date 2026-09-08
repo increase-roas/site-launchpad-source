@@ -24,6 +24,10 @@ import { contentTypeForStorageKey } from "./localAssetStore";
 import { findPublishedAssetBaseUrls } from "./publishedAssetOrigins";
 import { createCloudflareApiClient } from "./publisher/cloudflareApi";
 import { getCloudflarePublisherEnvironment } from "./publisher/publisherEnv";
+import {
+  readPublisherDraftObject,
+  writePublisherDraftObject,
+} from "./publisherDraftStore";
 import { createR2ObjectStore, readR2ObjectForServing } from "./r2";
 import {
   findLatestMediaPublicationByDraftKey,
@@ -75,10 +79,12 @@ async function readLocalDraftAsset(key: string): Promise<DraftAsset | null> {
 
 async function readRemoteDraftAsset(key: string): Promise<DraftAsset | null> {
   try {
-    return await readR2ObjectForServing(key);
+    const fromLaunchpad = await readR2ObjectForServing(key);
+    if (fromLaunchpad) return fromLaunchpad;
   } catch {
-    return null;
+    // Launchpad S3 R2 is optional when publisher draft storage is available.
   }
+  return readPublisherDraftObject(key);
 }
 
 export async function readDraftForPublishedSync(
@@ -165,6 +171,11 @@ async function writeRecoveredDraftAsset(key: string, asset: DraftAsset): Promise
       cacheControl: RECOVERED_DRAFT_CACHE_CONTROL,
     });
   }
+  await writePublisherDraftObject({
+    key,
+    body: asset.body,
+    contentType: asset.contentType,
+  });
 }
 
 /**

@@ -43,6 +43,7 @@ import { assetUploadPersistence } from "./assetUploadDb";
 import { deriveRuntimeMode, readAssetStorageDriver, tryUsableR2Configuration } from "./_core/env";
 import { getDevelopmentAssetStore } from "./developmentAssetStore";
 import { DEFAULT_LOCAL_ASSET_URL_PREFIX } from "./localAssetStore";
+import { tryCreatePublisherDraftObjectStore } from "./publisherDraftStore";
 import {
   MAX_PRESIGN_EXPIRY_SECONDS,
   createR2ObjectStore,
@@ -490,22 +491,28 @@ export function mirrorPermanentPuts(
   };
 }
 
+function withSharedDraftReplica(store: R2ObjectStore): R2ObjectStore {
+  const publisher = tryCreatePublisherDraftObjectStore();
+  return publisher ? mirrorPermanentPuts(store, publisher) : store;
+}
+
 function resolveObjectStorage(): { store: R2ObjectStore; publicAssetBaseUrl: string } {
   // Display URL is always `/local-assets/...` (Launchpad serves it).
-  // When real R2 exists, that bucket is the shared draft store (Vercel + local).
-  // Disk is only a cache. Website R2 is filled on preview/publish, not here.
+  // Permanent uploads also copy into the publisher draft bucket so Vercel can
+  // read them before preview/publish fills the website bucket.
   if (readAssetStorageDriver(deriveRuntimeMode()) === "local") {
     const local = getDevelopmentAssetStore();
     const remote = tryUsableR2Configuration();
+    const primary = remote
+      ? mirrorPermanentPuts(createR2ObjectStore(remote), local.store)
+      : local.store;
     return {
-      store: remote
-        ? mirrorPermanentPuts(createR2ObjectStore(remote), local.store)
-        : local.store,
+      store: withSharedDraftReplica(primary),
       publicAssetBaseUrl: DEFAULT_LOCAL_ASSET_URL_PREFIX,
     };
   }
   return {
-    store: createR2ObjectStore(readR2Configuration()),
+    store: withSharedDraftReplica(createR2ObjectStore(readR2Configuration())),
     publicAssetBaseUrl: DEFAULT_LOCAL_ASSET_URL_PREFIX,
   };
 }
