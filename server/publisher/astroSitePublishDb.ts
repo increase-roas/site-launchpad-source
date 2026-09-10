@@ -6,8 +6,10 @@ import {
   type AstroSitePublish,
   type InsertAstroSitePublish,
 } from "../../drizzle/schema";
-import { astroSitePublishContractConflicts } from "../../shared/astroSitePublish";
-import { isWorkersDevUrl } from "../../shared/liveSiteHostname";
+import {
+  astroSitePublishContractConflicts,
+  astroSitePublishStartPatch,
+} from "../../shared/astroSitePublish";
 import { getDb } from "../db";
 import type {
   AstroSitePublishStepValues,
@@ -65,29 +67,17 @@ async function startWithDb(
       "Existing website publish job uses a different template contract; manual attention is required.",
     );
   }
-  const refreshTemplateRepo = job.templateRepo !== input.templateRepo;
-  const reopenForLiveDomain =
-    job.status === "published" && isWorkersDevUrl(job.liveUrl);
-  if (refreshTemplateRepo || reopenForLiveDomain) {
-    const reopened = await db
-      .update(astroSitePublishes)
-      .set({
-        ...(refreshTemplateRepo ? { templateRepo: input.templateRepo } : {}),
-        ...(reopenForLiveDomain
-          ? {
-              step: "attach_custom_domain" as const,
-              status: "pending" as const,
-              completedAt: null,
-              lastError: null,
-            }
-          : {}),
-        updatedAt: input.now,
-      })
-      .where(eq(astroSitePublishes.id, job.id))
-      .returning();
-    return reopened[0] ?? job;
-  }
-  return job;
+  const patch = astroSitePublishStartPatch(job, input);
+  if (!patch) return job;
+  const reopened = await db
+    .update(astroSitePublishes)
+    .set({
+      ...patch,
+      updatedAt: input.now,
+    })
+    .where(eq(astroSitePublishes.id, job.id))
+    .returning();
+  return reopened[0] ?? job;
 }
 
 function setStepValues(

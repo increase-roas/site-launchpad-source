@@ -131,6 +131,7 @@ export interface AstroSitePublishExternal {
   }): Promise<void>;
   commitSource(input: {
     publishJobId: string;
+    attemptCount: number;
     repositoryFullName: string;
     defaultBranch: string;
     workerName: string;
@@ -356,6 +357,7 @@ async function execute(
       const result = await bounded(Math.max(deps.externalTimeoutMs, 60_000), signal =>
         deps.external.commitSource({
           publishJobId: job.id,
+          attemptCount: job.attemptCount,
           repositoryFullName: requireValue(job.repositoryFullName, "Published repository is missing."),
           defaultBranch: requireValue(job.defaultBranch, "Published repository branch is missing."),
           workerName: job.workerName,
@@ -614,7 +616,7 @@ function createRuntimeExternal(): AstroSitePublishExternal {
     },
     async commitSource(input) {
       const repository = splitFullName(input.repositoryFullName);
-      const message = `chore: configure Astro website ${input.publishJobId} ${input.d1DatabaseId}`;
+      const message = `chore: configure Astro website ${input.publishJobId} ${input.d1DatabaseId} attempt ${input.attemptCount}`;
       return commitAstroSiteGeneratedSource({
         github,
         ...repository,

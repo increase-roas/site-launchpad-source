@@ -3,6 +3,7 @@ import {
   astroSitePublishContractConflicts,
   astroSitePublishProgress,
   astroSitePublishResourceNames,
+  astroSitePublishStartPatch,
 } from "./astroSitePublish";
 
 describe("Astro site publish resource names", () => {
@@ -33,6 +34,49 @@ describe("Astro site publish resource names", () => {
       completed: 9,
       total: 9,
     });
+  });
+});
+
+describe("Astro site publish start", () => {
+  const job = {
+    status: "published" as const,
+    step: "published" as const,
+    liveUrl: "https://www.thehottubstore.com",
+    templateRepo: "increase-roas/32-htl-website-template-astrobuild",
+  };
+
+  it("reopens a live custom-domain site so Publish again can move phases", () => {
+    expect(
+      astroSitePublishStartPatch(job, {
+        templateRepo: job.templateRepo,
+      }),
+    ).toMatchObject({
+      step: "create_repository",
+      status: "pending",
+      commitSha: null,
+      dispatchRequestedAt: null,
+    });
+  });
+
+  it("still only reconnects a workers.dev site to its live domain", () => {
+    expect(
+      astroSitePublishStartPatch(
+        { ...job, liveUrl: "https://website-hot-tub-store-5.increase-roas.workers.dev" },
+        { templateRepo: job.templateRepo },
+      ),
+    ).toMatchObject({
+      step: "attach_custom_domain",
+      status: "pending",
+    });
+  });
+
+  it("leaves an in-flight publish alone", () => {
+    expect(
+      astroSitePublishStartPatch(
+        { ...job, status: "pending", step: "commit_source", liveUrl: null },
+        { templateRepo: job.templateRepo },
+      ),
+    ).toBeNull();
   });
 });
 

@@ -1,3 +1,5 @@
+import { isWorkersDevUrl } from "./liveSiteHostname";
+
 export const astroSitePublishStepValues = [
   "create_repository",
   "ensure_d1_database",
@@ -93,6 +95,65 @@ export function astroSitePublishContractConflicts(
   if (job.templateKey !== expected.templateKey) return true;
   if (job.contractVersion !== expected.contractVersion) return true;
   return templateRepoName(job.templateRepo) !== templateRepoName(expected.templateRepo);
+}
+
+export type AstroSitePublishStartState = {
+  status: AstroSitePublishStatus;
+  step: AstroSitePublishStep;
+  liveUrl: string | null;
+  templateRepo: string;
+};
+
+export type AstroSitePublishStartPatch = {
+  templateRepo?: string;
+  step: AstroSitePublishStep;
+  status: "pending";
+  completedAt: null;
+  lastError: null;
+  leaseToken?: null;
+  leaseUntil?: null;
+  commitSha?: null;
+  dispatchRequestedAt?: null;
+  workflowRunId?: null;
+  workflowStatus?: null;
+  workflowCheckedAt?: null;
+  runtimeSecretsPatchedAt?: null;
+};
+
+/** Restart a finished live site, or only reopen workers.dev to attach a domain. */
+export function astroSitePublishStartPatch(
+  job: AstroSitePublishStartState,
+  input: { templateRepo: string },
+): AstroSitePublishStartPatch | null {
+  const refreshTemplateRepo = job.templateRepo !== input.templateRepo;
+  const connectLiveDomain =
+    job.status === "published" && isWorkersDevUrl(job.liveUrl);
+  const republish = job.status === "published" && !connectLiveDomain;
+  if (!refreshTemplateRepo && !connectLiveDomain && !republish) return null;
+  if (connectLiveDomain) {
+    return {
+      ...(refreshTemplateRepo ? { templateRepo: input.templateRepo } : {}),
+      step: "attach_custom_domain",
+      status: "pending",
+      completedAt: null,
+      lastError: null,
+    };
+  }
+  return {
+    ...(refreshTemplateRepo ? { templateRepo: input.templateRepo } : {}),
+    step: "create_repository",
+    status: "pending",
+    completedAt: null,
+    lastError: null,
+    leaseToken: null,
+    leaseUntil: null,
+    commitSha: null,
+    dispatchRequestedAt: null,
+    workflowRunId: null,
+    workflowStatus: null,
+    workflowCheckedAt: null,
+    runtimeSecretsPatchedAt: null,
+  };
 }
 
 export function astroSitePublishProgress(step: AstroSitePublishStep): {
