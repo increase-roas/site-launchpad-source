@@ -59,7 +59,7 @@ describe("GitHub publisher client", () => {
     vi.useRealTimers();
   });
 
-  it("reads the exact reviewed template branch head", async () => {
+  it("reads the live template main branch head", async () => {
     const { fetchFn } = createMockFetch([
       jsonResponse({ object: { sha: PERSISTED_SOURCE_SHA } }),
     ]);
@@ -75,6 +75,34 @@ describe("GitHub publisher client", () => {
         signal: abortSignal(),
       })
     ).resolves.toBe(PERSISTED_SOURCE_SHA);
+  });
+
+  it("lists blob paths from the template git tree", async () => {
+    const { fetchFn, requests } = createMockFetch([
+      jsonResponse({
+        tree: [
+          { type: "tree", path: "src" },
+          { type: "blob", path: "src/styles/theme.css" },
+          { type: "blob", path: "src/pages/index.astro" },
+        ],
+      }),
+    ]);
+    const client = createGitHubApiClient({
+      token: "opaque-test-credential",
+      fetchFn,
+    });
+
+    await expect(
+      client.listRepositoryBlobs({
+        owner: "increase-roas",
+        repository: "32-htl-website-template-astrobuild",
+        ref: "main",
+        signal: abortSignal(),
+      }),
+    ).resolves.toEqual(["src/styles/theme.css", "src/pages/index.astro"]);
+    expect(requests[0]?.url).toBe(
+      "https://api.github.com/repos/increase-roas/32-htl-website-template-astrobuild/git/trees/main?recursive=1",
+    );
   });
 
   it("generates a public repository from the configured template", async () => {

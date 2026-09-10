@@ -111,6 +111,12 @@ export type GitHubApiClient = {
     branch: string;
     signal: AbortSignal;
   }): Promise<string>;
+  listRepositoryBlobs(input: {
+    owner: string;
+    repository: string;
+    ref: string;
+    signal: AbortSignal;
+  }): Promise<string[]>;
   generatePublicRepository(
     input: GeneratePublicRepositoryInput
   ): Promise<GeneratedRepository>;
@@ -654,6 +660,26 @@ export function createGitHubApiClient(options: {
         input.signal
       );
       return parseObjectSha(response, "branch head lookup");
+    },
+    async listRepositoryBlobs(input) {
+      const response = await request(
+        "repository tree lookup",
+        `/repos/${encoded(input.owner)}/${encoded(input.repository)}/git/trees/${encoded(input.ref)}?recursive=1`,
+        { method: "GET" },
+        input.signal
+      );
+      const record = requireRecord(response, "repository tree lookup");
+      const tree = record.tree;
+      if (!Array.isArray(tree)) {
+        throw new GitHubApiError("repository tree lookup response validation");
+      }
+      const paths: string[] = [];
+      for (const value of tree) {
+        const item = requireRecord(value, "repository tree lookup");
+        if (item.type !== "blob") continue;
+        paths.push(requireString(item, "path", "repository tree lookup"));
+      }
+      return paths;
     },
     async generatePublicRepository(input) {
       const response = await request(

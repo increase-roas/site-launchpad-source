@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AstroSitePreviewJob, AstroSitePreviewDependencies } from "./previewAstroSite";
-import { advanceAstroSitePreview } from "./previewAstroSite";
+import { advanceAstroSitePreview, startAstroSitePreviewJob, waitForPreviewUrl } from "./previewAstroSite";
 import { protectPreviewMaterialSnapshot } from "./previewMaterial";
 
 function jobFixture(): AstroSitePreviewJob {
@@ -74,6 +74,7 @@ function inMemoryDependencies(initial: AstroSitePreviewJob) {
     externalTimeoutMs: 5_000,
     currentRevision: async () => 28,
     external: {
+      resolveTemplateSha: unused,
       ensureRepository: unused,
       ensureD1Database: unused,
       ensureR2Bucket: unused,
@@ -146,6 +147,35 @@ function inMemoryDependencies(initial: AstroSitePreviewJob) {
 }
 
 describe("Astro website preview pipeline", () => {
+  it("records the live template main SHA instead of a Launchpad pin", async () => {
+    const harness = inMemoryDependencies(jobFixture());
+    const liveSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    harness.deps.external.resolveTemplateSha = vi.fn().mockResolvedValue(liveSha);
+    harness.deps.store.start = vi.fn().mockResolvedValue({
+      ...jobFixture(),
+      templateSha: liveSha,
+    });
+
+    await startAstroSitePreviewJob(
+      {
+        clientId: 5,
+        clientShortName: "abc-hot-tubs",
+        snapshotEncrypted: jobFixture().materialSnapshotEncrypted,
+        clientRevision: 27,
+        warnings: [],
+      },
+      harness.deps,
+    );
+
+    expect(harness.deps.external.resolveTemplateSha).toHaveBeenCalled();
+    expect(harness.deps.store.start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateSha: liveSha,
+        templateRepo: "increase-roas/32-htl-website-template-astrobuild",
+      }),
+    );
+  });
+
   it("commits the frozen snapshot instead of live client edits", async () => {
     const harness = inMemoryDependencies(jobFixture());
     const ensureKvNamespace = vi.fn().mockResolvedValue({
@@ -162,6 +192,7 @@ describe("Astro website preview pipeline", () => {
       expect.objectContaining({
         generatedConfig: 'export const rawClientConfig = {"identity":{"name":"Frozen ABC"}};',
         clientRevision: 27,
+        templateSha: "2ced3065460a31a497df96b214e2a0f0ace27f3d",
         workerName: "website-abc-hot-tubs-5-preview",
         sessionKvNamespaceId: "8d78d85f7f7a4e07bccce07a141ec6ac",
       }),
@@ -257,5 +288,18 @@ describe("Astro website preview pipeline", () => {
       step: "ready",
       previewUrl: "https://website-abc-hot-tubs-5-preview.increase-roas.workers.dev",
     });
+  });
+
+  it("retries a workers.dev health check that fails right after deploy", async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 530 }))
+      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+    await waitForPreviewUrl(
+      "https://website-abc-hot-tubs-5-preview.increase-roas.workers.dev",
+      new AbortController().signal,
+      fetchImpl,
+      { delayMs: 0 },
+    );
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 });

@@ -353,7 +353,7 @@ async function execute(
           signal,
         }),
       );
-      const result = await bounded(deps.externalTimeoutMs, signal =>
+      const result = await bounded(Math.max(deps.externalTimeoutMs, 60_000), signal =>
         deps.external.commitSource({
           publishJobId: job.id,
           repositoryFullName: requireValue(job.repositoryFullName, "Published repository is missing."),

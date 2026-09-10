@@ -2,16 +2,6 @@ import { z } from "zod";
 import astroSiteManifestJson from "../server/templates/astro-site/launchpad.template.json";
 
 export const ASTRO_SITE_TEMPLATE_KEY = "htl-astro-website" as const;
-export const ASTRO_SITE_APPROVED_SOURCE_SHA =
-  "f6ead330e317909638e47ddfaffa45318670ebb8" as const;
-
-/** New repos always copy the live template main. A newer HEAD is never a blocker. */
-export function templateHeadBlocksRepositoryCreate(
-  _templateHead: string,
-  _approvedSha: string = ASTRO_SITE_APPROVED_SOURCE_SHA,
-): boolean {
-  return false;
-}
 
 export const astroSiteManifestSchema = z.strictObject({
   schemaVersion: z.literal(1),

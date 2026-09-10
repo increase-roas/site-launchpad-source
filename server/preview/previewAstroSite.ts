@@ -5,7 +5,6 @@ import {
   PREVIEW_ERROR_MESSAGES,
   astroSitePreviewProgress,
   astroSitePreviewResourceNames,
-  pinnedPreviewTemplateSha,
   previewIsStale,
   type AstroSitePreviewErrorCode,
   type AstroSitePreviewStatusView,
@@ -135,6 +134,7 @@ type WorkflowResult = {
 };
 
 export interface AstroSitePreviewExternal {
+  resolveTemplateSha(input: { signal: AbortSignal }): Promise<string>;
   ensureRepository(input: {
     externalSiteId: string;
     repositoryName: string;
@@ -155,6 +155,7 @@ export interface AstroSitePreviewExternal {
     clientRevision: number;
     repositoryFullName: string;
     defaultBranch: string;
+    templateSha: string;
     workerName: string;
     d1DatabaseName: string;
     d1DatabaseId: string;
@@ -403,13 +404,14 @@ async function execute(
           signal,
         }),
       );
-      const result = await bounded(deps.externalTimeoutMs, signal =>
+      const result = await bounded(Math.max(deps.externalTimeoutMs, 60_000), signal =>
         deps.external.commitSource({
           publishJobId: job.id,
           clientId: job.clientId,
           clientRevision: material.clientRevision,
           repositoryFullName: requireValue(job.repositoryFullName, "Preview repository is missing."),
           defaultBranch: requireValue(job.defaultBranch, "Preview repository branch is missing."),
+          templateSha: job.templateSha,
           workerName: job.workerName,
           d1DatabaseName: job.d1DatabaseName,
           d1DatabaseId: requireValue(job.d1DatabaseId, "Preview D1 database is missing."),
@@ -565,7 +567,9 @@ export async function startAstroSitePreviewJob(
     templateKey: ASTRO_SITE_MANIFEST.templateKey,
     templateRepo: ASTRO_SITE_MANIFEST.repo,
     contractVersion: ASTRO_SITE_MANIFEST.contractVersion,
-    templateSha: pinnedPreviewTemplateSha(),
+    templateSha: await deps.external.resolveTemplateSha({
+      signal: AbortSignal.timeout(deps.externalTimeoutMs),
+    }),
     clientRevision: input.clientRevision,
     materialSnapshotEncrypted: input.snapshotEncrypted,
     warnings: input.warnings,
@@ -608,6 +612,43 @@ export async function advanceAstroSitePreview(
   }
 }
 
+const PREVIEW_HEALTHCHECK_ATTEMPTS = 4;
+const PREVIEW_HEALTHCHECK_DELAY_MS = 1_500;
+
+async function waitMs(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) throw signal.reason instanceof Error ? signal.reason : new Error("Aborted");
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal.reason instanceof Error ? signal.reason : new Error("Aborted"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+/** First workers.dev requests after a new deploy can 4xx/5xx before the subdomain is live. */
+export async function waitForPreviewUrl(
+  url: string,
+  signal: AbortSignal,
+  fetchImpl: typeof fetch = fetch,
+  options?: { attempts?: number; delayMs?: number },
+): Promise<void> {
+  const attempts = options?.attempts ?? PREVIEW_HEALTHCHECK_ATTEMPTS;
+  const delayMs = options?.delayMs ?? PREVIEW_HEALTHCHECK_DELAY_MS;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const response = await fetchImpl(url, { redirect: "manual", signal });
+    if (response.status >= 200 && response.status < 400) return;
+    if (attempt === attempts) {
+      throw new Error(PREVIEW_ERROR_MESSAGES.PREVIEW_HEALTHCHECK_FAILED);
+    }
+    await waitMs(delayMs, signal);
+  }
+}
+
 function createRuntimeExternal(): AstroSitePreviewExternal {
   const githubEnvironment = getGitHubPublisherEnvironment();
   const cloudflareEnvironment = getCloudflarePublisherEnvironment();
@@ -616,6 +657,13 @@ function createRuntimeExternal(): AstroSitePreviewExternal {
   const template = splitFullName(ASTRO_SITE_MANIFEST.repo);
 
   return {
+    async resolveTemplateSha(input) {
+      return github.getBranchHeadSha({
+        ...template,
+        branch: ASTRO_SITE_MANIFEST.defaultBranch,
+        signal: input.signal,
+      });
+    },
     async ensureRepository(input) {
       const repository = await reconcilePublicTemplateRepository({
         github,
@@ -674,6 +722,7 @@ function createRuntimeExternal(): AstroSitePreviewExternal {
           r2BucketName: input.r2BucketName,
           sessionKvNamespaceId: input.sessionKvNamespaceId,
         },
+        templateRef: input.templateSha,
         signal: input.signal,
       });
     },
@@ -722,13 +771,7 @@ function createRuntimeExternal(): AstroSitePreviewExternal {
       return { liveUrl: status.url };
     },
     async verifyPreviewUrl(input) {
-      const response = await fetch(input.url, {
-        redirect: "manual",
-        signal: input.signal,
-      });
-      if (response.status < 200 || response.status >= 400) {
-        throw new Error(PREVIEW_ERROR_MESSAGES.PREVIEW_HEALTHCHECK_FAILED);
-      }
+      await waitForPreviewUrl(input.url, input.signal);
     },
   };
 }

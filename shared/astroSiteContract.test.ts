@@ -1,23 +1,17 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
-  ASTRO_SITE_APPROVED_SOURCE_SHA,
   ASTRO_SITE_CONDITIONAL_RUNTIME_SECRETS,
   ASTRO_SITE_MANIFEST,
   ASTRO_SITE_REQUIRED_RUNTIME_SECRETS,
   astroSiteManifestSchema,
   getAstroSiteRuntimeSecrets,
-  templateHeadBlocksRepositoryCreate,
 } from "./astroSiteContract";
 
 describe("Astro website template contract", () => {
-  it("lets new repositories follow the live template main commit", () => {
-    expect(
-      templateHeadBlocksRepositoryCreate(
-        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        ASTRO_SITE_APPROVED_SOURCE_SHA,
-      ),
-    ).toBe(false);
+  it("follows the live template main branch instead of a pinned SHA", () => {
+    expect(ASTRO_SITE_MANIFEST.defaultBranch).toBe("main");
+    expect(ASTRO_SITE_MANIFEST).not.toHaveProperty("approvedSourceSha");
   });
   it("models the exact canonical repository, config, workflow, and bindings", () => {
     const raw = JSON.parse(

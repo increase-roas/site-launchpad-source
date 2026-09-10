@@ -1,5 +1,3 @@
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
 import { ASTRO_SITE_MANIFEST } from "../../shared/astroSiteContract";
 import {
   renderAstroSiteWranglerToml,
@@ -8,16 +6,28 @@ import {
 import { patchAstroSiteWorkerRuntimeFiles } from "./astroSiteWorkerRuntimePatch";
 import type { GitHubApiClient } from "./githubApi";
 
-function localTemplateFieldManifest(): string | undefined {
-  if (process.env.NODE_ENV === "test") return undefined;
-  const roots = [
-    process.env.ASTRO_TEMPLATE_DIR?.trim(),
-    path.resolve(process.cwd(), "../32-htl-website-template-astrobuild"),
-  ].filter((root): root is string => Boolean(root));
-  for (const root of roots) {
-    const file = path.join(root, "intake", "field-manifest.json");
-    if (existsSync(file)) return readFileSync(file, "utf8");
+const GENERATED_PATHS = new Set([
+  ASTRO_SITE_MANIFEST.configPath,
+  "wrangler.toml",
+  "src/config/schema.ts",
+  "src/config/index.ts",
+  "intake/field-manifest.json",
+]);
+
+const TEMPLATE_TEXT = /\.(astro|ts|tsx|js|mjs|cjs|css|json|md|toml|yml|yaml|svg|html|txt)$/i;
+
+function templateRepo(): { owner: string; repository: string } {
+  const [owner, repository, extra] = ASTRO_SITE_MANIFEST.repo.split("/");
+  if (!owner || !repository || extra) {
+    throw new Error("Astro template repository name is invalid.");
   }
+  return { owner, repository };
+}
+
+export function shouldSyncTemplatePath(filePath: string): boolean {
+  if (GENERATED_PATHS.has(filePath)) return false;
+  if (filePath.startsWith("node_modules/") || filePath.startsWith("dist/")) return false;
+  return TEMPLATE_TEXT.test(filePath);
 }
 
 export function astroSiteSessionKvTitle(workerName: string): string {
@@ -25,7 +35,11 @@ export function astroSiteSessionKvTitle(workerName: string): string {
 }
 
 export async function commitAstroSiteGeneratedSource(input: {
-  github: Pick<GitHubApiClient, "getFileText" | "findCommitByMessage" | "commitFiles">;
+  github: Pick<
+    GitHubApiClient,
+    "getFileText" | "findCommitByMessage" | "commitFiles"
+  > &
+    Partial<Pick<GitHubApiClient, "listRepositoryBlobs">>;
   owner: string;
   repository: string;
   branch: string;
@@ -33,6 +47,7 @@ export async function commitAstroSiteGeneratedSource(input: {
   generatedConfig: string;
   wrangler: AstroSiteWranglerConfigInput;
   signal: AbortSignal;
+  templateRef?: string;
 }): Promise<{ commitSha: string }> {
   const existing = await input.github.findCommitByMessage({
     owner: input.owner,
@@ -43,37 +58,34 @@ export async function commitAstroSiteGeneratedSource(input: {
   });
   if (existing) return existing;
 
-  const schemaTs = await input.github.getFileText({
-    owner: input.owner,
-    repository: input.repository,
-    path: "src/config/schema.ts",
-    ref: input.branch,
+  const template = templateRepo();
+  const templateRef = input.templateRef ?? ASTRO_SITE_MANIFEST.defaultBranch;
+  const fromTemplate = {
+    owner: template.owner,
+    repository: template.repository,
+    ref: templateRef,
     signal: input.signal,
+  };
+
+  const schemaTs = await input.github.getFileText({
+    ...fromTemplate,
+    path: "src/config/schema.ts",
   });
   const indexTs = await input.github.getFileText({
-    owner: input.owner,
-    repository: input.repository,
+    ...fromTemplate,
     path: "src/config/index.ts",
-    ref: input.branch,
-    signal: input.signal,
   });
-  const fieldManifestJson = localTemplateFieldManifest() ?? await input.github.getFileText({
-    owner: input.owner,
-    repository: input.repository,
+  const fieldManifestJson = await input.github.getFileText({
+    ...fromTemplate,
     path: "intake/field-manifest.json",
-    ref: input.branch,
-    signal: input.signal,
   });
   const sectionsSchemaTs = await input.github.getFileText({
-    owner: input.owner,
-    repository: input.repository,
+    ...fromTemplate,
     path: "src/config/sections.schema.ts",
-    ref: input.branch,
-    signal: input.signal,
   });
   if (!schemaTs || !indexTs || !fieldManifestJson) {
     throw new Error(
-      "Client repository is missing schema, derived config, or intake field-manifest files.",
+      "Template repository is missing schema, derived config, or intake field-manifest files.",
     );
   }
   const patched = patchAstroSiteWorkerRuntimeFiles({
@@ -86,21 +98,45 @@ export async function commitAstroSiteGeneratedSource(input: {
     throw new Error("Intake field-manifest could not be patched for Workers.");
   }
 
+  const files = [
+    { path: ASTRO_SITE_MANIFEST.configPath, content: input.generatedConfig },
+    {
+      path: "wrangler.toml",
+      content: renderAstroSiteWranglerToml(input.wrangler),
+    },
+    { path: "src/config/schema.ts", content: patched.schemaTs },
+    { path: "src/config/index.ts", content: patched.indexTs },
+    { path: "intake/field-manifest.json", content: patched.fieldManifestJson },
+  ];
+
+  if (input.github.listRepositoryBlobs) {
+    const blobs = (await input.github.listRepositoryBlobs(fromTemplate)).filter(
+      shouldSyncTemplatePath,
+    );
+    const concurrency = 8;
+    for (let index = 0; index < blobs.length; index += concurrency) {
+      const batch = blobs.slice(index, index + concurrency);
+      const fetched = await Promise.all(
+        batch.map(async filePath => {
+          const content = await input.github.getFileText({
+            ...fromTemplate,
+            path: filePath,
+          });
+          return content == null ? null : { path: filePath, content };
+        }),
+      );
+      for (const file of fetched) {
+        if (file) files.push(file);
+      }
+    }
+  }
+
   const commit = await input.github.commitFiles({
     owner: input.owner,
     repository: input.repository,
     branch: input.branch,
     message: input.message,
-    files: [
-      { path: ASTRO_SITE_MANIFEST.configPath, content: input.generatedConfig },
-      {
-        path: "wrangler.toml",
-        content: renderAstroSiteWranglerToml(input.wrangler),
-      },
-      { path: "src/config/schema.ts", content: patched.schemaTs },
-      { path: "src/config/index.ts", content: patched.indexTs },
-      { path: "intake/field-manifest.json", content: patched.fieldManifestJson },
-    ],
+    files,
     signal: input.signal,
   });
   return { commitSha: commit.commitSha };

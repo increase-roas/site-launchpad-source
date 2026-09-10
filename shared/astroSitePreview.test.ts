@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createDefaultAstroConfig } from "./astroConfig";
 import { BUSINESS_DAY_VALUES } from "./client";
-import { ASTRO_SITE_APPROVED_SOURCE_SHA } from "./astroSiteContract";
 import {
   astroSitePreviewProgress,
   astroSitePreviewResourceNames,
   astroSitePreviewStepLabel,
   parseGeneratedAstroClientConfig,
-  pinnedPreviewTemplateSha,
   previewIsStale,
   validateAstroSitePreview,
 } from "./astroSitePreview";
@@ -127,9 +125,5 @@ describe("preview presentation", () => {
     expect(previewIsStale({ currentRevision: 28, previewRevision: 27 })).toBe(true);
     expect(previewIsStale({ currentRevision: 27, previewRevision: 27 })).toBe(false);
     expect(previewIsStale({ currentRevision: 28, previewRevision: null })).toBe(false);
-  });
-
-  it("records a template SHA on new preview jobs", () => {
-    expect(pinnedPreviewTemplateSha()).toBe(ASTRO_SITE_APPROVED_SOURCE_SHA);
   });
 });

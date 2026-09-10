@@ -1,4 +1,3 @@
-import { ASTRO_SITE_APPROVED_SOURCE_SHA } from "./astroSiteContract";
 import {
   ASTRO_THEME_VALUES,
   CLIENT_DEPLOY_REQUIRED_ASSETS,
@@ -258,10 +257,6 @@ export function previewIsStale(input: {
 }): boolean {
   if (input.previewRevision == null) return false;
   return input.currentRevision > input.previewRevision;
-}
-
-export function pinnedPreviewTemplateSha(): string {
-  return ASTRO_SITE_APPROVED_SOURCE_SHA;
 }
 
 export type AstroSitePreviewHistoryItem = {
