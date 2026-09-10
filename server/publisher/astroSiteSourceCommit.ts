@@ -15,6 +15,8 @@ const GENERATED_PATHS = new Set([
 ]);
 
 const TEMPLATE_TEXT = /\.(astro|ts|tsx|js|mjs|cjs|css|json|md|toml|yml|yaml|svg|html|txt)$/i;
+const SYNC_ROOTS = ["src/", ".github/workflows/"];
+const SYNC_FILES = new Set(["astro.config.ts", "package.json", "tsconfig.json"]);
 
 function templateRepo(): { owner: string; repository: string } {
   const [owner, repository, extra] = ASTRO_SITE_MANIFEST.repo.split("/");
@@ -26,8 +28,20 @@ function templateRepo(): { owner: string; repository: string } {
 
 export function shouldSyncTemplatePath(filePath: string): boolean {
   if (GENERATED_PATHS.has(filePath)) return false;
-  if (filePath.startsWith("node_modules/") || filePath.startsWith("dist/")) return false;
-  return TEMPLATE_TEXT.test(filePath);
+  if (filePath === "package-lock.json") return false;
+  if (
+    filePath.startsWith("docs/") ||
+    filePath.startsWith("intake/examples/") ||
+    filePath.startsWith("clients/") ||
+    filePath.startsWith("node_modules/") ||
+    filePath.startsWith("dist/")
+  ) {
+    return false;
+  }
+  if (SYNC_FILES.has(filePath)) return true;
+  return (
+    SYNC_ROOTS.some(root => filePath.startsWith(root)) && TEMPLATE_TEXT.test(filePath)
+  );
 }
 
 export function astroSiteSessionKvTitle(workerName: string): string {
@@ -39,7 +53,7 @@ export async function commitAstroSiteGeneratedSource(input: {
     GitHubApiClient,
     "getFileText" | "findCommitByMessage" | "commitFiles"
   > &
-    Partial<Pick<GitHubApiClient, "listRepositoryBlobs">>;
+    Partial<Pick<GitHubApiClient, "getRepositoryTextFiles">>;
   owner: string;
   repository: string;
   branch: string;
@@ -67,22 +81,20 @@ export async function commitAstroSiteGeneratedSource(input: {
     signal: input.signal,
   };
 
-  const schemaTs = await input.github.getFileText({
-    ...fromTemplate,
-    path: "src/config/schema.ts",
-  });
-  const indexTs = await input.github.getFileText({
-    ...fromTemplate,
-    path: "src/config/index.ts",
-  });
-  const fieldManifestJson = await input.github.getFileText({
-    ...fromTemplate,
-    path: "intake/field-manifest.json",
-  });
-  const sectionsSchemaTs = await input.github.getFileText({
-    ...fromTemplate,
-    path: "src/config/sections.schema.ts",
-  });
+  const archive = input.github.getRepositoryTextFiles
+    ? await input.github.getRepositoryTextFiles(fromTemplate)
+    : [];
+  const fromArchive = new Map(archive.map(file => [file.path, file.content]));
+
+  const readTemplate = async (path: string): Promise<string | null> => {
+    if (fromArchive.size > 0) return fromArchive.get(path) ?? null;
+    return input.github.getFileText({ ...fromTemplate, path });
+  };
+
+  const schemaTs = await readTemplate("src/config/schema.ts");
+  const indexTs = await readTemplate("src/config/index.ts");
+  const fieldManifestJson = await readTemplate("intake/field-manifest.json");
+  const sectionsSchemaTs = await readTemplate("src/config/sections.schema.ts");
   if (!schemaTs || !indexTs || !fieldManifestJson) {
     throw new Error(
       "Template repository is missing schema, derived config, or intake field-manifest files.",
@@ -109,26 +121,8 @@ export async function commitAstroSiteGeneratedSource(input: {
     { path: "intake/field-manifest.json", content: patched.fieldManifestJson },
   ];
 
-  if (input.github.listRepositoryBlobs) {
-    const blobs = (await input.github.listRepositoryBlobs(fromTemplate)).filter(
-      shouldSyncTemplatePath,
-    );
-    const concurrency = 8;
-    for (let index = 0; index < blobs.length; index += concurrency) {
-      const batch = blobs.slice(index, index + concurrency);
-      const fetched = await Promise.all(
-        batch.map(async filePath => {
-          const content = await input.github.getFileText({
-            ...fromTemplate,
-            path: filePath,
-          });
-          return content == null ? null : { path: filePath, content };
-        }),
-      );
-      for (const file of fetched) {
-        if (file) files.push(file);
-      }
-    }
+  for (const file of archive) {
+    if (shouldSyncTemplatePath(file.path)) files.push(file);
   }
 
   const commit = await input.github.commitFiles({

@@ -1,3 +1,4 @@
+import { gzipSync } from "node:zlib";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FetchFunction } from "../../shared/requestTimeout";
 import {
@@ -102,6 +103,51 @@ describe("GitHub publisher client", () => {
     ).resolves.toEqual(["src/styles/theme.css", "src/pages/index.astro"]);
     expect(requests[0]?.url).toBe(
       "https://api.github.com/repos/increase-roas/32-htl-website-template-astrobuild/git/trees/main?recursive=1",
+    );
+  });
+
+  it("downloads the template tarball as text files in one request", async () => {
+    const header = Buffer.alloc(512, 0);
+    header.write("src/styles/theme.css", 0, 100, "utf8");
+    const body = Buffer.from("--page-gutter: 24px;", "utf8");
+    header.write("0000644\0", 100, 8, "utf8");
+    header.write(`${body.length.toString(8).padStart(11, "0")}\0`, 124, 12, "utf8");
+    header[156] = 0x30;
+    header.write("ustar\0", 257, 6, "utf8");
+    header.write("increase-roas-32-htl-website-template-astrobuild-sha", 345, 155, "utf8");
+    header.fill(0x20, 148, 156);
+    let checksum = 0;
+    for (const byte of header) checksum += byte;
+    header.write(`${checksum.toString(8).padStart(6, "0")}\0 `, 148, 8, "utf8");
+    const tar = Buffer.concat([
+      header,
+      body,
+      Buffer.alloc((512 - (body.length % 512)) % 512),
+      Buffer.alloc(1024, 0),
+    ]);
+    const { fetchFn, requests } = createMockFetch([
+      new Response(gzipSync(tar), {
+        status: 200,
+        headers: { "content-type": "application/x-gzip" },
+      }),
+    ]);
+    const client = createGitHubApiClient({
+      token: "opaque-test-credential",
+      fetchFn,
+    });
+
+    await expect(
+      client.getRepositoryTextFiles({
+        owner: "increase-roas",
+        repository: "32-htl-website-template-astrobuild",
+        ref: "main",
+        signal: abortSignal(),
+      }),
+    ).resolves.toEqual([
+      { path: "src/styles/theme.css", content: "--page-gutter: 24px;" },
+    ]);
+    expect(requests[0]?.url).toBe(
+      "https://api.github.com/repos/increase-roas/32-htl-website-template-astrobuild/tarball/main",
     );
   });
 

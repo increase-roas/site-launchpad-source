@@ -4,10 +4,12 @@ import {
   type FetchFunction,
 } from "../../shared/requestTimeout";
 import { encryptGitHubActionsSecret } from "./githubActionsSecret";
+import { parseGzipTarTextFiles } from "./githubTarball";
 
 export const GITHUB_API_VERSION = "2026-03-10";
 export const DEFAULT_PUBLISHER_REQUEST_TIMEOUT_MS = 10_000;
 export const REPOSITORY_GENERATION_TIMEOUT_MS = 15_000;
+export const REPOSITORY_ARCHIVE_TIMEOUT_MS = 20_000;
 
 export type CreatePublicRepositoryInput = {
   owner: string;
@@ -117,6 +119,12 @@ export type GitHubApiClient = {
     ref: string;
     signal: AbortSignal;
   }): Promise<string[]>;
+  getRepositoryTextFiles(input: {
+    owner: string;
+    repository: string;
+    ref: string;
+    signal: AbortSignal;
+  }): Promise<Array<{ path: string; content: string }>>;
   generatePublicRepository(
     input: GeneratePublicRepositoryInput
   ): Promise<GeneratedRepository>;
@@ -680,6 +688,41 @@ export function createGitHubApiClient(options: {
         paths.push(requireString(item, "path", "repository tree lookup"));
       }
       return paths;
+    },
+    async getRepositoryTextFiles(input) {
+      const fetchFn = options.fetchFn ?? globalThis.fetch;
+      input.signal.throwIfAborted();
+      let response: Response;
+      try {
+        response = await fetchAwaitingCancellation(
+          fetchFn,
+          `https://api.github.com/repos/${encoded(input.owner)}/${encoded(input.repository)}/tarball/${encoded(input.ref)}`,
+          {
+            method: "GET",
+            headers: {
+              Accept: "application/vnd.github+json",
+              Authorization: `Bearer ${options.token}`,
+              "X-GitHub-Api-Version": GITHUB_API_VERSION,
+            },
+            redirect: "follow",
+            signal: input.signal,
+          },
+          REPOSITORY_ARCHIVE_TIMEOUT_MS,
+        );
+      } catch (error) {
+        if (error instanceof RequestTimeoutError) throw error;
+        input.signal.throwIfAborted();
+        throw new GitHubApiError("repository archive download");
+      }
+      input.signal.throwIfAborted();
+      if (!response.ok) {
+        throw new GitHubApiError("repository archive download", response.status);
+      }
+      try {
+        return parseGzipTarTextFiles(Buffer.from(await response.arrayBuffer()));
+      } catch {
+        throw new GitHubApiError("repository archive download response validation");
+      }
     },
     async generatePublicRepository(input) {
       const response = await request(
