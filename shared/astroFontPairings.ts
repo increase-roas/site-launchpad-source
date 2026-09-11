@@ -54,6 +54,13 @@ export const FONT_PAIRINGS: FontPairing[] = [
     display: "Libre Baskerville",
     body: "Work Sans",
   },
+  {
+    id: "showroom",
+    name: "Showroom",
+    mood: "Local and established",
+    display: "Bricolage Grotesque",
+    body: "Instrument Sans",
+  },
 ];
 
 function matches(a: string, b: string): boolean {

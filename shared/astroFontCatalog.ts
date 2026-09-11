@@ -25,6 +25,8 @@ export const FONT_CATALOG: FontOption[] = [
   { family: "Poppins", category: "sans", weights: [100, 200, 300, 400, 500, 600, 700, 800, 900] },
   { family: "Montserrat", category: "sans", weights: [100, 200, 300, 400, 500, 600, 700, 800, 900] },
   { family: "Lato", category: "sans", weights: [100, 300, 400, 700, 900] },
+  { family: "Bricolage Grotesque", category: "sans", weights: [200, 300, 400, 500, 600, 700, 800] },
+  { family: "Instrument Sans", category: "sans", weights: [400, 500, 600, 700] },
   { family: "Fraunces", category: "serif", weights: [100, 200, 300, 400, 500, 600, 700, 800, 900] },
   { family: "Playfair Display", category: "serif", weights: [400, 500, 600, 700, 800, 900] },
   { family: "Lora", category: "serif", weights: [400, 500, 600, 700] },
@@ -37,6 +39,7 @@ export const FONT_CATALOG: FontOption[] = [
   { family: "Roboto Mono", category: "mono", weights: [100, 200, 300, 400, 500, 600, 700] },
   { family: "Source Code Pro", category: "mono", weights: [200, 300, 400, 500, 600, 700, 800, 900] },
   { family: "Space Mono", category: "mono", weights: [400, 700] },
+  { family: "Spline Sans Mono", category: "mono", weights: [300, 400, 500, 600, 700] },
 ];
 
 export const FONT_CATEGORY_LABELS: Record<FontCategory, string> = {

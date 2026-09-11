@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Site Launchpad Easy Manual</title>
+  <style>
+    @page { size: letter; margin: 0.55in 0.6in 0.6in; }
+    :root {
+      --ink: #142033;
+      --muted: #5b6677;
+      --blue: #2563eb;
+      --blue-soft: #e8f0ff;
+      --green: #15803d;
+      --green-soft: #e8f7ee;
+      --orange: #ea580c;
+      --orange-soft: #fff1e7;
+      --line: #d7deea;
+      --card: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      color: var(--ink);
+      background: #fff;
+      font: 12.5px/1.55 "Segoe UI", "Trebuchet MS", sans-serif;
+    }
+    h1, h2, h3 { line-height: 1.2; margin: 0 0 0.4em; }
+    p { margin: 0 0 0.7em; }
+    .cover {
+      min-height: 9.4in;
+      padding: 0.4in 0.15in;
+      page-break-after: always;
+      background:
+        radial-gradient(circle at 90% 8%, #dbe7ff 0, transparent 36%),
+        linear-gradient(#f7faff, #fff 52%);
+    }
+    .badge {
+      display: inline-block;
+      background: var(--blue);
+      color: #fff;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.28em 0.7em;
+      border-radius: 999px;
+    }
+    .cover h1 {
+      font-size: 42px;
+      letter-spacing: -0.03em;
+      margin: 0.28em 0 0.15em;
+    }
+    .cover .lead {
+      font-size: 18px;
+      color: var(--muted);
+      max-width: 7.2in;
+    }
+    .cover-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 28px;
+    }
+    .idea {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px 16px;
+      background: var(--card);
+    }
+    .idea strong { display: block; font-size: 15px; margin-bottom: 4px; }
+    .chapter { page-break-before: always; }
+    .chapter:first-of-type { page-break-before: auto; }
+    h2 {
+      font-size: 24px;
+      padding-bottom: 6px;
+      border-bottom: 3px solid var(--blue);
+      margin-bottom: 10px;
+    }
+    h3 { font-size: 16px; margin-top: 14px; }
+    .steps {
+      margin: 0 0 12px;
+      padding-left: 1.2em;
+    }
+    .steps li { margin: 0.25em 0; }
+    .shot-wrap {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #f4f7fb;
+      margin: 10px 0 8px;
+    }
+    .shot-wrap img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .pin {
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      margin: -30px 0 0 -12px;
+      border-radius: 50%;
+      background: var(--orange);
+      color: #fff;
+      font: 700 13px/24px "Segoe UI", sans-serif;
+      text-align: center;
+      box-shadow: 0 0 0 3px #fff, 0 3px 10px rgba(0,0,0,.28);
+      z-index: 2;
+    }
+    .pin::after {
+      content: "";
+      position: absolute;
+      left: 6px;
+      top: 20px;
+      border: 6px solid transparent;
+      border-top-color: var(--orange);
+    }
+    .pin.blue { background: var(--blue); }
+    .pin.blue::after { border-top-color: var(--blue); }
+    .arrow {
+      position: absolute;
+      z-index: 1;
+      pointer-events: none;
+    }
+    .legend {
+      display: grid;
+      gap: 6px;
+      margin: 0 0 8px;
+    }
+    .legend-item {
+      display: grid;
+      grid-template-columns: 24px 1fr;
+      gap: 8px;
+      align-items: start;
+    }
+    .n {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--orange);
+      color: #fff;
+      font: 700 12px/22px "Segoe UI", sans-serif;
+      text-align: center;
+    }
+    .n.blue { background: var(--blue); }
+    .n.green { background: var(--green); }
+    .tip, .warn, .soon {
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin: 10px 0;
+    }
+    .tip { background: var(--blue-soft); }
+    .warn { background: var(--orange-soft); }
+    .soon { background: #f3f4f6; }
+    .tip strong, .warn strong, .soon strong { display: block; margin-bottom: 2px; }
+    .two {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin: 8px 0 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 7px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f4f7fb; }
+    .footer-note {
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 8px;
+    }
+    .path {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 10px 0 14px;
+    }
+    .path span {
+      background: var(--blue-soft);
+      color: var(--blue);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-weight: 700;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <span class="badge">Easy picture guide</span>
+    <h1>How to use<br>Site Launchpad</h1>
+    <p class="lead">A very simple manual. Short words. Real pictures from the app. Orange numbers show you exactly where to look and click.</p>
+    <div class="cover-grid">
+      <div class="idea">
+        <strong>What is Launchpad?</strong>
+        Launchpad is a website factory. You put in a business name, pictures, and words. Then you preview the site. Then you launch it so the world can see it.
+      </div>
+      <div class="idea">
+        <strong>Who is this for?</strong>
+        Anyone who can click a mouse. If you can play a simple computer game, you can follow this book.
+      </div>
+      <div class="idea">
+        <strong>How the pictures work</strong>
+        Each orange circle is a number. Match that number to the list under the picture. That is the button or box we mean.
+      </div>
+      <div class="idea">
+        <strong>The big rule</strong>
+        Do one client at a time. Finish the steps in order. Green means done. Blue means “do this next.”
+      </div>
+    </div>
+    <div class="tip" style="margin-top:22px">
+      <strong>Think of it like building a lemonade stand</strong>
+      First you name the stand. Then you pick colors. Then you add photos. Then you write the signs. Then you open the door. Launchpad is the same idea, but for a real website.
+    </div>
+  </section>
+
+  <section class="chapter">
+    <h2>1. The big map</h2>
+    <p>Every website in Launchpad walks the same path. You do not have to remember this. The app shows you the next step.</p>
+    <div class="path">
+      <span>1 Client setup</span>
+      <span>2 Brand &amp; content</span>
+      <span>3 Media</span>
+      <span>4 Pages</span>
+      <span>5 Integrations</span>
+      <span>6 Launch</span>
+    </div>
+    <table>
+      <tr><th>Step</th><th>Kid words</th><th>Where you click</th></tr>
+      <tr><td>Client setup</td><td>Write the business name, phone, and address.</td><td>Configuration → Basic info</td></tr>
+      <tr><td>Brand &amp; content</td><td>Pick colors, fonts, and website words.</td><td>Configuration → Branding and Content</td></tr>
+      <tr><td>Media</td><td>Add logos and photos.</td><td>Configuration → Media</td></tr>
+      <tr><td>Pages</td><td>See which website pages will exist.</td><td>Pages tab</td></tr>
+      <tr><td>Integrations</td><td>Turn on extra tools, like email or ads.</td><td>Configuration → Technical, then Integrations</td></tr>
+      <tr><td>Launch</td><td>Look at a practice site, then make it live.</td><td>Launch tab</td></tr>
+    </table>
+    <div class="soon">
+      <strong>Gray badges that say “Soon”</strong>
+      Templates, Campaigns, System Settings, and sign-in are designed but not turned on yet. You can see them. You cannot use them. Skip them.
+    </div>
+  </section>
+
+  <section class="chapter">
+    <h2>2. Open Launchpad and meet the home page</h2>
+    <p>When you open Launchpad you land on <strong>Clients</strong>. This is home base. Every website you are building lives in this list.</p>
+    <div class="shot-wrap">
+      <img src="01-clients.png" alt="Clients home page" />
+      <span class="pin" style="left:7%; top:8%">1</span>
+      <span class="pin" style="left:92%; top:8%">2</span>
+      <span class="pin" style="left:28%; top:22%">3</span>
+      <span class="pin" style="left:22%; top:38%">4</span>
+      <span class="pin" style="left:88%; top:58%">5</span>
+      <svg class="arrow" viewBox="0 0 100 100" preserveAspectRatio="none" style="inset:0; width:100%; height:100%">
+        <defs>
+          <marker id="ah" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6 Z" fill="#ea580c" />
+          </marker>
+        </defs>
+      </svg>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="n">1</span><div><strong>Rocket logo.</strong> This is Launchpad. Click it any time to come back to the client list.</div></div>
+      <div class="legend-item"><span class="n">2</span><div><strong>+ New client.</strong> The big blue button that starts a brand new website.</div></div>
+      <div class="legend-item"><span class="n">3</span><div><strong>Score cards.</strong> How many websites you have, how many are live, how many still need work.</div></div>
+      <div class="legend-item"><span class="n">4</span><div><strong>Search and filters.</strong> Type a name to find one client. You can also sort the list.</div></div>
+      <div class="legend-item"><span class="n">5</span><div><strong>Continue.</strong> Opens that client so you can keep building. The three dots <strong>⋯</strong> can delete a client. Be careful.</div></div>
+    </div>
+    <div class="tip">
+      <strong>How to read a row</strong>
+      <em>Status</em> is the report card. <em>Setup</em> is how much of the worksheet is filled. <em>Next step</em> tells you what to do right now. <em>Visit</em> opens the live website if it is already online.
+    </div>
+  </section>
+
+  <section class="chapter">
+    <h2>3. Add a new client</h2>
+    <p>A “client” is one business. One client = one website. You only need the business name to start. You can add the phone and address later.</p>
+    <ol class="steps">
+      <li>On the Clients page, click the blue <strong>+ New client</strong> button.</li>
+      <li>Type the business name in the box. Example: <em>Paradise Spas</em>.</li>
+      <li>Click <strong>+ Create client</strong>.</li>
+      <li>Launchpad takes you into that client’s workspace.</li>
+    </ol>
+    <div class="shot-wrap">
+      <img src="02-new-client.png" alt="New client form" />
+      <span class="pin" style="left:30%; top:18%">1</span>
+      <span class="pin" style="left:52%; top:48%">2</span>
+      <span class="pin" style="left:52%; top:58%">3</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="n">1</span><div><strong>Back arrow + Clients.</strong> Changed your mind? Click here to go home without making a client.</div></div>
+      <div class="legend-item"><span class="n">2</span><div><strong>Business name box.</strong> Type at least 2 letters. The gray words inside are only an example.</div></div>
+      <div class="legend-item"><span class="n">3</span><div><strong>+ Create client.</strong> Saves the new client and opens their page.</div></div>
+    </div>
+    <div class="warn">
+      <strong>Do not delete by accident</strong>
+      On the client list, the ⋯ menu can delete a client. Deleting removes that website project. Only do this if you are sure.
+    </div>
+  </section>
+
+  <section class="chapter">
+    <h2>4. The workspace and the Overview</h2>
+    <p>After you open a client, the top of the page grows extra buttons. This is the workspace. The first tab is <strong>Overview</strong>. It is the report card and the treasure map.</p>
+    <div class="shot-wrap">
+      <img src="03-overview.png" alt="Client overview" />
+      <span class="pin" style="left:38%; top:8%">1</span>
+      <span class="pin" style="left:88%; top:8%">2</span>
+      <span class="pin" style="left:32%; top:18%">3</span>
+      <span class="pin" style="left:22%; top:42%">4</span>
+      <span class="pin" style="left:72%; top:42%">5</span>
+      <span class="pin" style="left:40%; top:86%">6</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="n">1</span><div><strong>Current client.</strong> The business you are working on right now. The pill next to the name is the status, like “Ready to publish.”</div></div>
+      <div class="legend-item"><span class="n">2</span><div><strong>Generate Preview / Open Preview.</strong> Makes or opens a practice copy of the website. Use this to look before you launch.</div></div>
+      <div class="legend-item"><span class="n">3</span><div><strong>Client tabs.</strong> Overview, Configuration, Pages, Campaigns (Soon), Integrations, Launch. These are the rooms of the factory.</div></div>
+      <div class="legend-item"><span class="n">4</span><div><strong>Build progress.</strong> A percent, like a game level bar. 83% means 5 of 6 steps are done.</div></div>
+      <div class="legend-item"><span class="n">5</span><div><strong>Recommended next step.</strong> Launchpad already picked the next job. Click <strong>Continue</strong>.</div></div>
+      <div class="legend-item"><span class="n">6</span><div><strong>Build path.</strong> The numbered quest list. Green check = finished. Blue “Next up” = do this now. Click a step, then <strong>Open …</strong>.</div></div>
+    </div>
+    <div class="tip">
+      <strong>Left sidebar client list</strong>
+      When you are inside a client, the left menu also shows your clients. Click another name to switch. The search box finds a name fast.
+    </div>
+  </section>
+
+  <section class="chapter">
+    <h2>5. Configuration is the worksheet</h2>
+    <p>Click the <strong>Configuration</strong> tab. This is where you fill in the website. There are 5 mini-steps across the top. Each one has a tiny progress bar. Green means that mini-step is finished.</p>
+    <p>Launchpad saves by itself after you type. You usually do not need a Save button. If you see <strong>Save failed</strong>, click <strong>Try again</strong>.</p>
+    <h3>5a. Basic info — who is this business?</h3>
+    <div class="shot-wrap">
+      <img src="04-basic.png" alt="Basic info" />
+      <span class="pin" style="left:18%; top:22%">1</span>
+      <span class="pin" style="left:38%; top:32%">2</span>
+      <span class="pin" style="left:78%; top:32%">3</span>
+      <span class="pin" style="left:22%; top:58%">4</span>
+      <span class="pin" style="left:28%; top:82%">5</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="n">1</span><div><strong>The 5 mini-steps.</strong> Basic info, Branding, Media, Content, Technical. Click a box to jump. The numbers (like 13 of 13) are required fields you finished.</div></div>
+      <div class="legend-item"><span class="n">2</span><div><strong>Business name and short name.</strong> The long official name, and a shorter nickname used in tight spots.</div></div>
+      <div class="legend-item"><span class="n">3</span><div><strong>Site URL.</strong> The real web address, like https://harborandheatspas.com. This must start with https. You need it later to connect the live domain.</div></div>
+      <div class="legend-item"><span class="n">4</span><div><strong>Contact.</strong> Main phone (use the +1 style, like +17015551234), optional SMS phone, and email.</div></div>
+      <div class="legend-item"><span class="n">5</span><div><strong>Address.</strong> Street, city, state, ZIP, country. Maps and Google use this. Keep scrolling for hours and social links.</div></div>
+    </div>
+    <div class="tip">
+      <strong>More Basic info below the picture</strong>
+      Keep scrolling to set open hours (you can fill many days at once), map location, and Facebook / Instagram / other links. A section that says <em>Advanced</em> is extra. You can skip it if you do not know it.
+    </div>
+  </section>
+
+  <section class="chapter">
+    <h2>6. Branding — crayons and handwriting</h2>
+    <p>Branding is how the website looks. Pick a color theme. Then pick fonts. A little preview at the bottom shows the name and a button, so you can see the vibe.</p>
+    <div class="shot-wrap">
+      <img src="05-branding.png" alt="Branding themes and fonts" />
+      <span class="pin" style="left:28%; top:22%">1</span>
+      <span class="pin" style="left:22%; top:42%">2</span>
+      <span class="pin" style="left:48%; top:68%">3</span>
+      <span class="pin" style="left:28%; top:92%">4</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="n">1</span><div><strong>Branding mini-step.</strong> It is selected when the box is light blue.</div></div>
+      <div class="legend-item"><span class="n">2</span><div><strong>Theme cards.</strong> Aqua = watery blue. Luxury = dark and gold. Natural = warm green. Mono = black and white. The one with the checkmark is active.</div></div>
+      <div class="legend-item"><span class="n">3</span><div><strong>Font pairings.</strong> Ready-made handwriting pairs. Click one. You can still change heading or body fonts after.</div></div>
+      <div class="legend-item"><span class="n">4</span><div><strong>Live type preview.</strong> Shows the business name in the chosen fonts so you can judge it.</div></div>
+    </div>
+  </section>
+
+  <section class="chapter">
+    <h2>7. Media — logos and photos</h2>
+    <p>Websites need pictures. Media is the photo room. Left side = all the picture slots. Right side = the one slot you picked, so you can replace it or write alt text.</p>
+    <div class="shot-wrap">
+      <img src="06-media.png" alt="Media photos workspace" />
+      <span class="pin" style="left:22%; top:30%">1</span>
+      <span class="pin" style="left:22%; top:42%">2</span>
+      <span class="pin" style="left:22%; top:58%">3</span>
+      <span class="pin" style="left:72%; top:42%">4</span>
+      <span class="pin" style="left:78%; top:72%">5</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="n">1</span><div><strong>Add photos.</strong> Upload JPEG, PNG, or WebP pictures. Keep each file under 20 MB.</div></div>
+      <div class="legend-item"><span class="n">2</span><div><strong>Filters.</strong> All, Missing, Brand, and other groups. Missing means “this slot still needs a picture.”</div></div>
+      <div class="legend-item"><span class="n">3</span><div><strong>Photo tiles.</strong> Navigation logo, footer logo, favicon (tiny browser-tab icon), social share image, category photos, and marketing photos.</div></div>
+      <div class="legend-item"><span class="n">4</span><div><strong>Replace / Remove.</strong> Change the picture in the selected slot, or take it out.</div></div>
+      <div class="legend-item"><span class="n">5</span><div><strong>Alt text.</strong> A short sentence that says what is in the picture. This helps people who cannot see the image, and it helps search.</div></div>
+    </div>
+    <div class="warn">
+      <strong>Pictures Launchpad cares about most</strong>
+      You really need a header logo, footer logo, favicon, and a wide social-share image. Category photos matter for every product group you turned on. If Launch later says an image is missing, come back here and upload it again.
+    </div>
+  </section>
+
+  <section class="chapter">
+    <h2>8. Content — words, menus, and homepage blocks</h2>
+    <p>Content is the writing and the menu. Customers will click these links and read these words.</p>
+    <div class="shot-wrap">
+      <img src="07-content.png" alt="Content navigation editor" />
+      <span class="pin" style="left:22%; top:30%">1</span>
+      <span class="pin" style="left:18%; top:48%">2</span>
+      <span class="pin" style="left:40%; top:62%">3</span>
+      <span class="pin" style="left:78%; top:62%">4</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="n">1</span><div><strong>Jump buttons.</strong> Navigation, Categories, Financing, Homepage. A green Ready badge means that part looks finished.</div></div>
+      <div class="legend-item"><span class="n">2</span><div><strong>Drag handle.</strong> The six dots. Hold and drag to change menu order. Up and down arrows also move a row. The trash can deletes it.</div></div>
+      <div class="legend-item"><span class="n">3</span><div><strong>Label and destination.</strong> Label = the words people see. Destination = where the click goes, like /inventory.</div></div>
+      <div class="legend-item"><span class="n">4</span><div><strong>Header and Footer switches.</strong> Blue means “show this link there.” You can show a link in the top menu, the bottom menu, or both.</div></div>
+    </div>
+    <h3>What else is on Content</h3>
+    <ul class="steps">
+      <li><strong>Categories</strong> — turn on only the products this client sells: hot tubs, swim spas, saunas, cold plunge, massage chairs. Fill the words for the ones that are on.</li>
+      <li><strong>Financing</strong> — a switch. Leave it off unless the client really has a lender and approved words.</li>
+      <li><strong>Homepage sections</strong> — building blocks of the home page: hero, reviews, FAQ, gallery, visit us, and more. Turn a block on, fill its boxes, drag to change order.</li>
+    </ul>
+  </section>
+
+  <section class="chapter">
+    <h2>9. Technical — turn tools on</h2>
+    <p>Technical is for grown-up tools that sit behind the website. You turn a switch on only if this site uses that tool. Then extra boxes appear.</p>
+    <div class="shot-wrap">
+      <img src="08-technical.png" alt="Technical integrations" />
+      <span class="pin" style="left:28%; top:38%">1</span>
+      <span class="pin" style="left:72%; top:38%">2</span>
+      <span class="pin" style="left:28%; top:58%">3</span>
+      <span class="pin" style="left:82%; top:92%">4</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="n">1</span><div><strong>Cloudflare D1.</strong> The website database. Binding name and database name go here if it is on.</div></div>
+      <div class="legend-item"><span class="n">2</span><div><strong>Cloudflare R2.</strong> Photo storage for products.</div></div>
+      <div class="legend-item"><span class="n">3</span><div><strong>Other tools.</strong> GoHighLevel, Meta, Zaraz, Sentry. Gray switch = not used. Leave them off if you do not have the keys.</div></div>
+      <div class="legend-item"><span class="n">4</span><div><strong>Open client integrations.</strong> Jumps to the secret-keys page. Passwords and tokens live there, not on this screen.</div></div>
+    </div>
+  </section>
+
+  <section class="chapter">
+    <h2>10. Integrations — the secret keys</h2>
+    <p>This tab stores keys the website and future funnels share. Orange means “still needed.” You only must fill keys for tools you turned on.</p>
+    <div class="shot-wrap">
+      <img src="10-integrations.png" alt="Client integrations" />
+      <span class="pin" style="left:18%; top:18%">1</span>
+      <span class="pin" style="left:28%; top:32%">2</span>
+      <span class="pin" style="left:40%; top:52%">3</span>
+      <span class="pin" style="left:40%; top:78%">4</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="n">1</span><div><strong>Back to configuration.</strong> Returns to the Technical mini-step.</div></div>
+      <div class="legend-item"><span class="n">2</span><div><strong>Missing list.</strong> Orange tags name every empty required key. That is your to-do list.</div></div>
+      <div class="legend-item"><span class="n">3</span><div><strong>GoHighLevel boxes.</strong> Location ID and private token, if that tool is on.</div></div>
+      <div class="legend-item"><span class="n">4</span><div><strong>Google Sheets.</strong> Sheet ID and service-account email. Share the sheet with that email if you use it.</div></div>
+    </div>
+    <div class="warn">
+      <strong>Treat these like house keys</strong>
+      Do not paste secret tokens into chat, email, or screenshots you will share. If a box says Required and the tool is on, Launch will block you until it is filled.
+    </div>
+  </section>
+
+  <section class="chapter">
+    <h2>11. Pages — the site map</h2>
+    <p>You do not invent new page types here. The template already decided which pages exist. This screen is a map. Each row tells you if that page is ready, and which Configuration box owns the words.</p>
+    <div class="shot-wrap">
+      <img src="09-pages.png" alt="Pages site map" />
+      <span class="pin" style="left:22%; top:22%">1</span>
+      <span class="pin" style="left:32%; top:42%">2</span>
+      <span class="pin" style="left:78%; top:42%">3</span>
+      <span class="pin" style="left:82%; top:62%">4</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="n">1</span><div><strong>Count cards.</strong> How many template pages, how many are ready, how many need a fix, how many homepage blocks are visible.</div></div>
+      <div class="legend-item"><span class="n">2</span><div><strong>Page list.</strong> Homepage, Category pages, Inventory, Visit us, Financing. Ready = good. Attention = click the owner button and finish the missing piece. Off = that page is hidden on purpose.</div></div>
+      <div class="legend-item"><span class="n">3</span><div><strong>Owned by.</strong> The button that jumps to the Configuration place that writes this page. This screen does not edit the words itself.</div></div>
+      <div class="legend-item"><span class="n">4</span><div><strong>Homepage stack.</strong> The blocks on the home page from top to bottom, and whether each one is visible.</div></div>
+    </div>
+  </section>
+
+  <section class="chapter">
+    <h2>12. Launch — look, then go live</h2>
+    <p>This is the last room. You do <strong>not</strong> jump here first. Overview will send you here when the other steps are ready. On Overview, Launch is the last item on the Build path.</p>
+    <div class="shot-wrap">
+      <img src="03-overview.png" alt="Overview pointing to Launch" />
+      <span class="pin blue" style="left:72%; top:42%">1</span>
+      <span class="pin" style="left:40%; top:86%">2</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="n blue">1</span><div>When the next step says <strong>Launch</strong>, click <strong>Continue</strong>.</div></div>
+      <div class="legend-item"><span class="n">2</span><div>Or open the last Build path row and click <strong>Open Launch</strong>.</div></div>
+    </div>
+    <h3>Do these three jobs, in this order</h3>
+    <table>
+      <tr><th>Job</th><th>What it means</th><th>What you click</th></tr>
+      <tr>
+        <td>1. Preview</td>
+        <td>Launchpad builds a practice website. Only your team should look at it. It is a dress rehearsal.</td>
+        <td>On Launch: the Preview card button. Or the top-right <strong>Generate Preview / Open Preview</strong> button.</td>
+      </tr>
+      <tr>
+        <td>2. Check and approve</td>
+        <td>Open the practice site. Click around. If it looks right, approve it. Approving says “this copy may go to the real world.”</td>
+        <td><strong>Approve preview</strong> on the Preview card.</td>
+      </tr>
+      <tr>
+        <td>3. Publish</td>
+        <td>The approved practice site becomes the live website. Later you can click <strong>Connect live domain</strong> so the nice name (like harborandheatspas.com) points at it.</td>
+        <td><strong>Publish</strong> on the Production card. If it is already on a temporary address, use <strong>Connect live domain</strong>.</td>
+      </tr>
+    </table>
+    <p>While preview or publish is working you will see steps like Prepare, Build, Deploy, Live. Wait. Do not click over and over. If it fails, read the red or orange notice, fix the thing it names, then Retry.</p>
+    <div class="warn">
+      <strong>Launch will stop you if something is missing</strong>
+      Common blockers: empty required Basic info, missing logos, no visible homepage sections, or missing secret keys. Each blocker has a <strong>Fix</strong> link. Follow it, fill the box, come back to Launch.
+    </div>
+    <div class="tip">
+      <strong>Site URL must be real before a custom domain</strong>
+      In Basic info, Site URL needs to be a real https address, not example.com. If Launch says it cannot connect the live domain, fix that URL first.
+    </div>
+  </section>
+
+  <section class="chapter">
+    <h2>13. Activity and leftover buttons</h2>
+    <p>The left menu also has <strong>Activity</strong>. It is a live “who needs help” list, not an old diary. Click a client row to jump to their Overview.</p>
+    <div class="shot-wrap">
+      <img src="12-activity.png" alt="Activity page" />
+      <span class="pin" style="left:10%; top:28%">1</span>
+      <span class="pin" style="left:40%; top:22%">2</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="n">1</span><div><strong>Activity in the left menu.</strong> Use it when you want to see every client’s next problem in one place.</div></div>
+      <div class="legend-item"><span class="n">2</span><div><strong>Current state by client.</strong> When the list loads, clients that need the most help sit at the top.</div></div>
+    </div>
+    <h3>The Actions menu</h3>
+    <p>Top right, next to Preview. It can open <strong>New client</strong>, <strong>Configuration</strong>, <strong>Integrations</strong>, and <strong>Open live site</strong> (only if one exists).</p>
+    <h3>If something looks broken</h3>
+    <ul class="steps">
+      <li><strong>Gray bars that never go away</strong> — the list is still loading. Wait, or click Try again.</li>
+      <li><strong>Choose a client</strong> — pick a name in the left client list, or go to Clients and click Continue.</li>
+      <li><strong>Website configuration could not be loaded</strong> — click Try again. If it keeps failing, the database or internet is unhappy. Ask a teammate.</li>
+      <li><strong>Preview is out of date</strong> — you changed the worksheet after the last practice site. Generate Preview again, then approve again, then publish again.</li>
+    </ul>
+  </section>
+
+  <section class="chapter">
+    <h2>14. A first-time walk-through</h2>
+    <p>Do this the first time you use Launchpad. Check each box in your head as you go.</p>
+    <ol class="steps">
+      <li>Open Launchpad. You should see the Clients list and the rocket.</li>
+      <li>Click <strong>+ New client</strong>. Type the business name. Click <strong>Create client</strong>.</li>
+      <li>On Overview, click <strong>Continue</strong> (or open Build path step 1).</li>
+      <li>Fill <strong>Basic info</strong>: name, site URL, phone, email, address, hours.</li>
+      <li>Open <strong>Branding</strong>. Pick a theme and a font pair.</li>
+      <li>Open <strong>Media</strong>. Add the header logo, footer logo, favicon, and share image. Add category photos for groups you sell.</li>
+      <li>Open <strong>Content</strong>. Set the menu. Turn on the right product groups. Turn on homepage blocks and write the words.</li>
+      <li>Look at <strong>Pages</strong>. If a row says Attention, click its owner button and finish it.</li>
+      <li>Open <strong>Technical</strong>. Turn on only the tools you really use. Then open <strong>Integrations</strong> and paste the required keys.</li>
+      <li>Click <strong>Generate Preview</strong>. Wait. Open the practice site. Click around like a customer.</li>
+      <li>Go to <strong>Launch</strong>. Approve the preview when it looks right.</li>
+      <li>Click <strong>Publish</strong>. When it is live, use <strong>Connect live domain</strong> if the Site URL is the real customer domain.</li>
+    </ol>
+    <div class="two">
+      <div class="tip">
+        <strong>Green / Complete</strong>
+        That part matches what Launchpad needs. You can still edit it later. If you edit after a preview, make a new preview.
+      </div>
+      <div class="warn">
+        <strong>Orange / Needs attention</strong>
+        Something is empty or wrong. Read the little message under the box. Fix that one thing. Do not guess.
+      </div>
+    </div>
+  </section>
+
+  <section class="chapter">
+    <h2>15. Word list</h2>
+    <table>
+      <tr><th>Word you see</th><th>Easy meaning</th></tr>
+      <tr><td>Client</td><td>One business. One website project.</td></tr>
+      <tr><td>Workspace</td><td>All the tabs for one client.</td></tr>
+      <tr><td>Configuration</td><td>The worksheet: facts, look, photos, words, tools.</td></tr>
+      <tr><td>Preview</td><td>A practice website. Not the final public one yet.</td></tr>
+      <tr><td>Approve preview</td><td>You looked at the practice site and said “yes, this one may go live.”</td></tr>
+      <tr><td>Publish / Production</td><td>Put the approved site on the real internet.</td></tr>
+      <tr><td>Live domain</td><td>The nice name people type, like thestore.com.</td></tr>
+      <tr><td>Integrations</td><td>Other companies’ tools plugged into the site.</td></tr>
+      <tr><td>Favicon</td><td>The tiny picture in the browser tab.</td></tr>
+      <tr><td>Alt text</td><td>Words that describe a picture.</td></tr>
+      <tr><td>Soon</td><td>Not ready. Skip it.</td></tr>
+    </table>
+    <p class="footer-note">This manual uses real screenshots from Site Launchpad (Website Factory). Pictures show the Harbor &amp; Heat Spas demo so you can see a filled-in example. Your own client names and photos will be different. The buttons stay in the same places.</p>
+  </section>
+</body>
+</html>

@@ -119,7 +119,7 @@ describe("site map shape", () => {
       `/workspace/${CLIENT_ID}/configuration?tab=basic&section=address`,
     );
     expect(row(pages, "inventory").ownerHref).toBe(
-      `/workspace/${CLIENT_ID}/configuration?tab=technical&section=integrations`,
+      `/workspace/${CLIENT_ID}/inventory`,
     );
   });
 
@@ -127,6 +127,7 @@ describe("site map shape", () => {
     const pages = siteMap(baseConfig());
     expect(row(pages, "homepage").ownerLabel).toBe("Homepage sections");
     expect(row(pages, "visitUs").ownerLabel).toBe("Business details");
+    expect(row(pages, "inventory").ownerLabel).toBe("Inventory");
   });
 });
 

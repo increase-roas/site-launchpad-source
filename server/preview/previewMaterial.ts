@@ -1,5 +1,8 @@
 import { randomBytes } from "node:crypto";
-import { ASTRO_SITE_REQUIRED_RUNTIME_SECRETS } from "../../shared/astroSiteContract";
+import {
+  ASTRO_SITE_REQUIRED_RUNTIME_SECRETS,
+  getAstroSiteRuntimeSecrets,
+} from "../../shared/astroSiteContract";
 import {
   validateAstroSitePreview,
   type PreviewValidationIssue,
@@ -42,6 +45,24 @@ export type AstroSitePreviewMaterialSnapshot = {
 
 function previewAdminSecret(): string {
   return randomBytes(24).toString("hex");
+}
+
+/**
+ * Preview must not fail closed when a CRM key is missing — the site still
+ * deploys. It must still copy every present key the live publisher would
+ * send, including identifiers such as GHL_LOCATION_ID. The previous allow-list
+ * dropped that ID, so the Worker never called GoHighLevel.
+ */
+export function previewRuntimeSecretNamesFromProfile(input: {
+  ghlEnabled: boolean;
+  metaEnabled: boolean;
+  presentKeys: Iterable<string>;
+}): string[] {
+  const present = new Set(input.presentKeys);
+  return getAstroSiteRuntimeSecrets({
+    ghl: input.ghlEnabled,
+    meta: input.metaEnabled,
+  }).filter(name => present.has(name));
 }
 
 export function protectPreviewMaterialSnapshot(
@@ -100,14 +121,11 @@ export async function buildAstroSitePreviewSnapshot(clientId: number): Promise<{
 
   const resolver = await clientIntegrationProfileResolverForClient(clientId);
   const present = presentProfileKeys(view.integrationProfile);
-  const optionalNames = [...present].filter(
-    name =>
-      name === "GHL_API_KEY" ||
-      name === "META_CAPI_ACCESS_TOKEN" ||
-      name === "STAGE_WEBHOOK_SECRET" ||
-      name === "ADMIN_PASSWORD" ||
-      name === "ADMIN_SESSION_SECRET",
-  );
+  const optionalNames = previewRuntimeSecretNamesFromProfile({
+    ghlEnabled: view.input.integrations.ghl.enabled,
+    metaEnabled: view.input.integrations.meta.enabled,
+    presentKeys: present,
+  });
   const planned = optionalNames.length
     ? planAstroSitePublishFromProfile({
         clientId,

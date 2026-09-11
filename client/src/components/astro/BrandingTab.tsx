@@ -18,7 +18,7 @@ import { UrlInput } from "./fieldWidgets";
 
 const THEME_META = {
   aqua: { label: "Aqua", description: "Bright and water focused", swatches: ["#06b6d4", "#0e7490", "#ecfeff"] },
-  luxury: { label: "Luxury", description: "Dark and premium", swatches: ["#171717", "#d4af37", "#faf7ef"] },
+  luxury: { label: "Luxury", description: "Navy and gold", swatches: ["#16469B", "#FFB81C", "#F8F4EC"] },
   natural: { label: "Natural", description: "Warm and grounded", swatches: ["#365314", "#a3b18a", "#f5f2e8"] },
   mono: { label: "Mono", description: "Neutral and editorial", swatches: ["#0a0a0a", "#737373", "#fafafa"] },
 } as const;

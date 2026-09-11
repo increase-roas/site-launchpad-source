@@ -15,7 +15,7 @@ import { activeWizardSteps } from "@/app/wizard";
 import { wizardStepHref } from "@/app/wizardRoutes";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { trpc } from "@/lib/trpc";
-import { configurationRoute } from "@/lib/workspaceNavigation";
+import { configurationRoute, workspaceRoute } from "@/lib/workspaceNavigation";
 import {
   ASTRO_SECTION_DESCRIPTIONS,
   ASTRO_SECTION_LABELS,
@@ -32,6 +32,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   FileText,
+  KeyRound,
   LayoutList,
   Lightbulb,
   Settings2,
@@ -175,6 +176,10 @@ export default function PagesManagerPage({ clientId }: { clientId: number }) {
             <li>
               Live appears only after the website has been published from Launch.
             </li>
+            <li>
+              Floor stock is edited on the Inventory tab. Publishing the
+              website does not wipe those products.
+            </li>
           </ul>
         </div>
       ) : null}
@@ -225,17 +230,32 @@ export default function PagesManagerPage({ clientId }: { clientId: number }) {
                     {page.detail}
                   </TableCell>
                   <TableCell className="px-4 py-3 text-right">
-                    <Button
-                      asChild
-                      variant="outline"
-                      size="sm"
-                      className="h-8 gap-1.5 text-xs font-semibold"
-                    >
-                      <Link href={page.ownerHref}>
-                        <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
-                        {page.ownerLabel}
-                      </Link>
-                    </Button>
+                    <div className="flex flex-wrap justify-end gap-1.5">
+                      {page.id === "inventory" ? (
+                        <Button
+                          asChild
+                          variant="outline"
+                          size="sm"
+                          className="h-8 gap-1.5 text-xs font-semibold"
+                        >
+                          <Link href={workspaceRoute("inventory", clientId)}>
+                            <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
+                            Inventory
+                          </Link>
+                        </Button>
+                      ) : null}
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1.5 text-xs font-semibold"
+                      >
+                        <Link href={page.ownerHref}>
+                          <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          {page.ownerLabel}
+                        </Link>
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

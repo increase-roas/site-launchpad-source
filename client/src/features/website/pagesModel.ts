@@ -1,5 +1,9 @@
 import type { BadgeTone } from "@/components/dashboard/StatusBadge";
-import { configurationRoute, type ConfigurationTab } from "@/lib/workspaceNavigation";
+import {
+  configurationRoute,
+  workspaceRoute,
+  type ConfigurationTab,
+} from "@/lib/workspaceNavigation";
 import {
   ASTRO_CATEGORY_VALUES,
   summarizeHomepageSections,
@@ -115,7 +119,7 @@ const PAGE_DEFINITIONS: readonly PageDefinition[] = [
     id: "inventory",
     title: "Inventory",
     slug: "/inventory",
-    owner: { tab: "technical", section: "integrations", label: "Product data" },
+    owner: { tab: "technical", section: "integrations", label: "Inventory" },
     sections: ["integrations"],
     describe: config =>
       config.integrations.d1.enabled && config.integrations.r2.enabled
@@ -208,11 +212,14 @@ export function buildSiteMap(input: SiteMapInput): PageRow[] {
       state,
       detail,
       ownerLabel: definition.owner.label,
-      ownerHref: configurationRoute(
-        input.clientId,
-        definition.owner.tab,
-        definition.owner.section,
-      ),
+      ownerHref:
+        definition.id === "inventory"
+          ? workspaceRoute("inventory", input.clientId)
+          : configurationRoute(
+              input.clientId,
+              definition.owner.tab,
+              definition.owner.section,
+            ),
     };
   });
 }
