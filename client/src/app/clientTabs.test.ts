@@ -18,10 +18,16 @@ describe("client tabs", () => {
     expect(clientTabHref("campaigns", 7)).toBe("/workspace/7/campaigns");
   });
 
+  it("puts Inventory on its own client tab", () => {
+    expect(CLIENT_TAB_LIST.map(tab => tab.tab)).toContain("inventory");
+    expect(clientTabHref("inventory", 7)).toBe("/workspace/7/inventory");
+  });
+
   it("routes the campaigns path at the notice, not the editor", () => {
     const app = readFileSync("client/src/App.tsx", "utf8");
 
     expect(app).toContain("DeferredCampaignsPage");
+    expect(app).toContain("InventoryPage");
     expect(app).not.toContain("features/campaigns/CampaignsPage");
   });
 });

@@ -9,6 +9,7 @@ export type WorkspaceArea =
   | "overview"
   | "configuration"
   | "pages"
+  | "inventory"
   | "campaigns"
   | "integrations";
 
@@ -32,6 +33,7 @@ export function getWorkspaceArea(location: string): WorkspaceArea {
   // `/funnels` is the pre-Campaign path and still arrives from saved links.
   if (location.includes("/campaigns") || location.includes("/funnels")) return "campaigns";
   if (location.includes("/integrations")) return "integrations";
+  if (location.includes("/inventory")) return "inventory";
   if (
     location.includes("/configuration") ||
     // Older links: brand & content lived at /settings and photos at /media.
@@ -60,6 +62,8 @@ export function workspaceRoute(area: WorkspaceArea, clientId?: number): string {
       return `/workspace/${clientId}/configuration`;
     case "pages":
       return `/workspace/${clientId}/pages`;
+    case "inventory":
+      return `/workspace/${clientId}/inventory`;
     case "campaigns":
       return `/workspace/${clientId}/campaigns`;
     case "integrations":
@@ -173,6 +177,7 @@ export function publisherDestination(input: {
     }
     case "overview":
     case "pages":
+    case "inventory":
     case "integrations":
     case "configuration":
       return websitePublisherRoute(input.clientId);

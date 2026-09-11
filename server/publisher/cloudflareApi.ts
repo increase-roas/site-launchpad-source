@@ -90,6 +90,12 @@ export type CloudflareApiClient = {
     reassign?: boolean;
     signal: AbortSignal;
   }): Promise<AttachedWorkerCustomDomain>;
+  queryD1(input: {
+    databaseId: string;
+    sql: string;
+    params?: readonly unknown[];
+    signal: AbortSignal;
+  }): Promise<{ rows: Record<string, unknown>[]; changes: number }>;
   putR2Object(input: {
     bucket: string;
     key: string;
@@ -266,6 +272,29 @@ function parseD1Database(value: unknown, operation: string): D1Database {
     id: requireString(record, "uuid", operation),
     name: requireString(record, "name", operation),
   };
+}
+
+function parseD1QueryResult(
+  envelope: Record<string, unknown>,
+  operation: string,
+): { rows: Record<string, unknown>[]; changes: number } {
+  const result = envelope.result;
+  const batches = Array.isArray(result) ? result : result === undefined ? [] : [result];
+  const rows: Record<string, unknown>[] = [];
+  let changes = 0;
+  for (const batch of batches) {
+    const record = requireRecord(batch, operation);
+    if (Array.isArray(record.results)) {
+      for (const row of record.results) {
+        rows.push(requireRecord(row, operation));
+      }
+    }
+    const meta = isRecord(record.meta) ? record.meta : undefined;
+    if (meta && typeof meta.changes === "number" && Number.isFinite(meta.changes)) {
+      changes += meta.changes;
+    }
+  }
+  return { rows, changes };
 }
 
 function parseQueue(value: unknown, operation: string): Queue {
@@ -817,6 +846,22 @@ export function createCloudflareApiClient(options: {
         throw new CloudflareApiError("Worker custom domain attach response validation");
       }
       return { hostname, liveUrl: liveUrlForHostname(hostname) };
+    },
+    async queryD1(input) {
+      const operation = "D1 query";
+      const envelope = await request(
+        operation,
+        `/d1/database/${encodeURIComponent(input.databaseId)}/query`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            sql: input.sql,
+            params: input.params ?? [],
+          }),
+          signal: input.signal,
+        },
+      );
+      return parseD1QueryResult(envelope, operation);
     },
     async putR2Object(input) {
       await objectRequest(

@@ -103,6 +103,24 @@ export function clientLiveSiteHref(input: {
   return live;
 }
 
+/**
+ * Hidden inventory desk on the published or preview Worker: `{origin}/admin`.
+ * Launchpad Inventory writes the same D1/R2; this URL is the on-site desk.
+ */
+export function clientAdminHref(siteUrl: string | null | undefined): string | null {
+  const live = siteUrl?.trim();
+  if (!live || isFactoryPlaceholderUrl(live)) return null;
+  try {
+    const url = new URL(live);
+    url.pathname = "/admin";
+    url.search = "";
+    url.hash = "";
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return null;
+  }
+}
+
 /** Keep the tab from the click so a later async preview URL is not popup-blocked. */
 export function assignPreviewTab(tab: Window | null, url: string) {
   if (tab && !tab.closed) {

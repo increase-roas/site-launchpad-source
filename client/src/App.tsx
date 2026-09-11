@@ -17,6 +17,7 @@ import ClientsPage from "./features/clients/ClientsPage";
 import ClientIntegrationsPage from "./features/integrations/ClientIntegrationsPage";
 import LaunchPage from "./features/launch/LaunchPage";
 import DeferredSettingsPage from "./features/settings/DeferredSettingsPage";
+import InventoryPage from "./features/inventory/InventoryPage";
 import PagesManagerPage from "./features/website/PagesManagerPage";
 import AstroClientEditor from "./pages/AstroClientEditor";
 import DraftClientCreate from "./pages/DraftClientCreate";
@@ -48,6 +49,14 @@ function Router() {
       <Route path="/workspace/:clientId/pages">
         {params => (
           <PagesManagerPage
+            key={Number(params.clientId)}
+            clientId={Number(params.clientId)}
+          />
+        )}
+      </Route>
+      <Route path="/workspace/:clientId/inventory">
+        {params => (
+          <InventoryPage
             key={Number(params.clientId)}
             clientId={Number(params.clientId)}
           />

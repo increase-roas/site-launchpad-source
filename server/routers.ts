@@ -7,6 +7,7 @@ import { funnelBuilderRouter } from "./routers/funnelBuilder";
 import { paidFunnelRouter } from "./routers/paidFunnel";
 import { simpleFormRouter } from "./routers/simpleForm";
 import { workspaceRouter } from "./routers/workspace";
+import { inventoryRouter } from "./routers/inventory";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -21,6 +22,7 @@ export const appRouter = router({
   paidFunnel: paidFunnelRouter,
   simpleForm: simpleFormRouter,
   workspace: workspaceRouter,
+  inventory: inventoryRouter(),
 });
 
 export type AppRouter = typeof appRouter;

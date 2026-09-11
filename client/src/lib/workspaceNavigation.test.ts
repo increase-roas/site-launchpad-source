@@ -21,6 +21,7 @@ describe("selected-client workspace navigation", () => {
     expect(getWorkspaceArea("/")).toBe("overview");
     expect(getWorkspaceArea("/workspace/12")).toBe("overview");
     expect(getWorkspaceArea("/workspace/12/pages")).toBe("pages");
+    expect(getWorkspaceArea("/workspace/12/inventory")).toBe("inventory");
     expect(getWorkspaceArea("/workspace/12/campaigns")).toBe("campaigns");
     expect(getWorkspaceArea("/workspace/12/integrations")).toBe("integrations");
     expect(getWorkspaceArea("/workspace/12/configuration")).toBe("configuration");
@@ -38,6 +39,7 @@ describe("selected-client workspace navigation", () => {
     expect(workspaceRoute("overview", 21)).toBe("/workspace/21");
     expect(workspaceRoute("configuration", 21)).toBe("/workspace/21/configuration");
     expect(workspaceRoute("pages", 21)).toBe("/workspace/21/pages");
+    expect(workspaceRoute("inventory", 21)).toBe("/workspace/21/inventory");
     expect(workspaceRoute("campaigns", 21)).toBe("/workspace/21/campaigns");
     expect(workspaceRoute("integrations", 21)).toBe("/workspace/21/integrations");
     expect(workspaceRoute("overview")).toBe("/");
@@ -154,6 +156,9 @@ describe("real publisher destinations", () => {
       "/workspace/9/launch",
     );
     expect(publisherDestination({ clientId: 9, area: "pages" })).toBe(
+      "/workspace/9/launch",
+    );
+    expect(publisherDestination({ clientId: 9, area: "inventory" })).toBe(
       "/workspace/9/launch",
     );
     expect(publisherDestination({ clientId: 9, area: "configuration" })).toBe(

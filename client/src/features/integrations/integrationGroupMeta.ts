@@ -21,7 +21,7 @@ const GROUP_META: Record<string, { name: string; purpose: string; icon: LucideIc
     purpose: "Webhook signing and failure alerts",
     icon: Webhook,
   },
-  other: { name: "Website admin access", purpose: "Sign-in for the live site", icon: KeyRound },
+  other: { name: "Website admin access", purpose: "Password for the live site /admin desk", icon: KeyRound },
 };
 
 export function groupMeta(id: string, fallbackLabel: string) {
@@ -38,6 +38,7 @@ export function groupMeta(id: string, fallbackLabel: string) {
 export const FIELD_HINTS: Partial<Record<ClientIntegrationProfileKey, string>> = {
   GOOGLE_SHEETS_ID: "Share the sheet with the service account below.",
   GOOGLE_SERVICE_ACCOUNT_EMAIL: "Needs Editor access to that sheet.",
+  ADMIN_PASSWORD: "Signs in to the preview or live site at /admin.",
 };
 
 export type FieldRequirement = "websiteAndFunnels" | "websiteOnly" | "funnelsOnly" | "optional";

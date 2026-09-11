@@ -15,6 +15,7 @@ export const CLIENT_TABS = [
   "overview",
   "configuration",
   "pages",
+  "inventory",
   "campaigns",
   "integrations",
   "launch",
@@ -48,6 +49,12 @@ export const CLIENT_TAB_DEFINITIONS: Record<ClientTab, ClientTabDefinition> = {
     label: "Pages",
     availability: "active",
     area: "pages",
+  },
+  inventory: {
+    tab: "inventory",
+    label: "Inventory",
+    availability: "active",
+    area: "inventory",
   },
   campaigns: {
     tab: "campaigns",
@@ -88,6 +95,8 @@ export function getClientTab(location: string, area: WorkspaceArea): ClientTab {
       return "configuration";
     case "pages":
       return "pages";
+    case "inventory":
+      return "inventory";
     case "campaigns":
       return "campaigns";
     case "integrations":

@@ -19,7 +19,7 @@ import {
   formatClientUpdatedAt,
 } from "@/lib/clientBoard";
 import { trpc } from "@/lib/trpc";
-import { configurationRoute } from "@/lib/workspaceNavigation";
+import { configurationRoute, workspaceRoute } from "@/lib/workspaceNavigation";
 import { cn } from "@/lib/utils";
 import { clientDeployGaps, summarizeHomepageSections } from "@shared/astroConfig";
 import type { AstroSitePreviewStatusView } from "@shared/astroSitePreview";
@@ -33,6 +33,7 @@ import {
   Eye,
   Globe,
   Info,
+  KeyRound,
   Loader2,
   Rocket,
   UsersRound,
@@ -432,7 +433,6 @@ function PreviewEnvironment({
     hasPreviewUrl: Boolean(preview?.previewUrl),
     approved: Boolean(preview?.approvedSha),
   });
-
   return (
     <EnvironmentCard
       lane="preview"
@@ -462,6 +462,17 @@ function PreviewEnvironment({
               </a>
             </Button>
           ) : null}
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="h-9 gap-1.5 text-xs font-semibold"
+          >
+            <Link href={workspaceRoute("inventory", clientId)}>
+              <KeyRound className="h-4 w-4" aria-hidden="true" />
+              Inventory
+            </Link>
+          </Button>
           <Button
             type="button"
             size="sm"
@@ -561,7 +572,6 @@ function ProductionEnvironment({
     siteUrl,
     currentLiveUrl: publish?.liveUrl ?? liveUrl,
   });
-
   return (
     <>
       <EnvironmentCard
@@ -598,6 +608,17 @@ function ProductionEnvironment({
                 </a>
               </Button>
             ) : null}
+            <Button
+              asChild
+              size="sm"
+              variant="outline"
+              className="h-9 gap-1.5 text-xs font-semibold"
+            >
+              <Link href={workspaceRoute("inventory", clientId)}>
+                <KeyRound className="h-4 w-4" aria-hidden="true" />
+                Inventory
+              </Link>
+            </Button>
             {kind === "failed" ? (
               <Button
                 type="button"

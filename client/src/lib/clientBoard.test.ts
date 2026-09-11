@@ -9,6 +9,7 @@ import {
   DEFAULT_CLIENT_BOARD_QUERY,
   filterClients,
   assignPreviewTab,
+  clientAdminHref,
   clientLiveSiteHref,
   clientPreviewHref,
   clientSiteHost,
@@ -282,6 +283,18 @@ describe("client board", () => {
       "http://localhost:4321/",
     );
     expect(replace).toHaveBeenCalledWith("http://localhost:4321/");
+  });
+
+  it("builds the live-site inventory admin URL from a published or preview origin", () => {
+    expect(clientAdminHref("https://harborandheatspas.com/visit-us")).toBe(
+      "https://harborandheatspas.com/admin",
+    );
+    expect(
+      clientAdminHref("https://website-15.increase-roas.workers.dev/"),
+    ).toBe("https://website-15.increase-roas.workers.dev/admin");
+    expect(clientAdminHref("https://example.com")).toBeNull();
+    expect(clientAdminHref("not-a-url")).toBeNull();
+    expect(clientAdminHref(null)).toBeNull();
   });
 
   it("reads the host of a published site and tolerates a broken address", () => {

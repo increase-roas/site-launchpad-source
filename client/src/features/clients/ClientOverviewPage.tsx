@@ -16,10 +16,10 @@ import {
   formatClientUpdatedAt,
   nextClientAction,
 } from "@/lib/clientBoard";
-import { clientDestinationRoute } from "@/lib/workspaceNavigation";
+import { clientDestinationRoute, workspaceRoute } from "@/lib/workspaceNavigation";
 import { BuildPath } from "./BuildPath";
 import { buildOverviewWizardSignals } from "./overviewWizard";
-import { ArrowRight, CircleDot, ExternalLink, ListChecks, UsersRound } from "lucide-react";
+import { ArrowRight, CircleDot, ExternalLink, KeyRound, ListChecks, UsersRound } from "lucide-react";
 import { Link } from "wouter";
 
 /**
@@ -129,6 +129,17 @@ export default function ClientOverviewPage({ clientId }: { clientId: number }) {
             Not published yet
           </span>
         )}
+        <Button
+          asChild
+          variant="outline"
+          size="sm"
+          className="h-9 gap-1.5 text-xs font-semibold"
+        >
+          <Link href={workspaceRoute("inventory", clientId)}>
+            <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
+            Inventory
+          </Link>
+        </Button>
       </section>
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">

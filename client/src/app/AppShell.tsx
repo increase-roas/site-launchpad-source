@@ -14,7 +14,11 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { WorkspaceProvider, useWorkspace } from "@/contexts/WorkspaceContext";
-import { clientLiveSiteHref, clientStatusTone } from "@/lib/clientBoard";
+import {
+  clientAdminHref,
+  clientLiveSiteHref,
+  clientStatusTone,
+} from "@/lib/clientBoard";
 import { useAstroPreviewJob } from "@/features/launch/useAstroPreviewJob";
 import { isPreviewActive, previewActionLabel } from "@/features/launch/astroPreviewFlow";
 import { cn } from "@/lib/utils";
@@ -37,6 +41,7 @@ import {
   Activity,
   ExternalLink,
   Eye,
+  KeyRound,
   LayoutTemplate,
   Menu,
   Plus,
@@ -240,6 +245,8 @@ function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
   const liveSiteUrl = clientLiveSiteHref({
     liveUrl: selectedClient?.operationalSummary.liveUrl,
   });
+  const adminUrl =
+    clientAdminHref(liveSiteUrl) ?? clientAdminHref(preview?.previewUrl);
   const openFactoryPreview = () => {
     if (!selectedClientId) return;
     if (preview?.status === "ready" && preview.previewUrl && !preview.stale) {
@@ -312,6 +319,12 @@ function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
+                      <Link href={workspaceRoute("inventory", selectedClientId)}>
+                        <KeyRound className="mr-2 h-4 w-4" aria-hidden="true" />
+                        Inventory
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
                       <Link href={workspaceRoute("integrations", selectedClientId)}>
                         <Signal className="mr-2 h-4 w-4" aria-hidden="true" />
                         Integrations
@@ -322,6 +335,14 @@ function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
                         <a href={liveSiteUrl} target="_blank" rel="noreferrer">
                           <ExternalLink className="mr-2 h-4 w-4" aria-hidden="true" />
                           Open live site
+                        </a>
+                      </DropdownMenuItem>
+                    ) : null}
+                    {adminUrl ? (
+                      <DropdownMenuItem asChild>
+                        <a href={adminUrl} target="_blank" rel="noreferrer">
+                          <ExternalLink className="mr-2 h-4 w-4" aria-hidden="true" />
+                          Open site /admin
                         </a>
                       </DropdownMenuItem>
                     ) : null}

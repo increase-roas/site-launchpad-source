@@ -1,10 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useAstroPreviewJob } from "@/features/launch/useAstroPreviewJob";
+import { clientAdminHref } from "@/lib/clientBoard";
 import { trpc } from "@/lib/trpc";
-import { configurationRoute } from "@/lib/workspaceNavigation";
+import { configurationRoute, workspaceRoute } from "@/lib/workspaceNavigation";
 import { websiteIntegrationEnablement } from "@shared/clientIntegrationProfile";
 import { publicErrorMessage } from "@shared/safePublicError";
-import { AlertCircle, ArrowLeft, Loader2 } from "lucide-react";
+import { AlertCircle, ArrowLeft, ExternalLink, KeyRound, Loader2 } from "lucide-react";
 import { Link } from "wouter";
 import { IntegrationEditor } from "./IntegrationEditor";
 
@@ -14,6 +16,10 @@ export default function ClientIntegrationsPage({ clientId }: { clientId: number 
   // Which services this site uses is set on the Configuration tab, and it
   // decides which of these credentials are actually required.
   const configQuery = trpc.astroConfig.get.useQuery({ clientId });
+  const { preview } = useAstroPreviewJob(clientId);
+  const adminHref =
+    clientAdminHref(selectedClient?.operationalSummary.liveUrl) ??
+    clientAdminHref(preview?.previewUrl);
 
   if (query.isLoading || configQuery.isLoading) {
     return (
@@ -51,6 +57,33 @@ export default function ClientIntegrationsPage({ clientId }: { clientId: number 
           Back to configuration
         </Link>
       </Button>
+
+      <section className="launchpad-panel flex flex-wrap items-center justify-between gap-3 rounded-lg p-4">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 text-sm font-semibold">
+            <KeyRound className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            Floor inventory
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            Add products on the Inventory tab. The Website admin password below is only
+            needed if someone signs in at the site’s{" "}
+            <span className="font-medium text-foreground">/admin</span> page.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild size="sm" className="h-9 shrink-0 gap-1.5 text-xs font-semibold">
+            <Link href={workspaceRoute("inventory", clientId)}>Open Inventory</Link>
+          </Button>
+          {adminHref ? (
+            <Button asChild variant="outline" size="sm" className="h-9 shrink-0 gap-1.5 text-xs font-semibold">
+              <a href={adminHref} target="_blank" rel="noreferrer">
+                Site /admin
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+              </a>
+            </Button>
+          ) : null}
+        </div>
+      </section>
 
       <IntegrationEditor
         dto={query.data}

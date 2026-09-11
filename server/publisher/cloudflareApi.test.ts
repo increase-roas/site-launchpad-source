@@ -632,4 +632,33 @@ describe("Cloudflare publisher client", () => {
     ).resolves.toBeNull();
     expect(requests[0]?.init?.method).toBe("GET");
   });
+
+  it("runs a D1 query and returns rows plus change count", async () => {
+    const { fetchFn, requests } = createMockFetch([
+      successEnvelope([
+        {
+          results: [{ slug: "caldera", inventory_name: "Caldera" }],
+          success: true,
+          meta: { changes: 0 },
+        },
+      ]),
+    ]);
+    const client = createClient(fetchFn);
+    await expect(
+      client.queryD1({
+        databaseId: "d1-inventory",
+        sql: "SELECT * FROM products WHERE slug = ?",
+        params: ["caldera"],
+        signal: activeSignal(),
+      }),
+    ).resolves.toEqual({
+      rows: [{ slug: "caldera", inventory_name: "Caldera" }],
+      changes: 0,
+    });
+    expect(requests[0]?.url).toContain("/d1/database/d1-inventory/query");
+    expect(parseRequestBody(requests[0])).toEqual({
+      sql: "SELECT * FROM products WHERE slug = ?",
+      params: ["caldera"],
+    });
+  });
 });
