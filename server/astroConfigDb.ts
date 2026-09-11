@@ -17,6 +17,7 @@ import {
   type AstroClientConfigInput,
   type WranglerSecretName,
 } from "../shared/astroConfig";
+import { fillEnabledAstroCloudIntegrations } from "../shared/astroCloudIntegrations";
 import { decryptSetupValue, encryptSetupValue } from "./clientSecurity";
 import {
   getClientAssets,
@@ -230,6 +231,10 @@ export async function getAstroConfigView(clientId: number) {
     astroConfigInputFromClient(client, configRows[0]),
     assetUrls,
   );
+  input.integrations = fillEnabledAstroCloudIntegrations(input.integrations, {
+    clientId,
+    shortName: input.identity.shortName,
+  });
   const secretStatus = wranglerSecretStatusFromProfile(integrationProfile.dto);
   const galleryLibrary = mediaItems.map(item => ({
     id: item.id,
@@ -306,8 +311,15 @@ export async function saveAstroConfig(clientId: number, input: AstroClientConfig
     alt: item.alt,
     description: item.description,
   }));
+  const filledInput = {
+    ...input,
+    integrations: fillEnabledAstroCloudIntegrations(input.integrations, {
+      clientId,
+      shortName: input.identity.shortName,
+    }),
+  };
   const normalized = mergeStoredAstroConfig(
-    applyAstroAssetUrls(input, assetUrls),
+    applyAstroAssetUrls(filledInput, assetUrls),
     undefined,
   );
   const generatedConfig = generateAstroClientConfig(

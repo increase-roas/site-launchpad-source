@@ -8,6 +8,7 @@ import {
   type AstroIntegration,
   type WranglerSecretName,
 } from "@shared/astroConfig";
+import { fillEnabledAstroCloudIntegrations } from "@shared/astroCloudIntegrations";
 import { type ConfigReadiness } from "@shared/astroConfigReadiness";
 import { summarizeRuntimeConfiguration } from "@shared/operationalSummary";
 import { CloudCog, KeyRound } from "lucide-react";
@@ -23,12 +24,14 @@ const INTEGRATION_LABELS: Record<AstroIntegration, string> = {
 };
 
 export function TechnicalTab({
+  clientId,
   value,
   readiness,
   onChange,
   secretStatus,
   onOpenClientIntegrations,
 }: {
+  clientId: number;
   value: AstroClientConfigInput;
   readiness: ConfigReadiness;
   onChange: (next: AstroClientConfigInput) => void;
@@ -38,14 +41,19 @@ export function TechnicalTab({
   const updateIntegration = (
     name: AstroIntegration,
     patch: Partial<AstroClientConfigInput["integrations"][AstroIntegration]>,
-  ) =>
+  ) => {
+    const next = {
+      ...value.integrations,
+      [name]: { ...value.integrations[name], ...patch },
+    };
     onChange({
       ...value,
-      integrations: {
-        ...value.integrations,
-        [name]: { ...value.integrations[name], ...patch },
-      },
+      integrations: fillEnabledAstroCloudIntegrations(next, {
+        clientId,
+        shortName: value.identity.shortName,
+      }),
     });
+  };
 
   const enabledIntegrations = ASTRO_INTEGRATION_VALUES.filter(
     name => value.integrations[name].enabled,

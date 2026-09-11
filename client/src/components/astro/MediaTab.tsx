@@ -9,6 +9,7 @@ import type { AssetSlot } from "@shared/client";
 import { LIBRARY_UPLOAD_SLOT } from "@shared/mediaLibrary";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { InventoryMediaPanel } from "@/features/inventory/InventoryMediaPanel";
 import { DevPlaceholderFillBar } from "./media/DevPlaceholderFillBar";
 import { MediaWorkspace } from "./media/MediaWorkspace";
 import {
@@ -302,6 +303,8 @@ export function MediaTab({
           onStart={placeholderFill.start}
         />
       ) : null}
+
+      <InventoryMediaPanel clientId={clientId} />
 
       <MediaWorkspace
         slots={slots}

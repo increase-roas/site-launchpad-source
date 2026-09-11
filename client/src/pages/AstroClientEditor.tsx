@@ -307,7 +307,7 @@ export default function AstroClientEditor({ clientId }: { clientId: number }) {
       <TabsContent value="branding"><BrandingTab value={config} readiness={readiness} onChange={changeConfig} /></TabsContent>
       <TabsContent value="media"><MediaTab clientId={clientId} value={config} assets={assets} uploadingSlot={uploadingSlot} onUpload={uploadFile} onSlotAssetChange={applySlotAsset} /></TabsContent>
       <TabsContent value="content"><ContentTab value={config} readiness={readiness} onChange={changeConfig} assets={assets} mediaItems={libraryQuery.data?.items ?? []} /></TabsContent>
-      <TabsContent value="technical"><TechnicalTab value={config} readiness={readiness} onChange={changeConfig} secretStatus={secretStatus} onOpenClientIntegrations={() => setLocation(`/workspace/${clientId}/integrations`)} /></TabsContent>
+      <TabsContent value="technical"><TechnicalTab clientId={clientId} value={config} readiness={readiness} onChange={changeConfig} secretStatus={secretStatus} onOpenClientIntegrations={() => setLocation(`/workspace/${clientId}/integrations`)} /></TabsContent>
     </Tabs>
   </div>;
 }

@@ -42,6 +42,7 @@ import {
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
+import { InventoryPhoto } from "./InventoryPhoto";
 
 const STATUS_LABELS: Record<InventoryStatus, string> = {
   draft: "Draft (hidden)",
@@ -510,6 +511,9 @@ export default function InventoryPage({ clientId }: { clientId: number }) {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
+                    <TableHead className="w-16 px-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Photo
+                    </TableHead>
                     <TableHead className="px-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Product
                     </TableHead>
@@ -536,6 +540,13 @@ export default function InventoryPage({ clientId }: { clientId: number }) {
                 <TableBody>
                   {products.map(product => (
                     <TableRow key={product.slug} className="border-border">
+                      <TableCell className="px-4 py-3">
+                        <InventoryPhoto
+                          src={product.primary_image}
+                          alt={product.inventory_name}
+                          className="h-12 w-16 rounded-md border border-border object-cover"
+                        />
+                      </TableCell>
                       <TableCell className="px-4 py-3">
                         <p className="text-sm font-medium">{product.inventory_name}</p>
                         <p className="text-xs text-muted-foreground">{product.slug}</p>
